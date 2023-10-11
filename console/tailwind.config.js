@@ -25,7 +25,7 @@ const config = {
 			},
 			backgroundImage: {
 				grain : "url('/images/light-grain.png')",
-			}
+			},
 		}
 	}
 };
