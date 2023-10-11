@@ -3,18 +3,17 @@
 	import { base } from '$app/paths';
 
 	import { page } from '$app/stores';
-	import { Navbar, NavLi, NavUl, NavHamburger } from 'flowbite-svelte';
 	$: activeUrl = $page.url.pathname;
+	import { Navbar, Dropdown, DropdownItem } from 'flowbite-svelte';
+	import { DotsHorizontalOutline } from 'flowbite-svelte-icons';
 </script>
 
 <div
 	class="pl-8 pr-8 md:pl-20 md:pr-20 pt-4 pb-4 w-full flex justify-between border-solid border-b items-center border-lightgrey dark:border-white dark:border-opacity-20"
 >
 	<Navbar
-		let:hidden
-		let:toggle
 		fluid={true}
-		class="dark:bg-black px-0 sm:px-0"
+		class="dark:bg-black dark:bg-opacity-0 px-0 sm:px-0"
 		navDivClass="flex flex-wrap justify-between items-center"
 	>
 		<div>
@@ -28,19 +27,26 @@
 			</a>
 		</div>
 
-		<NavHamburger on:click={toggle} />
-		<NavUl
-			{activeUrl}
-			{hidden}
-			classUl="dark:bg-black dark:text-white p-0 md:items-center md:space-x-4 mx-2"
-			activeClass="text-white dark:text-black bg-black dark:bg-white rounded-full md:px-4 md:py-2 font-semibold text-base"
-			nonActiveClass="md:px-4 md:py-2 text-base rounded-full dark:hover:bg-grey dark:hover:bg-opacity-20 hover:bg-lightgrey hover:bg-opacity-40"
+		<DotsHorizontalOutline class="dots-menu dark:text-white" />
+		<Dropdown
+			triggeredBy=".dots-menu"
+			containerClass="pb-4 text-left border border-lightgrey dark:bg-black"
 		>
-			<NavLi href="/console">Tasks</NavLi>
-			<NavLi href="https://docs.hiphops.io">Docs</NavLi>
+			<DropdownItem>
+				<a href="/console">Tasks</a>
+			</DropdownItem>
+
+			<DropdownItem>
+				<a href="/console/advanced">Advanced</a>
+			</DropdownItem>
+
+			<DropdownItem>
+				<a href="https://docs.hiphops.io" target="_blank">Docs</a>
+			</DropdownItem>
+
 			<div>
 				<ThemeToggle />
 			</div>
-		</NavUl>
+		</Dropdown>
 	</Navbar>
 </div>
