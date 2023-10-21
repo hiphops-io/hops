@@ -1,0 +1,7 @@
+{
+  "hops": {
+    "event": "testevent",
+    "source": "fake",
+    "action": "foo"
+  }
+}

@@ -1,0 +1,5 @@
+console-dist/
+main
+bin/
+.vscode/
+.DS_Store

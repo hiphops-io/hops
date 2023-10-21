@@ -1,0 +1,11 @@
+on testevent {
+  name = "simple_pipeline"
+
+  call anything {
+    name = "should_dispatch"
+
+    inputs = {
+      foo = "bar"
+    }
+  }
+}

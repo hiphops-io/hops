@@ -1,0 +1,25 @@
+on change_merged {
+  name = "a_sensor"
+  if = true == true && glob("foo", "fo*")
+
+  call integration_action {
+    name = "first_task"
+    after = allmatch(true, "foo" == "foo")
+
+    inputs = {
+      a = "b"
+      from_env = env("HIPHOPS_TEST_ENV", "")
+    }
+  }
+
+  call integration_other_action {
+    name = "second_task"
+    if = glob(event.branch, "fix/*") // This when does not match the event.
+
+    inputs = {
+      is_true = true
+    }
+  }
+
+  call index_id_call {}
+}
