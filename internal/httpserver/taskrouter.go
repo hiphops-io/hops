@@ -102,7 +102,6 @@ func (c *taskController) runTask(w http.ResponseWriter, r *http.Request) {
 		c.writeTaskRunResponse(w, runResponse)
 		return
 	}
-	fmt.Println("Created source event")
 
 	// Push the event message to the topic, including the hash as sequence ID and "event" as event ID
 	_, err = c.lease.PublishSource(r.Context(), undist.Notify, sequenceID, "event", sourceEvent)
@@ -112,8 +111,6 @@ func (c *taskController) runTask(w http.ResponseWriter, r *http.Request) {
 		c.writeTaskRunResponse(w, runResponse)
 		return
 	}
-
-	fmt.Println("Published source event")
 
 	runResponse.statusCode = http.StatusOK
 	runResponse.Message = "OK"
