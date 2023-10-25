@@ -20,7 +20,7 @@ type taskReader interface {
 }
 
 type leasePublisher interface {
-	Publish(context.Context, undist.Channel, string, string, []byte) (*jetstream.PubAck, error)
+	Publish(context.Context, undist.Channel, string, string, []byte, ...string) (*jetstream.PubAck, error)
 	PublishSource(context.Context, undist.Channel, string, string, []byte) (*jetstream.PubAck, error)
 }
 
