@@ -9,8 +9,8 @@ import (
 
 var DefaultFunctions = map[string]function.Function{
 	"abs":             stdlib.AbsoluteFunc,
-	"allmatch":        AllMatchFunc,
-	"anymatch":        AnyMatchFunc,
+	"alltrue":         AllTrueFunc,
+	"anytrue":         AnyTrueFunc,
 	"versiontmpl":     VersionTemplateFunc,
 	"can":             tryfunc.CanFunc,
 	"ceil":            stdlib.CeilFunc,

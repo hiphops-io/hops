@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -23,7 +24,7 @@ type Runner struct {
 }
 
 type LeasePublisher interface {
-	Publish(context.Context, undist.Channel, string, string, []byte) (*jetstream.PubAck, error)
+	Publish(context.Context, undist.Channel, string, string, []byte, ...string) (*jetstream.PubAck, error)
 }
 
 type SecretStoreReader interface {
@@ -58,7 +59,7 @@ func (r *Runner) Run(
 	var sensorErrors error
 	for i := range hop.Ons {
 		sensor := &hop.Ons[i]
-		err := r.dispatchTasks(ctx, sensor, sequenceId, logger)
+		err := r.dispatchCalls(ctx, sensor, sequenceId, logger)
 		if err != nil {
 			sensorErrors = multierror.Append(sensorErrors, err)
 		}
@@ -67,20 +68,20 @@ func (r *Runner) Run(
 	return sensorErrors
 }
 
-func (r *Runner) dispatchTasks(ctx context.Context, sensor *dsl.OnAST, sequenceId string, logger zerolog.Logger) error {
+func (r *Runner) dispatchCalls(ctx context.Context, sensor *dsl.OnAST, sequenceId string, logger zerolog.Logger) error {
 	var wg sync.WaitGroup
 	var errs error
 
 	logger = logger.With().Str("sensor", sensor.Slug).Logger()
-	logger.Info().Msg("Running sensor tasks")
+	logger.Info().Msg("Running sensor calls")
 
 	numTasks := len(sensor.Calls)
 	errorchan := make(chan error, numTasks)
 
-	for _, task := range sensor.Calls {
-		task := task
+	for _, call := range sensor.Calls {
+		call := call
 		wg.Add(1)
-		go r.dispatchTask(ctx, &wg, task, sequenceId, errorchan, logger)
+		go r.dispatchCall(ctx, &wg, call, sequenceId, errorchan, logger)
 	}
 
 	wg.Wait()
@@ -93,10 +94,16 @@ func (r *Runner) dispatchTasks(ctx context.Context, sensor *dsl.OnAST, sequenceI
 	return errs
 }
 
-func (r *Runner) dispatchTask(ctx context.Context, wg *sync.WaitGroup, task dsl.CallAST, sequenceId string, errorchan chan<- error, logger zerolog.Logger) {
+func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.CallAST, sequenceId string, errorchan chan<- error, logger zerolog.Logger) {
 	defer wg.Done()
 
-	_, err := r.lease.Publish(ctx, undistribute.Request, sequenceId, task.Slug, task.Inputs)
+	app, handler, found := strings.Cut(call.TaskType, "_")
+	if !found {
+		errorchan <- fmt.Errorf("Unable to parse app/handler from call %s", call.Name)
+		return
+	}
+
+	_, err := r.lease.Publish(ctx, undistribute.Request, sequenceId, call.Slug, call.Inputs, app, handler)
 
 	// At the time of writing, the go client does not contain an error matching
 	// the 'maximum massages per subject exceeded' error. We match on the code here instead
@@ -106,7 +113,7 @@ func (r *Runner) dispatchTask(ctx context.Context, wg *sync.WaitGroup, task dsl.
 	}
 
 	if err == nil {
-		logger.Info().Msgf("Dispatched task: %s", task.Slug)
+		logger.Info().Msgf("Dispatched call: %s", call.Slug)
 	}
 
 	errorchan <- nil

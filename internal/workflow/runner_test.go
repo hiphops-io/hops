@@ -19,7 +19,7 @@ type LeaseStub struct {
 	calledWith []map[string]string
 }
 
-func (l *LeaseStub) Publish(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte) (*jetstream.PubAck, error) {
+func (l *LeaseStub) Publish(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte, appendTokens ...string) (*jetstream.PubAck, error) {
 	// TODO: Append sequenceID and msgId to l.calledWith
 	return nil, nil
 }

@@ -39,34 +39,68 @@ func TestValidParse(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Test we parsed the correct number of matching on blocks.
-		require.Equal(t, 3, len(hop.Ons))
+		require.Len(t, hop.Ons, 3)
 
 		// Test the first on block had the proper values
 		assert.Equal(t, "change_merged", hop.Ons[0].EventType)
-		assert.Equal(t, `change_merged-a_sensor`, hop.Ons[0].Slug)
+		assert.Equal(t, `a_sensor`, hop.Ons[0].Slug)
 
 		// Test the second on block had the proper values
 		assert.Equal(t, "change", hop.Ons[1].EventType)
-		assert.Equal(t, 0, len(hop.Ons[1].Calls))
+		assert.Len(t, hop.Ons[1].Calls, 0)
 
 		// Test the index named on block had the proper values
-		assert.Equal(t, "2", hop.Ons[2].Name)
-		assert.Equal(t, "change-2", hop.Ons[2].Slug)
+		assert.Equal(t, "change2", hop.Ons[2].Name)
+		assert.Equal(t, "change2", hop.Ons[2].Slug)
 
 		// Now dig into calls in the first on block, checking how they were parsed
-		require.Equal(t, 2, len(hop.Ons[0].Calls))
+		require.Len(t, hop.Ons[0].Calls, 2)
 
 		call := hop.Ons[0].Calls[0]
-		assert.Equal(t, `change_merged-a_sensor-integration_action-first_task`, call.Slug)
+		assert.Equal(t, `a_sensor-first_task`, call.Slug)
 		assert.JSONEq(t, `{"a":"b", "from_env": ""}`, string(call.Inputs))
 
 		call = hop.Ons[0].Calls[1]
-		assert.Equal(t, `change_merged-a_sensor-index_id_call-2`, call.Slug)
+		assert.Equal(t, `a_sensor-index_id_call2`, call.Slug)
 	}
 }
 
+// This has duplication with the above test.
+// Ideally we'll move them both to a single table based test, but there's a bit
+// of work there due to the nature of the test reaching into deep data structures to check values
 func TestValidParseResponseStep(t *testing.T) {
-	t.Skip("Not implemented - test that parsing is correct for further iterations of the pipeline")
+	logger := initTestLogger()
+	ctx := context.Background()
+
+	hopsFile := "./testdata/valid.hops"
+	eventFile := "./testdata/raw_change_event.json"
+	responseFile := "./testdata/task_response.json"
+
+	eventData, err := os.ReadFile(eventFile)
+	require.NoError(t, err)
+
+	responseData, err := os.ReadFile(responseFile)
+	require.NoError(t, err)
+
+	eventBundle := map[string][]byte{
+		"event":               eventData,
+		"a_sensor-first_task": responseData,
+	}
+
+	hclFile, _, err := ReadHopsFiles(hopsFile)
+	assert.NoError(t, err)
+
+	hop, err := ParseHops(ctx, hclFile, eventBundle, logger)
+	assert.NoError(t, err)
+
+	// Test we parsed the correct number of matching on blocks.
+	require.Len(t, hop.Ons, 3)
+
+	// Test the first on block had the correct number of calls
+	require.Len(t, hop.Ons[0].Calls, 3)
+
+	// Ensure the slugs align with what we want
+	assert.Equal(t, hop.Ons[0].Calls[0].Slug, "a_sensor-first_task")
 }
 
 func TestInvalidParse(t *testing.T) {

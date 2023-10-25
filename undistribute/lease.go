@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"time"
@@ -96,8 +97,9 @@ const (
 )
 
 // Publish publishes a message on the lease subject
-func (l *Lease) Publish(ctx context.Context, channel Channel, sequenceId string, msgId string, data []byte) (*jetstream.PubAck, error) {
-	msgSubject := l.config.LeaseMsgSubject(string(channel), sequenceId, msgId)
+func (l *Lease) Publish(ctx context.Context, channel Channel, sequenceId string, msgId string, data []byte, appendTokens ...string) (*jetstream.PubAck, error) {
+	msgSubject := l.config.LeaseMsgSubject(string(channel), sequenceId, msgId, appendTokens...)
+	fmt.Println("Message subject for publish was", msgSubject)
 	return l.js.Publish(ctx, msgSubject, data)
 }
 
