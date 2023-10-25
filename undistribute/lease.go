@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"time"
@@ -187,7 +186,6 @@ func (l *Lease) initLeaseId() error {
 func createLeaseId(rootLeaseDir string, seeds ...[]byte) (string, error) {
 	baseId, err := getOrCreateBaseId(rootLeaseDir)
 	if err != nil {
-		fmt.Println("Error on getcreate base ID:", err.Error())
 		return "", err
 	}
 	sublease := bytes.Join(seeds, []byte{})
