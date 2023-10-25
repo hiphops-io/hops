@@ -32,8 +32,7 @@ const (
 	consoleLongDesc  = `Start the hops console to interact with the UI.
 		
 This does *not* start the hops workflow server.
-The console provides credential helpers (allowing users to manually sign-in and authenticate)
-in addition to info on stored secrets.`
+The console provides access to the hops UI and the backend APIs needed to serve it`
 )
 
 // consoleCmd starts the hops console and required APIs

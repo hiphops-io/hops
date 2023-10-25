@@ -13,11 +13,6 @@ If working on the console specifically, you can start hops independently and run
 To run tests, from the root of the repo run:
 `go test ./... -test.v`
 
-Currently, running tests requires your `local` secret store to be populated with
-your Hiphops.io refresh token (see [Connecting services](#connecting-services)).
-
-Adding a persistent, zero-permission token as a fixture is on the todo list which will remove this step.
-
 
 ### Test style guide
 

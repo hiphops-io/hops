@@ -17,18 +17,13 @@ import (
 )
 
 type Runner struct {
-	logger      zerolog.Logger
-	hopsFiles   dsl.HclFiles
-	secretstore SecretStoreReader
-	lease       LeasePublisher
+	logger    zerolog.Logger
+	hopsFiles dsl.HclFiles
+	lease     LeasePublisher
 }
 
 type LeasePublisher interface {
 	Publish(context.Context, undist.Channel, string, string, []byte, ...string) (*jetstream.PubAck, error)
-}
-
-type SecretStoreReader interface {
-	InterpolateSecrets(data []byte) ([]byte, error)
 }
 
 func NewRunner(lease LeasePublisher, hopsFiles dsl.HclFiles, logger zerolog.Logger) (*Runner, error) {

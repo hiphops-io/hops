@@ -7,7 +7,6 @@ import (
 
 type AppDirs struct {
 	RootDir      string
-	SecretsDir   string
 	WorkspaceDir string
 }
 
@@ -18,12 +17,7 @@ func NewAppDirs(rootDir string) (AppDirs, error) {
 		RootDir: rootDir,
 	}
 
-	err := ensureSubDir(&appdirs.SecretsDir, rootDir, "secrets", fm)
-	if err != nil {
-		return appdirs, err
-	}
-
-	err = ensureSubDir(&appdirs.WorkspaceDir, rootDir, "workspace", fm)
+	err := ensureSubDir(&appdirs.WorkspaceDir, rootDir, "workspace", fm)
 	if err != nil {
 		return appdirs, err
 	}
