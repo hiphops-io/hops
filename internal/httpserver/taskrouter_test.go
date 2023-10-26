@@ -148,7 +148,7 @@ type LeaseMock struct {
 	calledWith []map[string]string
 }
 
-func (l *LeaseMock) Publish(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte) (*jetstream.PubAck, error) {
+func (l *LeaseMock) Publish(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte, appendTokens ...string) (*jetstream.PubAck, error) {
 	return nil, nil
 }
 

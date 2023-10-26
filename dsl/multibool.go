@@ -6,20 +6,20 @@ import (
 )
 
 /*
-allmatch() takes a variable number of bool arguments and returns true if all of them are true.
+alltrue() takes a variable number of bool arguments and returns true if all of them are true.
 */
-var AllMatchFunc = function.New(&function.Spec{
+var AllTrueFunc = function.New(&function.Spec{
 	VarParam: &function.Parameter{
 		Name: "clauses",
 		Type: cty.Bool,
 	},
 	Type: function.StaticReturnType(cty.Bool),
 	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-		return AllMatch(args)
+		return AllTrue(args)
 	},
 })
 
-func AllMatch(values []cty.Value) (cty.Value, error) {
+func AllTrue(values []cty.Value) (cty.Value, error) {
 	if len(values) == 0 {
 		return cty.False, nil
 	}
@@ -34,9 +34,9 @@ func AllMatch(values []cty.Value) (cty.Value, error) {
 }
 
 /*
-anymatch() takes a variable number of bool arguments and returns true if any of them are true.
+anytrue() takes a variable number of bool arguments and returns true if any of them are true.
 */
-var AnyMatchFunc = function.New(&function.Spec{
+var AnyTrueFunc = function.New(&function.Spec{
 	VarParam: &function.Parameter{
 		Name: "clauses",
 		Type: cty.Bool,
@@ -57,7 +57,7 @@ var AnyMatchFunc = function.New(&function.Spec{
 	},
 })
 
-func AnyMatch(values []cty.Value) (cty.Value, error) {
+func AnyTrue(values []cty.Value) (cty.Value, error) {
 	if len(values) == 0 {
 		return cty.False, nil
 	}

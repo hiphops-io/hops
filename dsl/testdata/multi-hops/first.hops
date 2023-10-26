@@ -4,7 +4,7 @@ on change_merged {
 
   call integration_action {
     name = "first_task"
-    after = allmatch(true, "foo" == "foo")
+    if = alltrue(true, "foo" == "foo")
 
     inputs = {
       a = "b"

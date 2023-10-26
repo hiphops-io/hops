@@ -2,7 +2,7 @@ package worker
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -97,7 +97,8 @@ func (w *Worker) initNats(ctx context.Context, natsUrl string, streamName string
 		return err
 	}
 
-	requestConsConf := leaseConf.RequestConsumerConfig()
+	// Hardcoded to the k8s handler. Will need to take config from handlers in future
+	requestConsConf := leaseConf.RequestConsumerConfig("k8s", "*")
 	requestConsConf.MaxDeliver = 3
 	requestConsumer, err := stream.CreateOrUpdateConsumer(ctx, requestConsConf)
 	if err != nil {
@@ -260,14 +261,14 @@ func (w *Worker) sendResponse(ctx context.Context, response *TaskResponse) (erro
 
 // getHandler returns the handler function that matches the request subject
 func (w *Worker) getHandler(subject string) (handlerFunc, error) {
-	subjectParts := strings.Split(subject, "-")
-	if len(subjectParts) <= 2 {
-		return nil, errors.New("Invalid request subject")
+	appName, handlerName, err := ParseAppHandler(subject)
+	if err != nil {
+		return nil, err
 	}
 
-	taskName := subjectParts[len(subjectParts)-2]
+	handlerKey := fmt.Sprintf("%s_%s", appName, handlerName)
 
-	handler, ok := w.handlers[taskName]
+	handler, ok := w.handlers[handlerKey]
 	if !ok {
 		handler = nil
 	}

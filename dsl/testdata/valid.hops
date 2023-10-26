@@ -1,10 +1,11 @@
 on change_merged {
   name = "a_sensor"
+
   if = true == true && glob("foo", "fo*")
 
   call integration_action {
     name = "first_task"
-    after = allmatch(true, "foo" == "foo")
+    if = alltrue(true, "foo" == "foo")
 
     inputs = {
       a = "b"
@@ -14,7 +15,7 @@ on change_merged {
 
   call integration_other_action {
     name = "second_task"
-    if = glob(event.branch, "fix/*") // This when does not match the event.
+    if = glob(event.branch, "fix/*") // This if does not match the event.
 
     inputs = {
       is_true = true
@@ -22,6 +23,11 @@ on change_merged {
   }
 
   call index_id_call {}
+
+  call depends_call {
+    name = "depends"
+    if = first_task.done
+  }
 }
 
 on change {
@@ -36,8 +42,3 @@ on change_no_such_action {
 }
 
 task foo {}
-
-// TODO: Add examples for all other features
-// - after
-// - after with non existent fields
-// - Fields that reference data in the sample event

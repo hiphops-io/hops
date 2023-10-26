@@ -3,6 +3,7 @@ package undistribute
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -103,8 +104,22 @@ func (l *LeaseConfig) MergeLeaseConfig(mergeConf LeaseConfig) {
 	}
 }
 
-func (l *LeaseConfig) RequestConsumerSubject() string {
-	return fmt.Sprintf("%s.*.request.>", l.StreamName)
+// BuildSubject is a simple helper for constructing a message subject from tokens
+func BuildSubject(tokens []string, extraTokens []string) string {
+	tokens = append(tokens, extraTokens...)
+	return strings.Join(tokens, ".")
+}
+
+func (l *LeaseConfig) RequestConsumerSubject(appendTokens ...string) string {
+	tokens := []string{
+		l.StreamName,
+		"*",
+		"request",
+		"*",
+		"*",
+	}
+
+	return BuildSubject(tokens, appendTokens)
 }
 
 func (l *LeaseConfig) LeaseConsumerSubject() string {
@@ -115,8 +130,16 @@ func (l *LeaseConfig) SourceConsumerSubject() string {
 	return fmt.Sprintf("%s.%s.notify.%s", l.StreamName, l.SourceSubject, l.SourceFilter)
 }
 
-func (l *LeaseConfig) LeaseMsgSubject(channel string, sequence string, msgId string) string {
-	return fmt.Sprintf("%s.%s.%s.%s.%s", l.StreamName, l.LeaseSubject, channel, sequence, msgId)
+func (l *LeaseConfig) LeaseMsgSubject(channel string, sequence string, msgId string, appendTokens ...string) string {
+	tokens := []string{
+		l.StreamName,
+		l.LeaseSubject,
+		channel,
+		sequence,
+		msgId,
+	}
+
+	return BuildSubject(tokens, appendTokens)
 }
 
 func (l *LeaseConfig) SourceMsgSubject(channel string, sequence string, msgId string) string {
@@ -124,8 +147,8 @@ func (l *LeaseConfig) SourceMsgSubject(channel string, sequence string, msgId st
 }
 
 // RequestConsumerConfig returns a jetstream.ConsumerConfig for the requests
-func (l *LeaseConfig) RequestConsumerConfig() jetstream.ConsumerConfig {
-	subject := l.RequestConsumerSubject()
+func (l *LeaseConfig) RequestConsumerConfig(appendTokens ...string) jetstream.ConsumerConfig {
+	subject := l.RequestConsumerSubject(appendTokens...)
 	durable := l.RequestDurability == Durable
 	return l.consumerConfig("", durable, subject, l.RequestDeliverPolicy)
 }

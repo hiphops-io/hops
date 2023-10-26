@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/gosimple/slug"
@@ -143,18 +142,18 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, 
 		return errors.New(d.Error())
 	}
 
+	on.EventType = block.Labels[0]
 	name, err := DecodeNameAttr(bc.Attributes[NameAttr])
 	if err != nil {
 		return err
 	}
-	// If no name is given, default to the stringified index of the block
+	// If no name is given, append stringified index of the block
 	if name == "" {
-		name = strconv.Itoa(idx)
+		name = fmt.Sprintf("%s%d", on.EventType, idx)
 	}
 
-	on.EventType = block.Labels[0]
 	on.Name = name
-	on.Slug = slugify(on.EventType, on.Name)
+	on.Slug = slugify(on.Name)
 
 	err = ValidateLabels(on.EventType, on.Name)
 	if err != nil {
@@ -225,17 +224,17 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 		return errors.New(d.Error())
 	}
 
+	call.TaskType = block.Labels[0]
 	name, err := DecodeNameAttr(bc.Attributes[NameAttr])
 	if err != nil {
 		return err
 	}
 	if name == "" {
-		name = strconv.Itoa(idx)
+		name = fmt.Sprintf("%s%d", call.TaskType, idx)
 	}
 
-	call.TaskType = block.Labels[0]
 	call.Name = name
-	call.Slug = slugify(on.Slug, call.TaskType, call.Name)
+	call.Slug = slugify(on.Slug, call.Name)
 
 	err = ValidateLabels(call.TaskType, call.Name)
 	if err != nil {
@@ -248,32 +247,15 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 		hop.SlugRegister[call.Slug] = true
 	}
 
-	afterClause := bc.Attributes[AfterAttr]
-	if afterClause != nil {
-		val, err := DecodeConditionalAttr(afterClause, evalctx)
-		if err != nil {
-			logger.Debug().Msgf(
-				"%s 'after' not met, skipped evaluation: %s",
-				call.Slug,
-				err.Error(),
-			)
-		}
-
-		if !val {
-			logger.Debug().Msgf("%s 'after' not met", call.Slug)
-			return nil
-		}
-
-		call.AfterClause = val
-	} else {
-		call.AfterClause = true
-	}
-
 	ifClause := bc.Attributes[IfAttr]
 	if ifClause != nil {
 		val, err := DecodeConditionalAttr(ifClause, evalctx)
 		if err != nil {
-			return err
+			logger.Debug().Msgf(
+				"%s 'if' not ready for evaluation, defaulting to false: %s",
+				call.Slug,
+				err.Error(),
+			)
 		}
 
 		if !val {
@@ -386,7 +368,7 @@ func concatenateHopsFiles(dirPath string) ([]fileContent, []byte, error) {
 			return err
 		}
 		// Exclude directories whose name starts with '..'
-		// This is because kubernetes configMaps create a set of simlinked
+		// This is because kubernetes configMaps create a set of symlinked
 		// directories for the mapped files and we don't want to pick those
 		// up. Those directories are named '..<various names>'
 		// Example:

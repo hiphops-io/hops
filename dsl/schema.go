@@ -7,9 +7,8 @@ import (
 )
 
 var (
-	IfAttr    = "if"
-	AfterAttr = "after"
-	NameAttr  = "name"
+	IfAttr   = "if"
+	NameAttr = "name"
 
 	HopSchema = &hcl.BodySchema{
 		Attributes: []hcl.AttributeSchema{},
@@ -44,7 +43,6 @@ var (
 		Blocks: []hcl.BlockHeaderSchema{},
 		Attributes: []hcl.AttributeSchema{
 			{Name: "name", Required: false},
-			{Name: AfterAttr, Required: false},
 			{Name: IfAttr, Required: false},
 			{Name: "inputs", Required: false},
 		},
@@ -118,8 +116,7 @@ type CallAST struct {
 }
 
 type ConditionalAST struct {
-	IfClause    bool
-	AfterClause bool
+	IfClause bool
 }
 
 type TaskAST struct {

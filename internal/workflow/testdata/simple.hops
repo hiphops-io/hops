@@ -1,7 +1,7 @@
 on testevent {
   name = "simple_pipeline"
 
-  call anything {
+  call app_anything {
     name = "should_dispatch"
 
     inputs = {

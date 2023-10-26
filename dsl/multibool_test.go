@@ -8,7 +8,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-func TestAnyMatch(t *testing.T) {
+func TestAnyTrue(t *testing.T) {
 	tests := []struct {
 		values   []cty.Value
 		expected cty.Value
@@ -42,9 +42,9 @@ func TestAnyMatch(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		testName := fmt.Sprintf("anymatch(%#v)", test.values)
+		testName := fmt.Sprintf("anytrue(%#v)", test.values)
 		t.Run(testName, func(t *testing.T) {
-			got, err := AnyMatch(test.values)
+			got, err := AnyTrue(test.values)
 
 			if assert.NoError(t, err) {
 				assert.Equal(t, test.expected, got)
@@ -53,7 +53,7 @@ func TestAnyMatch(t *testing.T) {
 	}
 }
 
-func TestAllMatch(t *testing.T) {
+func TestAllTrue(t *testing.T) {
 	tests := []struct {
 		values   []cty.Value
 		expected cty.Value
@@ -87,9 +87,9 @@ func TestAllMatch(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		testName := fmt.Sprintf("anymatch(%#v)", test.values)
+		testName := fmt.Sprintf("anytrue(%#v)", test.values)
 		t.Run(testName, func(t *testing.T) {
-			got, err := AllMatch(test.values)
+			got, err := AllTrue(test.values)
 
 			if assert.NoError(t, err) {
 				assert.Equal(t, test.expected, got)
