@@ -12,4 +12,4 @@ For most users the easiest way to get started will be using a hiphops.io account
 
 ---
 
-Our guide for contributing and developing to hops itself is [here](./CONTRIBUTING.md)
+Our guide for contributing and developing to hops itself is [here](./docs/contributing.md)

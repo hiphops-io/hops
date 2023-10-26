@@ -1,4 +1,4 @@
-package workflow
+package orchestrator
 
 import (
 	"context"
@@ -18,12 +18,13 @@ func InitLeasedRunner(ctx context.Context, leaseConf undist.LeaseConfig, appdirs
 		return nil, nil, err
 	}
 
+	// Sneaky little hopses @manterfield
 	runner, err := NewRunner(lease, hopses, logger)
 
 	return runner, lease, err
 }
 
-// CreateRunnerCallback is a helper method to return a consume callback that runs workflow.Runner.Run
+// CreateRunnerCallback is a helper method to return a consume callback that runs orchestrator.Runner.Run
 //
 // TODO: Properly handle the two error states rather than just Nak'ing them
 func CreateRunnerCallback(runner *Runner, stateDir string, logger zerolog.Logger) func(m jetstream.Msg) {

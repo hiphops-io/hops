@@ -24,19 +24,19 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/internal/orchestrator"
 	"github.com/hiphops-io/hops/internal/setup"
-	"github.com/hiphops-io/hops/internal/workflow"
 	undist "github.com/hiphops-io/hops/undistribute"
 )
 
 const (
-	serverShortDesc = "Start the hops workflow server & listen for events"
-	serverLongDesc  = `Start an instance of the hops server to process events and run workflows.
+	serverShortDesc = "Start the hops orchestration server & listens for events"
+	serverLongDesc  = `Start an instance of the hops orchestration server to process events and run workflows.
 	
 Hops can run locally only, or connect with a cluster and share workloads.`
 )
 
-// serverCmd starts the hops workflow server, listening for and processing new events
+// serverCmd starts the hops orchestrator server, listening for and processing new events
 func serverCmd(ctx context.Context) *cobra.Command {
 	serverCmd := &cobra.Command{
 		Use:   "server",
@@ -88,7 +88,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 	return serverCmd
 }
 
-func setupServer(ctx context.Context, appdirs setup.AppDirs, natsUrl string, streamName string, hopsFilePath string, logger zerolog.Logger) (*workflow.Runner, *undist.Lease, error) {
+func setupServer(ctx context.Context, appdirs setup.AppDirs, natsUrl string, streamName string, hopsFilePath string, logger zerolog.Logger) (*orchestrator.Runner, *undist.Lease, error) {
 	hops, hopsHash, err := dsl.ReadHopsFiles(hopsFilePath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to read hops file: %w", err)
@@ -101,7 +101,7 @@ func setupServer(ctx context.Context, appdirs setup.AppDirs, natsUrl string, str
 		Seed:       []byte(hopsHash),
 	}
 
-	server, lease, err := workflow.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
+	server, lease, err := orchestrator.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -110,10 +110,10 @@ func setupServer(ctx context.Context, appdirs setup.AppDirs, natsUrl string, str
 }
 
 // TODO: Add context cancellation with cleanup on SIGINT/SIGTERM https://medium.com/@matryer/make-ctrl-c-cancel-the-context-context-bd006a8ad6ff
-func server(ctx context.Context, server *workflow.Runner, lease *undist.Lease, logger zerolog.Logger) error {
+func server(ctx context.Context, server *orchestrator.Runner, lease *undist.Lease, logger zerolog.Logger) error {
 	logger.Info().Msg("Listening for new events")
 
-	callback := workflow.CreateRunnerCallback(server, lease.Dir(), logger)
+	callback := orchestrator.CreateRunnerCallback(server, lease.Dir(), logger)
 	err := lease.Consume(ctx, callback)
 	if err != nil {
 		return err

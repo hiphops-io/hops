@@ -25,8 +25,8 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/internal/orchestrator"
 	"github.com/hiphops-io/hops/internal/setup"
-	"github.com/hiphops-io/hops/internal/workflow"
 	undist "github.com/hiphops-io/hops/undistribute"
 )
 
@@ -93,7 +93,7 @@ func replayCmd(ctx context.Context) *cobra.Command {
 	return replayCmd
 }
 
-func setupReplay(ctx context.Context, appdirs setup.AppDirs, keyFile setup.KeyFile, hopsFilePath string, eventSequence string, debug bool, logger zerolog.Logger) (*workflow.Runner, *undist.Lease, error) {
+func setupReplay(ctx context.Context, appdirs setup.AppDirs, keyFile setup.KeyFile, hopsFilePath string, eventSequence string, debug bool, logger zerolog.Logger) (*orchestrator.Runner, *undist.Lease, error) {
 	hops, _, err := dsl.ReadHopsFiles(hopsFilePath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to read hops file: %w", err)
@@ -114,15 +114,15 @@ func setupReplay(ctx context.Context, appdirs setup.AppDirs, keyFile setup.KeyFi
 		Seed:                []byte(replayId),
 	}
 
-	runner, lease, err := workflow.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
+	runner, lease, err := orchestrator.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
 
 	return runner, lease, err
 }
 
-func replay(ctx context.Context, runner *workflow.Runner, lease *undist.Lease, logger zerolog.Logger) error {
+func replay(ctx context.Context, runner *orchestrator.Runner, lease *undist.Lease, logger zerolog.Logger) error {
 	logger.Info().Msgf("Replaying events - Replay ID: %s", lease.Config().SourceConsumerName)
 
-	callback := workflow.CreateRunnerCallback(runner, lease.Dir(), logger)
+	callback := orchestrator.CreateRunnerCallback(runner, lease.Dir(), logger)
 	err := lease.Consume(ctx, callback)
 	if err != nil {
 		return err

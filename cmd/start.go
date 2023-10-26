@@ -26,9 +26,9 @@ import (
 
 const (
 	startShortDesc = "Start hops"
-	startLongDesc  = `Start the hops server, worker, & console in one instance.
+	startLongDesc  = `Start the hops orchestration server, worker, & console in one instance.
 
-Server, console, and worker can be started independently with subcommands:
+Orchestration server, console, and worker can be started independently with subcommands:
 
 hops start console
 
@@ -38,7 +38,7 @@ hops start worker
 	`
 )
 
-// startCmd starts the hops workflow server, listening for and processing new events
+// startCmd starts the hops orchestration server, listening for and processing new events
 func startCmd(ctx context.Context) *cobra.Command {
 	startCmd := &cobra.Command{
 		Use:   "start",

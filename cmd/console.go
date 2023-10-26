@@ -31,7 +31,7 @@ const (
 	consoleShortDesc = "Start the hops console locally"
 	consoleLongDesc  = `Start the hops console to interact with the UI.
 		
-This does *not* start the hops workflow server.
+This does *not* start the hops orchestration server.
 The console provides access to the hops UI and the backend APIs needed to serve it`
 )
 
