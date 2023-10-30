@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hiphops-io/hops/internal/logs"
+	"github.com/hiphops-io/hops/logs"
 )
 
 func TestLease(t *testing.T) {
@@ -254,7 +254,7 @@ func createTestLease(ctx context.Context, t *testing.T, natsUrl string) (*Lease,
 //
 // It will create a local NATS server to act as the hiphops.io hub
 func createNatsServers(t *testing.T) (*server.Server, func()) {
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 	hubLogger := logs.NewNatsZeroLogger(logger)
 
 	// Hub server

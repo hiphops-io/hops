@@ -7,11 +7,10 @@ import (
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/logs"
 	undist "github.com/hiphops-io/hops/undistribute"
 )
 
@@ -26,7 +25,7 @@ func (l *LeaseStub) Publish(ctx context.Context, channel undist.Channel, sequenc
 
 func TestTaskDispatch(t *testing.T) {
 	ctx := context.Background()
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 	lease := &LeaseStub{}
 
 	hops, _, err := dsl.ReadHopsFiles("./testdata/simple.hops")
@@ -60,9 +59,4 @@ func initTestEventBundle() (map[string][]byte, error) {
 	}
 
 	return eventBundle, nil
-}
-
-func initTestLogger() zerolog.Logger {
-	zerolog.SetGlobalLevel(zerolog.Disabled)
-	return log.Logger
 }

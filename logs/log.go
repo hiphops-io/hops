@@ -1,12 +1,12 @@
 package logs
 
 import (
-	"context"
 	"io"
 	"log"
 	"os"
 
 	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 )
 
 func InitLogger(debug bool) zerolog.Logger {
@@ -28,9 +28,7 @@ func InitLogger(debug bool) zerolog.Logger {
 	return logger
 }
 
-func UpdateLogContextStr(ctx context.Context, key string, value string) {
-	logger := zerolog.Ctx(ctx)
-	logger.UpdateContext(func(c zerolog.Context) zerolog.Context {
-		return c.Str(key, value)
-	})
+func NoOpLogger() zerolog.Logger {
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	return zlog.Logger
 }

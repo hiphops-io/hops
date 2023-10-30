@@ -11,9 +11,8 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/logs"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -76,7 +75,7 @@ func TestTriggerTask(t *testing.T) {
 	}
 
 	// Let's set up the hops config...
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 	taskHops, err := initTaskHops(testHopsConfig, t)
 	require.NoError(t, err, "Test setup: Hops config should be valid")
 
@@ -137,11 +136,6 @@ func initTmpHopsFile(content string, t *testing.T) (dsl.HclFiles, string) {
 	require.NoError(t, err)
 
 	return hclFile, hash
-}
-
-func initTestLogger() zerolog.Logger {
-	zerolog.SetGlobalLevel(zerolog.Disabled)
-	return log.Logger
 }
 
 type LeaseMock struct {

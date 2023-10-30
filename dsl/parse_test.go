@@ -6,14 +6,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/hiphops-io/hops/logs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestValidParse(t *testing.T) {
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 	ctx := context.Background()
 
 	// test that split hops files have identical result as single hops file
@@ -69,7 +68,7 @@ func TestValidParse(t *testing.T) {
 // Ideally we'll move them both to a single table based test, but there's a bit
 // of work there due to the nature of the test reaching into deep data structures to check values
 func TestValidParseResponseStep(t *testing.T) {
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 	ctx := context.Background()
 
 	hopsFile := "./testdata/valid.hops"
@@ -107,7 +106,7 @@ func TestInvalidParse(t *testing.T) {
 	hopsFile := "./testdata/invalid.hops"
 	eventFile := "./testdata/raw_change_event.json"
 	ctx := context.Background()
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 
 	eventData, err := os.ReadFile(eventFile)
 	require.NoError(t, err)
@@ -269,9 +268,4 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			assert.Equal(t, tt.expectedRows, len(resultFileContent))
 		})
 	}
-}
-
-func initTestLogger() zerolog.Logger {
-	zerolog.SetGlobalLevel(zerolog.Disabled)
-	return log.Logger
 }

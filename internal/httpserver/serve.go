@@ -11,8 +11,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
-	"github.com/hiphops-io/hops/internal/logs"
 	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/logs"
 )
 
 type leasePublisherConnector interface {

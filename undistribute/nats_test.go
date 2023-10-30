@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hiphops-io/hops/internal/logs"
+	"github.com/hiphops-io/hops/logs"
 )
 
 func TestNewNatsServer(t *testing.T) {
@@ -19,7 +19,7 @@ func TestNewNatsServer(t *testing.T) {
 	expectedMsg := []byte("Hello!")
 	expectedReply := []byte("Reply")
 	// Create no-op logger
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 	natsLogger := logs.NewNatsZeroLogger(logger)
 
 	ns, _, err := NewNatsServer("./testdata/leaf-nats.conf", rootDir, false, &natsLogger)
