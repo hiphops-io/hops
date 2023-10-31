@@ -1,5 +1,9 @@
 <script lang="ts">
+	import TableHeadItem from '$lib/tables/TableHeadItem.svelte';
+	import TableDataCell from '$lib/tables/TableDataCell.svelte';
+	import Tag from '$lib/components/Tag.svelte';
 	import HopsNav from '$lib/nav/HopsNav.svelte';
+	import { PlayOutline } from 'flowbite-svelte-icons';
 
 	let tableData = [
 		{
@@ -7,86 +11,36 @@
 			eventName: 'Event 1',
 			pipelines: 3,
 			pipelineNames: ['Pipeline 1', 'Pipeline 2', 'Pipeline 3'],
-			JSON: 'This is some JSON from Event 1'
+			hops: {
+				event: 'pull_request',
+				source: 'github',
+				action: 'opened'
+			},
+			JSON: {
+				status: 'Success',
+				duration: '2 hours 30 minutes',
+				logs: ['Data Ingestion started at 9:30 AM.', 'Data Processing completed at 12:00 PM.']
+			}
 		},
 		{
-			timestamp: '2023-10-10 02:30 PM',
+			timestamp: '2023-10-10 10:02 AM',
 			eventName: 'Event 2',
-			pipelines: 5,
-			pipelineNames: ['Pipeline 1', 'Pipeline 2', 'Pipeline 3', 'Pipeline 4', 'Pipeline 5'],
-			JSON: 'This is some JSON from Event 2'
-		},
-		{
-			timestamp: '2023-10-11 09:15 AM',
-			eventName: 'Event 3',
-			pipelines: 2,
-			pipelineNames: ['Pipeline 1', 'Pipeline 2'],
-			JSON: 'This is some JSON from Event 3'
-		},
-		{
-			timestamp: '2023-10-11 11:00 AM',
-			eventName: 'Event 4',
 			pipelines: 1,
 			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 4'
-		},
-		{
-			timestamp: '2023-10-11 11:04 AM',
-			eventName: 'Event 5',
-			pipelines: 1,
-			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 5'
-		},
-		{
-			timestamp: '2023-10-11 11:05 AM',
-			eventName: 'Event 6',
-			pipelines: 1,
-			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 6'
-		},
-		{
-			timestamp: '2023-10-11 11:06 AM',
-			eventName: 'Event 7',
-			pipelines: 1,
-			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 7'
-		},
-		{
-			timestamp: '2023-10-11 11:07 AM',
-			eventName: 'Event 8',
-			pipelines: 1,
-			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 8'
-		},
-		{
-			timestamp: '2023-10-11 11:08 AM',
-			eventName: 'Event 9',
-			pipelines: 1,
-			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 9'
-		},
-		{
-			timestamp: '2023-10-11 11:09 AM',
-			eventName: 'Event 10',
-			pipelines: 1,
-			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 10'
-		},
-		{
-			timestamp: '2023-10-11 11:10 AM',
-			eventName: 'Event 11',
-			pipelines: 1,
-			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 11'
-		},
-		{
-			timestamp: '2023-10-11 11:11 AM',
-			eventName: 'Event 12',
-			pipelines: 1,
-			pipelineNames: ['Pipeline 1'],
-			JSON: 'This is some JSON from Event 12'
+			hops: {
+				event: 'pull_request',
+				source: 'github',
+				action: 'opened'
+			},
+			JSON: {
+				status: 'Success',
+				duration: '2 hours 30 minutes',
+				logs: ['Data Ingestion started at 9:30 AM.', 'Data Processing completed at 12:00 PM.']
+			}
 		}
 	];
+
+	tableData = tableData.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
 	let activeRow = tableData[0];
 
@@ -96,7 +50,7 @@
 </script>
 
 <svelte:head>
-	<title>Events</title>
+	<title>Advanced</title>
 	<meta name="description" content="Trigger task flows" />
 </svelte:head>
 
@@ -105,35 +59,39 @@
 
 	<!--Page title-->
 	<div class="md:pl-20 md:pr-20 mx-8 md:mx-auto mt-16 pb-4">
-		<h1 class="text-left text-6xl font-normal mb-4 dark:text-white">Events</h1>
+		<h1 class="text-left text-5xl font-normal mb-2 dark:text-white">Events</h1>
 
-		<h2 class="text-2xl mb-6 text-grey dark:text-white dark:text-opacity-50">Description TBC</h2>
+		<h2 class="text-xl mb-6 text-grey dark:text-white dark:text-opacity-50">
+			See what's going on with your tasks
+		</h2>
 	</div>
 
 	<!-- Events container-->
 	<div class="flex space-x-4 pl-8 pr-8 md:pl-20 md:pr-20 text-white">
 		<!--Events table container-->
-		<div class="w-1/2 bg-[#191919] rounded-lg overflow-scroll h-[450px]">
+		<div
+			class="w-1/2 dark:bg-[#191919] dark:border-none border border-lightrey overflow-scroll h-[450px] rounded-lg"
+		>
 			<div class="w-full">
 				<table class="table-auto w-full">
 					<thead class="text-left">
 						<tr>
-							<th class=" border-r border-b border-almostblack p-2">Timestamp</th>
-							<th class=" border-r border-b border-almostblack p-2">Event name</th>
-							<th class="border-b border-almostblack p-2">Pipelines</th>
+							<TableHeadItem>Timestamp</TableHeadItem>
+							<TableHeadItem>Event name</TableHeadItem>
+							<TableHeadItem>Pipelines</TableHeadItem>
 						</tr>
 					</thead>
 					<tbody>
 						{#each tableData as row (row.timestamp)}
 							<tr
-								class="hover:bg-almostblack {row === activeRow
-									? 'border-l-4 border-purple bg-almostblack'
+								class="hover:bg-lightgrey dark:hover:bg-almostblack {row === activeRow
+									? 'border-l-2 border-purple bg-lightgrey dark:bg-almostblack'
 									: ''}"
 								on:click={() => setActiveRow(row)}
 							>
-								<td class=" border-r border-b border-almostblack p-2">{row.timestamp}</td>
-								<td class=" border-r border-b border-almostblack p-2">{row.eventName}</td>
-								<td class="border-b border-almostblack p-2">{row.pipelines}</td>
+								<TableDataCell>{row.timestamp}</TableDataCell>
+								<TableDataCell>{row.eventName}</TableDataCell>
+								<TableDataCell>{row.pipelines}</TableDataCell>
 							</tr>
 						{/each}
 					</tbody>
@@ -142,26 +100,42 @@
 		</div>
 
 		<!--Selected event detail container-->
-		<div class="w-1/2 bg-[#191919] rounded-lg border border-purple overflow-scroll h-[450px]">
+		<div
+			class="w-1/2 bg-white border border-lightrey dark:border-none dark:bg-[#191919] overflow-scroll h-[450px] text-black dark:text-white rounded-lg"
+		>
 			<div class="p-8">
-				<p
-					class="border rounded-full px-4 py-1 border-grey w-fit mb-2 text-sm font-medium text-lightgrey"
+				<h2 class="text-2xl mb-8 text-grey dark:text-midgrey">{activeRow.eventName}</h2>
+				<!--Pipelines container-->
+				<div class="mt-4 mb-12">
+					<Tag>Pipelines</Tag>
+
+					<div
+						class="mt-4 mb-12 border-l-2 border-midgrey dark:border-almostblack py-1 px-4 text-sm text-grey dark:text-midgrey"
+					>
+						{#each activeRow.pipelineNames as pipeline}
+							<div class="mb-3 last:mb-0">
+								<PlayOutline class="inline-block w-3 h-3 mr-2" strokeWidth="1" />
+								{pipeline}
+							</div>
+						{/each}
+					</div>
+				</div>
+
+				<Tag>Hops</Tag>
+				<div
+					class="mt-4 mb-12 border-l-2 border-midgrey dark:border-almostblack py-2 px-4 text-sm text-grey dark:text-midgrey"
 				>
-					Tag
-				</p>
-				<p class="mb-8">{activeRow.eventName}</p>
-				<p
-					class="border rounded-full px-4 py-1 border-grey w-fit mb-2 text-sm font-medium text-lightgrey"
-				>
-					Pipelines
-				</p>
-				<p class="mb-8">{activeRow.pipelineNames}</p>
-				<p
-					class="border rounded-full px-4 py-1 border-grey w-fit mb-2 text-sm font-medium text-lightgrey"
-				>
-					JSON
-				</p>
-				<p class="mb-8">{activeRow.JSON}</p>
+					<pre>{JSON.stringify(activeRow.hops, null, 2)}</pre>
+				</div>
+
+				<div class="mt-4 mb-12">
+					<Tag>JSON</Tag>
+					<div
+						class="mt-4 mb-12 border-l-2 border-midgrey dark:border-almostblack py-2 px-4 text-sm text-grey dark:text-midgrey"
+					>
+						<pre>{JSON.stringify(activeRow.JSON, null, 2)}</pre>
+					</div>
+				</div>
 			</div>
 		</div>
 	</div>

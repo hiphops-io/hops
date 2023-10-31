@@ -5,7 +5,7 @@
 		ArrowRightSolid,
 		CheckCircleOutline,
 		ExclamationCircleOutline,
-		IconOutline
+		MessageDotsOutline
 	} from 'flowbite-svelte-icons';
 	import { useForm } from 'svelte-use-form';
 
@@ -73,7 +73,7 @@
 	<meta name="description" content="Run the '{task.display_name}' task" />
 </svelte:head>
 
-<div class="dark:bg-grain bg-cover bg-norepeat h-screen">
+<div class="dark:bg-grain bg-cover bg-norepeat min-h-screen pb-16">
 	<TaskNav />
 
 	<!--Page title-->
@@ -176,18 +176,25 @@
 	<!-- Configure response UI-->
 
 	<div
-		class="md:w-2/4 mx-8 md:mx-auto p-6 bg-grey bg-opacity-5 dark:bg-almostblack rounded-xl space-y-8 border border-purple h-fit"
+		class="md:w-2/4 mx-8 md:mx-auto p-6 bg-white bg-opacity-5 dark:bg-almostblack rounded-xl space-y-8 border border-purple h-fit"
 	>
 		<!--Running task/ Task ran alert-->
 		<div class="flex items-center space-x-4">
 			{#if taskRan}
-				<img src="/images/Check-outline.svg" alt="Check IconOutline" />
+				<CheckCircleOutline class="w-8 h-8 dark:text-white text-almostblack" strokeWidth="1" />
 				<p class="font-medium dark:text-white text-grey">Task ran</p>
 			{:else}
+				<!--Dark mode spinner-->
 				<img
-					src="/images/Loading-static.svg"
+					src="/images/loading-white.svg"
 					alt="loading icon"
-					class="animate-[spin_2s_linear_infinite]"
+					class="animate-[spin_2s_linear_infinite] hidden dark:block"
+				/>
+				<!--Light mode spinner-->
+				<img
+					src="/images/loading-black.svg"
+					alt="loading icon"
+					class="animate-[spin_2s_linear_infinite] dark:hidden block"
 				/>
 				<p class="font-medium dark:text-white text-grey">Running task...</p>
 			{/if}
@@ -196,8 +203,8 @@
 		<!--Configure response container-->
 		{#if taskRan}
 			<div class="flex space-x-4 place-items-start">
-				<img src="/images/Response-outline.svg" alt="Check IconOutline" />
-				<p class="font-medium dark:text-white text-grey mt-2">
+				<MessageDotsOutline class="w-8 h-8 dark:text-white text-almostblack" strokeWidth="1" />
+				<p class="font-medium dark:text-white text-grey">
 					Team Activity Report - Last 3 Months
 					<br />
 					Team Name: TechXplorers
