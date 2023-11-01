@@ -73,7 +73,7 @@
 	<meta name="description" content="Run the '{task.display_name}' task" />
 </svelte:head>
 
-<div class="dark:bg-grain bg-cover bg-norepeat min-h-screen pb-16">
+<div class="dark:bg-grain bg-cover bg-norepeat bg-fixed min-h-screen">
 	<TaskNav />
 
 	<!--Page title-->
@@ -145,13 +145,7 @@
 
 				<!--Run task button for a task with fields-->
 				<button
-					class={`
-			mx-8 md:mx-0 px-6 py-4 flex items-center
-			font-semibold text-white dark:text-black
-			bg-black dark:bg-white disabled:dark:bg-grey
-			active:shadow-md active:shadow-purple active:disabled:shadow-black
-			hover:scale-105
-			transition-[transform] transition-[box-shadow] duration-200 ` +
+					class={`rounded-md hover:border-b-4 border-b-4 border-midgrey hover:border-purple hover:shadow-purpleglow hover:transition hover:duration-500 mx-8 md:mx-0 px-6 py-4 pb-4 flex items-center font-semibold text-white dark:text-black bg-black dark:bg-white disabled:dark:bg-grey active:shadow-md active:shadow-purple active:disabled:shadow-black` +
 						(task.params.length !== 0 ? 'float-right mt-12' : 'w-80 justify-between')}
 					type="submit"
 					disabled={formStatus !== 'ready'}

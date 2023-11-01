@@ -14,7 +14,7 @@
 	<meta name="description" content="Trigger task flows" />
 </svelte:head>
 
-<div class="dark:bg-grain bg-cover bg-norepeat min-h-screen">
+<div class="dark:bg-grain bg-cover bg-norepeat bg-fixed min-h-screen">
 	<HopsNav />
 
 	<!--Page title-->

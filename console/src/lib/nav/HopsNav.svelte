@@ -9,7 +9,7 @@
 </script>
 
 <div
-	class="pl-8 pr-8 md:pl-20 md:pr-20 pt-4 pb-4 w-full flex justify-between border-solid border-b items-center border-lightgrey dark:border-white dark:border-opacity-20"
+	class="pl-8 pr-8 md:pl-20 md:pr-20 pt-4 pb-4 w-full flex justify-between border-solid border-b items-center border-lightgrey dark:border-white dark:border-opacity-10"
 >
 	<Navbar
 		fluid={true}
@@ -30,23 +30,23 @@
 		<DotsHorizontalOutline class="dots-menu dark:text-white" />
 		<Dropdown
 			triggeredBy=".dots-menu"
-			containerClass="pb-4 text-left border border-lightgrey dark:bg-black"
+			containerClass="text-left border border-lightgrey dark:bg-black"
 		>
-			<DropdownItem>
+			<DropdownItem defaultClass="hover:bg-almostblack px-4 py-2 text-sm">
 				<a href="/console">Tasks</a>
 			</DropdownItem>
 
-			<DropdownItem>
+			<DropdownItem defaultClass="hover:bg-almostblack px-4 py-2 text-sm">
 				<a href="/console/advanced">Advanced</a>
 			</DropdownItem>
 
-			<DropdownItem>
+			<DropdownItem defaultClass="hover:bg-almostblack px-4 py-2 text-sm">
 				<a href="https://docs.hiphops.io" target="_blank">Docs</a>
 			</DropdownItem>
-
+			<!-- 
 			<div>
 				<ThemeToggle />
-			</div>
+			</div> -->
 		</Dropdown>
 	</Navbar>
 </div>
