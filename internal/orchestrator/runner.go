@@ -12,34 +12,38 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
-	"github.com/hiphops-io/hops/undistribute"
-	undist "github.com/hiphops-io/hops/undistribute"
+	"github.com/hiphops-io/hops/nats"
 )
 
+type NatsClient interface {
+	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error)
+	ConsumeSequences(context.Context, nats.SequenceHandler) error
+}
+
 type Runner struct {
-	logger    zerolog.Logger
-	hopsFiles dsl.HclFiles
-	lease     LeasePublisher
+	logger     zerolog.Logger
+	hopsFiles  dsl.HclFiles
+	natsClient NatsClient
 }
 
-type LeasePublisher interface {
-	Publish(context.Context, undist.Channel, string, string, []byte, ...string) (*jetstream.PubAck, error)
-}
-
-func NewRunner(lease LeasePublisher, hopsFiles dsl.HclFiles, logger zerolog.Logger) (*Runner, error) {
+func NewRunner(natsClient NatsClient, hopsFiles dsl.HclFiles, logger zerolog.Logger) (*Runner, error) {
 	runner := &Runner{
-		logger:    logger,
-		hopsFiles: hopsFiles,
-		lease:     lease,
+		logger:     logger,
+		hopsFiles:  hopsFiles,
+		natsClient: natsClient,
 	}
 
 	return runner, nil
 }
 
-func (r *Runner) Run(
+func (r *Runner) Run(ctx context.Context) {
+	r.natsClient.ConsumeSequences(ctx, r)
+}
+
+func (r *Runner) SequenceCallback(
 	ctx context.Context,
 	sequenceId string,
-	eventBundle map[string][]byte,
+	eventBundle nats.MessageBundle,
 ) error {
 	logger := r.logger.With().Str("sequence_id", sequenceId).Logger()
 
@@ -98,10 +102,11 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 		return
 	}
 
-	_, err := r.lease.Publish(ctx, undistribute.Request, sequenceId, call.Slug, call.Inputs, app, handler)
+	_, err := r.natsClient.Publish(ctx, call.Inputs, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
 
 	// At the time of writing, the go client does not contain an error matching
-	// the 'maximum massages per subject exceeded' error. We match on the code here instead
+	// the 'maximum massages per subject exceeded' error.
+	// We match on the code here instead - @manterfield
 	if err != nil && !strings.Contains(err.Error(), "err_code=10077") {
 		errorchan <- err
 		return

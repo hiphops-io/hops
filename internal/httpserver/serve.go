@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
@@ -15,17 +15,17 @@ import (
 	"github.com/hiphops-io/hops/logs"
 )
 
-type leasePublisherConnector interface {
-	leasePublisher
-	NatsConnection() *nats.Conn
+type NatsClient interface {
+	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error)
+	CheckConnection() bool
 }
 
-func Serve(appdirs setup.AppDirs, addr string, hopsFilePath string, lease leasePublisherConnector, logger zerolog.Logger) error {
+func Serve(appdirs setup.AppDirs, addr string, hopsFilePath string, natsClient NatsClient, logger zerolog.Logger) error {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RedirectSlashes)
 	r.Use(logs.AccessLogMiddleware(logger))
-	r.Use(Healthcheck(lease.NatsConnection(), "/health"))
+	r.Use(Healthcheck(natsClient, "/health"))
 	// TODO: Make CORS configurable and lock down by default. As-is it would be
 	// insecure for production/deployed use.
 	r.Use(cors.Handler(cors.Options{
@@ -46,7 +46,7 @@ func Serve(appdirs setup.AppDirs, addr string, hopsFilePath string, lease leaseP
 		return err
 	}
 
-	r.Mount("/tasks", TaskRouter(taskHops, lease, logger))
+	r.Mount("/tasks", TaskRouter(taskHops, natsClient, logger))
 
 	logger.Info().Msgf("Console available on http://%s/console", addr)
 	return http.ListenAndServe(addr, r)

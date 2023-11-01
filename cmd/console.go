@@ -24,7 +24,7 @@ import (
 
 	"github.com/hiphops-io/hops/internal/httpserver"
 	"github.com/hiphops-io/hops/internal/setup"
-	undist "github.com/hiphops-io/hops/undistribute"
+	"github.com/hiphops-io/hops/nats"
 )
 
 const (
@@ -56,25 +56,18 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			_, lease, err := setupServer(
-				ctx,
-				appdirs,
-				keyFile.NatsUrl(),
-				keyFile.AccountId,
-				viper.GetString("hops"),
-				logger,
-			)
+			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId)
 			if err != nil {
-				logger.Error().Err(err).Msg("Failed to setup server")
+				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
-			defer lease.Close()
+			defer natsClient.Close()
 
 			if err := console(
 				appdirs,
 				viper.GetString("address"),
-				viper.GetString("hops"),
-				lease,
+				viper.GetString("hops"), // TODO: Replace this with pre-loaded HclFiles (as in start cmd)
+				natsClient,
 				logger,
 			); err != nil {
 				logger.Error().Err(err).Msg("Console failed to start")
@@ -88,6 +81,6 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 	return consoleCmd
 }
 
-func console(appdirs setup.AppDirs, address string, hopsFilePath string, lease *undist.Lease, logger zerolog.Logger) error {
-	return httpserver.Serve(appdirs, address, hopsFilePath, lease, logger)
+func console(appdirs setup.AppDirs, address string, hopsFilePath string, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
+	return httpserver.Serve(appdirs, address, hopsFilePath, natsClient, logger)
 }

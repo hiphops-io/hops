@@ -16,6 +16,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// LocalServer is an in-process hiphops.io style NATS server instance
+// created from a NATS config file.
 type LocalServer struct {
 	NatsServer *server.Server
 	ServerOpts *server.Options

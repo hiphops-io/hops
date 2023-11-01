@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -26,7 +25,7 @@ import (
 	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/orchestrator"
 	"github.com/hiphops-io/hops/internal/setup"
-	undist "github.com/hiphops-io/hops/undistribute"
+	"github.com/hiphops-io/hops/nats"
 )
 
 const (
@@ -88,36 +87,36 @@ func serverCmd(ctx context.Context) *cobra.Command {
 	return serverCmd
 }
 
-func setupServer(ctx context.Context, appdirs setup.AppDirs, natsUrl string, streamName string, hopsFilePath string, logger zerolog.Logger) (*orchestrator.Runner, *undist.Lease, error) {
-	hops, hopsHash, err := dsl.ReadHopsFiles(hopsFilePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to read hops file: %w", err)
-	}
+// TODO: Delete
+// func setupServer(ctx context.Context, appdirs setup.AppDirs, natsUrl string, streamName string, hopsFilePath string, logger zerolog.Logger) (*orchestrator.Runner, *undist.Lease, error) {
+// 	hops, hopsHash, err := dsl.ReadHopsFiles(hopsFilePath)
+// 	if err != nil {
+// 		return nil, nil, fmt.Errorf("Failed to read hops file: %w", err)
+// 	}
 
-	leaseConf := undist.LeaseConfig{
-		NatsUrl:    natsUrl,
-		StreamName: streamName,
-		RootDir:    appdirs.WorkspaceDir,
-		Seed:       []byte(hopsHash),
-	}
+// 	leaseConf := undist.LeaseConfig{
+// 		NatsUrl:    natsUrl,
+// 		StreamName: streamName,
+// 		RootDir:    appdirs.WorkspaceDir,
+// 		Seed:       []byte(hopsHash),
+// 	}
 
-	server, lease, err := orchestrator.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
-	if err != nil {
-		return nil, nil, err
-	}
+// 	server, lease, err := orchestrator.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
 
-	return server, lease, nil
-}
+// 	return server, lease, nil
+// }
 
 // TODO: Add context cancellation with cleanup on SIGINT/SIGTERM https://medium.com/@matryer/make-ctrl-c-cancel-the-context-context-bd006a8ad6ff
-func server(ctx context.Context, server *orchestrator.Runner, lease *undist.Lease, logger zerolog.Logger) error {
+func server(ctx context.Context, hopsFiles dsl.HclFiles, natsClient *nats.Client, logger zerolog.Logger) error {
 	logger.Info().Msg("Listening for new events")
 
-	callback := orchestrator.CreateRunnerCallback(server, lease.Dir(), logger)
-	err := lease.Consume(ctx, callback)
+	runner, err := orchestrator.NewRunner(natsClient, hopsFiles, logger)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return runner.Run(ctx)
 }

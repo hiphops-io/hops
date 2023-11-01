@@ -10,27 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLocalNatsConnection(t *testing.T) {
-	localNats := setupLocalNatsServer(t)
-	defer localNats.Close()
-
-	nc, err := localNats.Connect("")
-
-	if assert.NotNil(t, nc) {
-		defer nc.Drain()
-	}
-	require.NoError(t, err, "Should connect to local NATS without errors")
-	require.True(t, nc.IsConnected(), "Connection to local NATS should be active")
-}
-
-func TestNewLocalNats(t *testing.T) {
+func TestNewLocalServer(t *testing.T) {
 	localNats := setupLocalNatsServer(t)
 	defer localNats.Close()
 
 	require.True(t, localNats.NatsServer.Running(), "Local NATS server should be running")
 }
 
-func TestLocalNatsConnect(t *testing.T) {
+func TestLocalServerConnect(t *testing.T) {
 	localNats := setupLocalNatsServer(t)
 	defer localNats.Close()
 
@@ -43,7 +30,7 @@ func TestLocalNatsConnect(t *testing.T) {
 	assert.True(t, nc.IsConnected(), "Local NATS client connection should be active")
 }
 
-func TestLocalNatsAuthUrl(t *testing.T) {
+func TestLocalServerAuthUrl(t *testing.T) {
 	localNats := setupLocalNatsServer(t)
 	defer localNats.Close()
 
@@ -64,7 +51,7 @@ func TestLocalNatsAuthUrl(t *testing.T) {
 	}
 }
 
-func TestLocalNatsClose(t *testing.T) {
+func TestLocalServerClose(t *testing.T) {
 	t.Skip("Not implemented: Ensure calling close shuts down the server")
 }
 

@@ -17,11 +17,14 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/nats"
 )
 
 const (
@@ -59,19 +62,33 @@ func startCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			serverRunner, lease, err := setupServer(
-				ctx,
-				appdirs,
-				keyFile.NatsUrl(),
-				keyFile.AccountId,
-				viper.GetString("hops"),
-				logger,
-			)
+			// TODO: Delete
+			// serverRunner, lease, err := setupServer(
+			// 	ctx,
+			// 	appdirs,
+			// 	keyFile.NatsUrl(),
+			// 	keyFile.AccountId,
+			// 	viper.GetString("hops"),
+			// 	logger,
+			// )
+			// if err != nil {
+			// 	logger.Error().Err(err).Msg("Failed to setup server")
+			// 	return err
+			// }
+			// defer lease.Close()
+
+			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId)
 			if err != nil {
-				logger.Error().Err(err).Msg("Failed to setup server")
+				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
-			defer lease.Close()
+			defer natsClient.Close()
+
+			hops, _, err := initHopsFiles(viper.GetString("hops"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return err
+			}
 
 			errs := make(chan error, 1)
 
@@ -80,7 +97,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 					appdirs,
 					viper.GetString("address"),
 					viper.GetString("hops"),
-					lease,
+					natsClient,
 					logger,
 				)
 			}()
@@ -88,8 +105,8 @@ func startCmd(ctx context.Context) *cobra.Command {
 			go func() {
 				errs <- server(
 					ctx,
-					serverRunner,
-					lease,
+					hops,
+					natsClient,
 					logger,
 				)
 			}()
@@ -118,4 +135,13 @@ func startCmd(ctx context.Context) *cobra.Command {
 	viper.BindPFlag("address", startCmd.PersistentFlags().Lookup("address"))
 
 	return startCmd
+}
+
+func initHopsFiles(hopsFilePath string) (dsl.HclFiles, string, error) {
+	hops, hopsHash, err := dsl.ReadHopsFiles(hopsFilePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("Failed to read hops file: %w", err)
+	}
+
+	return hops, hopsHash, err
 }

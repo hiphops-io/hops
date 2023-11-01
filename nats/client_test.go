@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewHopsNats(t *testing.T) {
+func TestNewClient(t *testing.T) {
 	ctx := context.Background()
-	hopsNats, cleanup := setupHopsNats(ctx, t)
+	hopsNats, cleanup := setupClient(ctx, t)
 	defer cleanup()
 
 	if assert.NotNil(t, hopsNats) {
@@ -26,12 +26,12 @@ func TestNewHopsNats(t *testing.T) {
 	assert.NotNil(t, hopsNats.Consumer, "HopsNats should initialise the Consumer")
 }
 
-func TestHopsNatsConsume(t *testing.T) {
+func TestClientConsume(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	hopsNats, cleanup := setupHopsNats(ctx, t)
+	hopsNats, cleanup := setupClient(ctx, t)
 	defer cleanup()
 
 	type testMsg struct {
@@ -59,8 +59,56 @@ func TestHopsNatsConsume(t *testing.T) {
 	}
 }
 
-// setupHopsNats is a test helper to create an instance of HopsNats with a local NATS server
-func setupHopsNats(ctx context.Context, t *testing.T) (*Client, func()) {
+func TestClientConsumeSequences(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	hopsNats, cleanup := setupClient(ctx, t)
+	defer cleanup()
+
+	receivedChan := make(chan MessageBundle)
+	expectedBundleOne := MessageBundle{
+		"event": []byte("One"),
+	}
+	expectedBundleTwo := MessageBundle{
+		"event":     []byte("One"),
+		"event-two": []byte("Two"),
+	}
+	expectedBundleThree := MessageBundle{
+		"event":       []byte("One"),
+		"event-two":   []byte("Two"),
+		"event-three": []byte("Three"),
+	}
+
+	go func() {
+		hopsNats.ConsumeSequences(ctx, func(ctx context.Context, sequenceId string, msgBundle MessageBundle) error {
+			receivedChan <- msgBundle
+			return nil
+		})
+	}()
+
+	_, err := hopsNats.Publish(ctx, []byte("One"), ChannelNotify, "SEQ_ID", "event")
+	if assert.NoError(t, err, "Message should be published without error") {
+		receivedMsgBundle := <-receivedChan
+		assert.Equal(t, receivedMsgBundle, expectedBundleOne)
+	}
+
+	_, err = hopsNats.Publish(ctx, []byte("Two"), ChannelNotify, "SEQ_ID", "event-two")
+	if assert.NoError(t, err, "Second message in sequence should be published without error") {
+		receivedMsgBundle := <-receivedChan
+		assert.Equal(t, receivedMsgBundle, expectedBundleTwo)
+	}
+
+	_, err = hopsNats.Publish(ctx, []byte("Three"), ChannelNotify, "SEQ_ID", "event-three")
+	if assert.NoError(t, err, "Third message in sequence should be published without error") {
+		receivedMsgBundle := <-receivedChan
+		assert.Equal(t, receivedMsgBundle, expectedBundleThree)
+	}
+}
+
+// setupClient is a test helper to create an instance of HopsNats with a local NATS server
+func setupClient(ctx context.Context, t *testing.T) (*Client, func()) {
 	localNats := setupLocalNatsServer(t)
 
 	authUrl, err := localNats.AuthUrl("")
