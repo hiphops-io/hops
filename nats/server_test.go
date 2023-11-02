@@ -60,7 +60,7 @@ func setupLocalNatsServer(t *testing.T) *LocalServer {
 	natsDir := t.TempDir()
 	// Create no-op logger
 	logger := logs.NoOpLogger()
-	natsLogger := logs.NewNatsZeroLogger(logger)
+	natsLogger := logs.NewNatsZeroLogger(logger, "nats")
 
 	localNats, err := NewLocalServer("./testdata/hub-nats.conf", natsDir, false, &natsLogger)
 	require.NoError(t, err, "Test setup: Embedded NATS server should start without errors")

@@ -23,6 +23,11 @@ type Client struct {
 	accountId string
 }
 
+// TODO: NewClient/NewReplayClient/NewWorkerClient could become a single function
+// with the use of variadic opt functions that init the appropriate consumer(s)
+// This would reduce duplication.
+
+// NewClient returns a new hiphops NATS client with an account prefixed consumer on the `notify` subject
 func NewClient(ctx context.Context, natsUrl string, accountId string) (*Client, error) {
 	natsClient := &Client{
 		accountId: accountId,
@@ -47,6 +52,7 @@ func NewClient(ctx context.Context, natsUrl string, accountId string) (*Client, 
 	return natsClient, err
 }
 
+// NewReplayClient returns a new hiphops NATS client with an ephemeral consumer containing a replayed source event
 func NewReplayClient(ctx context.Context, natsUrl string, accountId string, sequenceId string) (*Client, error) {
 	natsClient := &Client{
 		accountId: accountId,
@@ -63,6 +69,35 @@ func NewReplayClient(ctx context.Context, natsUrl string, accountId string, sequ
 	}
 
 	err = natsClient.initReplayConsumer(ctx, accountId, sequenceId)
+	if err != nil {
+		defer natsClient.Close()
+		return nil, err
+	}
+
+	return natsClient, err
+}
+
+// NewWorkerClient returns a new hiphops NATS client with a consumer on the account.request subject
+// for each app worker
+//
+// appName is the name of the app the worker is handling messages for,
+// e.g. our github app's worker would use appName='github'
+func NewWorkerClient(ctx context.Context, natsUrl string, accountId string, appName string) (*Client, error) {
+	natsClient := &Client{
+		accountId: accountId,
+	}
+	err := natsClient.initNatsConnection(natsUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	err = natsClient.initJetStream()
+	if err != nil {
+		defer natsClient.Close()
+		return nil, err
+	}
+
+	err = natsClient.initWorkerConsumer(ctx, accountId, appName)
 	if err != nil {
 		defer natsClient.Close()
 		return nil, err
@@ -133,7 +168,7 @@ func (c *Client) ConsumeSequences(ctx context.Context, handler SequenceHandler) 
 // FetchMessageBundle pulls all historic messages for a sequenceId from the stream, converting them to a message bundle
 //
 // The returned message bundle will contain all previous messages in addition to the newly received message
-func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *Msg) (MessageBundle, error) {
+func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgFmt) (MessageBundle, error) {
 	filter := newMsg.SequenceFilter()
 
 	// TODO: Create a deadline for the context
@@ -259,6 +294,23 @@ func (c *Client) initReplayConsumer(ctx context.Context, accountId string, seque
 	c.Publish(ctx, rawMsg.Data, ChannelNotify, replaySequenceId, "event")
 
 	// Set the consumer on the client
+	c.Consumer = consumer
+	return nil
+}
+
+func (c *Client) initWorkerConsumer(ctx context.Context, accountId string, appName string) error {
+	name := fmt.Sprintf("%s-%s-%s", accountId, ChannelRequest, appName)
+	// Create or update the consumer, since these are created dynamically
+	consumerCfg := jetstream.ConsumerConfig{
+		Name:          name,
+		Durable:       name,
+		FilterSubject: WorkerRequestSubject(accountId, appName, "*"),
+	}
+	consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, accountId, consumerCfg)
+	if err != nil {
+		return err
+	}
+
 	c.Consumer = consumer
 	return nil
 }

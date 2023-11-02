@@ -20,7 +20,7 @@ func TestNewNatsServer(t *testing.T) {
 	expectedReply := []byte("Reply")
 	// Create no-op logger
 	logger := logs.NoOpLogger()
-	natsLogger := logs.NewNatsZeroLogger(logger)
+	natsLogger := logs.NewNatsZeroLogger(logger, "nats")
 
 	ns, _, err := NewNatsServer("./testdata/leaf-nats.conf", rootDir, false, &natsLogger)
 	require.NoError(t, err, "Embedded NATS server should start without errors")

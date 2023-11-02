@@ -39,6 +39,7 @@ func workerCmd(ctx context.Context) *cobra.Command {
 		Long:  workerLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			// TODO: NewNatsZeroLogger from="k8s_worker"
 
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {

@@ -255,7 +255,7 @@ func createTestLease(ctx context.Context, t *testing.T, natsUrl string) (*Lease,
 // It will create a local NATS server to act as the hiphops.io hub
 func createNatsServers(t *testing.T) (*server.Server, func()) {
 	logger := logs.NoOpLogger()
-	hubLogger := logs.NewNatsZeroLogger(logger)
+	hubLogger := logs.NewNatsZeroLogger(logger, "nats")
 
 	// Hub server
 	hubOpts, err := server.ProcessConfigFile("./testdata/hub-nats.conf")

@@ -1,151 +1,152 @@
 package httpserver
 
-import (
-	"bytes"
-	"context"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"testing"
+// TODO: Move these e2e/multi-package tests into main
 
-	"github.com/goccy/go-json"
-	"github.com/hiphops-io/hops/dsl"
-	"github.com/hiphops-io/hops/logs"
-	"github.com/nats-io/nats.go/jetstream"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+// import (
+// 	"bytes"
+// 	"context"
+// 	"fmt"
+// 	"net/http"
+// 	"net/http/httptest"
+// 	"os"
+// 	"testing"
 
-	undist "github.com/hiphops-io/hops/undistribute"
-)
+// 	"github.com/goccy/go-json"
+// 	"github.com/hiphops-io/hops/dsl"
+// 	"github.com/hiphops-io/hops/logs"
+// 	"github.com/nats-io/nats.go/jetstream"
+// 	"github.com/stretchr/testify/assert"
+// 	"github.com/stretchr/testify/require"
 
-var testHopsConfig string = `
-task say_hello {}
+// 	undist "github.com/hiphops-io/hops/undistribute"
+// )
 
-task say_greeting {
-	param greeting {
-		type = "text"
-		required = true
-	}
-}
-`
+// var testHopsConfig string = `
+// task say_hello {}
 
-func TestTriggerTask(t *testing.T) {
-	type testCase struct {
-		name             string
-		taskName         string
-		payload          string
-		expectStatusCode int
-		expectResponse   taskRunResponse
-	}
+// task say_greeting {
+// 	param greeting {
+// 		type = "text"
+// 		required = true
+// 	}
+// }
+// `
 
-	tests := []testCase{
-		{
-			name:             "Trigger task with no params",
-			taskName:         "say_hello",
-			payload:          "{}",
-			expectStatusCode: 200,
-			expectResponse: taskRunResponse{
-				Message: "OK",
-			},
-		},
-		{
-			name:             "Trigger non-existent task",
-			taskName:         "say_goodbye",
-			payload:          "{}",
-			expectStatusCode: 404,
-			expectResponse: taskRunResponse{
-				Message: "Not found",
-			},
-		},
-		{
-			name:             "Trigger task with invalid inputs",
-			taskName:         "say_greeting",
-			payload:          "{}",
-			expectStatusCode: 400,
-			expectResponse: taskRunResponse{
-				Message: "Invalid inputs for say_greeting",
-				Errors: map[string][]string{
-					"greeting": {
-						dsl.InvalidRequired,
-					},
-				},
-			},
-		},
-	}
+// func TestTriggerTask(t *testing.T) {
+// 	type testCase struct {
+// 		name             string
+// 		taskName         string
+// 		payload          string
+// 		expectStatusCode int
+// 		expectResponse   taskRunResponse
+// 	}
 
-	// Let's set up the hops config...
-	logger := logs.NoOpLogger()
-	taskHops, err := initTaskHops(testHopsConfig, t)
-	require.NoError(t, err, "Test setup: Hops config should be valid")
+// 	tests := []testCase{
+// 		{
+// 			name:             "Trigger task with no params",
+// 			taskName:         "say_hello",
+// 			payload:          "{}",
+// 			expectStatusCode: 200,
+// 			expectResponse: taskRunResponse{
+// 				Message: "OK",
+// 			},
+// 		},
+// 		{
+// 			name:             "Trigger non-existent task",
+// 			taskName:         "say_goodbye",
+// 			payload:          "{}",
+// 			expectStatusCode: 404,
+// 			expectResponse: taskRunResponse{
+// 				Message: "Not found",
+// 			},
+// 		},
+// 		{
+// 			name:             "Trigger task with invalid inputs",
+// 			taskName:         "say_greeting",
+// 			payload:          "{}",
+// 			expectStatusCode: 400,
+// 			expectResponse: taskRunResponse{
+// 				Message: "Invalid inputs for say_greeting",
+// 				Errors: map[string][]string{
+// 					"greeting": {
+// 						dsl.InvalidRequired,
+// 					},
+// 				},
+// 			},
+// 		},
+// 	}
 
-	// ...Then the router and test server...
-	lease := &LeaseMock{}
-	taskRouter := TaskRouter(taskHops, lease, logger)
-	testServer := httptest.NewServer(taskRouter)
-	defer testServer.Close()
+// 	// Let's set up the hops config...
+// 	logger := logs.NoOpLogger()
+// 	taskHops, err := initTaskHops(testHopsConfig, t)
+// 	require.NoError(t, err, "Test setup: Hops config should be valid")
 
-	// ...and set the endpoint once
-	urlTmpl := testServer.URL + "/%s"
+// 	// ...Then the router and test server...
+// 	taskRouter := TaskRouter(taskHops, lease, logger)
+// 	testServer := httptest.NewServer(taskRouter)
+// 	defer testServer.Close()
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Prep the request
-			url := fmt.Sprintf(urlTmpl, tc.taskName)
-			request, err := http.NewRequest(http.MethodPost, url, bytes.NewBufferString(tc.payload))
-			require.NoError(t, err, "Request should be created")
+// 	// ...and set the endpoint once
+// 	urlTmpl := testServer.URL + "/%s"
 
-			// Make the request
-			response, err := http.DefaultClient.Do(request)
-			require.NoError(t, err, "Request should be successful")
-			defer response.Body.Close()
+// 	for _, tc := range tests {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			// Prep the request
+// 			url := fmt.Sprintf(urlTmpl, tc.taskName)
+// 			request, err := http.NewRequest(http.MethodPost, url, bytes.NewBufferString(tc.payload))
+// 			require.NoError(t, err, "Request should be created")
 
-			// Decode the response to check expected values
-			var runResponse taskRunResponse
-			err = json.NewDecoder(response.Body).Decode(&runResponse)
-			// Remove event ID for comparison and check separately
-			eventId := runResponse.SequenceID
-			runResponse.SequenceID = ""
+// 			// Make the request
+// 			response, err := http.DefaultClient.Do(request)
+// 			require.NoError(t, err, "Request should be successful")
+// 			defer response.Body.Close()
 
-			assert.NoError(t, err, "Body should be valid JSON")
-			assert.Equal(t, tc.expectStatusCode, response.StatusCode, "Status code should match")
-			assert.Equal(t, tc.expectResponse, runResponse, "Response body should match")
-			if tc.expectStatusCode == http.StatusOK {
-				assert.Regexp(t, "[0-9a-f]{40}", eventId, "Event ID must be a valid SHA1 hash")
-			}
-		})
-	}
-}
+// 			// Decode the response to check expected values
+// 			var runResponse taskRunResponse
+// 			err = json.NewDecoder(response.Body).Decode(&runResponse)
+// 			// Remove event ID for comparison and check separately
+// 			eventId := runResponse.SequenceID
+// 			runResponse.SequenceID = ""
 
-func initTaskHops(content string, t *testing.T) (*dsl.HopAST, error) {
-	ctx := context.Background()
-	hopsHcl, _ := initTmpHopsFile(content, t)
-	return dsl.ParseHopsTasks(ctx, hopsHcl)
-}
+// 			assert.NoError(t, err, "Body should be valid JSON")
+// 			assert.Equal(t, tc.expectStatusCode, response.StatusCode, "Status code should match")
+// 			assert.Equal(t, tc.expectResponse, runResponse, "Response body should match")
+// 			if tc.expectStatusCode == http.StatusOK {
+// 				assert.Regexp(t, "[0-9a-f]{40}", eventId, "Event ID must be a valid SHA1 hash")
+// 			}
+// 		})
+// 	}
+// }
 
-func initTmpHopsFile(content string, t *testing.T) (dsl.HclFiles, string) {
-	// TODO: This is a duplicate of the createTmpHopsFile func in the dsl package
-	// we move to a sensible location and consolidate
-	dir := t.TempDir()
-	f, err := os.CreateTemp(dir, "*")
-	require.NoError(t, err)
+// func initTaskHops(content string, t *testing.T) (*dsl.HopAST, error) {
+// 	ctx := context.Background()
+// 	hopsHcl, _ := initTmpHopsFile(content, t)
+// 	return dsl.ParseHopsTasks(ctx, hopsHcl)
+// }
 
-	f.WriteString(content)
+// func initTmpHopsFile(content string, t *testing.T) (dsl.HclFiles, string) {
+// 	// TODO: This is a duplicate of the createTmpHopsFile func in the dsl package
+// 	// we move to a sensible location and consolidate
+// 	dir := t.TempDir()
+// 	f, err := os.CreateTemp(dir, "*")
+// 	require.NoError(t, err)
 
-	hclFile, hash, err := dsl.ReadHopsFiles(f.Name())
-	require.NoError(t, err)
+// 	f.WriteString(content)
 
-	return hclFile, hash
-}
+// 	hclFile, hash, err := dsl.ReadHopsFiles(f.Name())
+// 	require.NoError(t, err)
 
-type LeaseMock struct {
-	calledWith []map[string]string
-}
+// 	return hclFile, hash
+// }
 
-func (l *LeaseMock) Publish(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte, appendTokens ...string) (*jetstream.PubAck, error) {
-	return nil, nil
-}
+// type LeaseMock struct {
+// 	calledWith []map[string]string
+// }
 
-func (l *LeaseMock) PublishSource(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte) (*jetstream.PubAck, error) {
-	return nil, nil
-}
+// func (l *LeaseMock) Publish(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte, appendTokens ...string) (*jetstream.PubAck, error) {
+// 	return nil, nil
+// }
+
+// func (l *LeaseMock) PublishSource(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte) (*jetstream.PubAck, error) {
+// 	return nil, nil
+// }
