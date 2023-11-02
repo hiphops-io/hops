@@ -50,32 +50,17 @@ func startCmd(ctx context.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
 
-			appdirs, err := setup.NewAppDirs(viper.GetString("rootdir"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to create app dirs")
-				return err
-			}
-
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			// TODO: Delete
-			// serverRunner, lease, err := setupServer(
-			// 	ctx,
-			// 	appdirs,
-			// 	keyFile.NatsUrl(),
-			// 	keyFile.AccountId,
-			// 	viper.GetString("hops"),
-			// 	logger,
-			// )
-			// if err != nil {
-			// 	logger.Error().Err(err).Msg("Failed to setup server")
-			// 	return err
-			// }
-			// defer lease.Close()
+			hops, _, err := dsl.ReadHopsFiles(viper.GetString("hops"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return fmt.Errorf("Failed to read hops file: %w", err)
+			}
 
 			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId)
 			if err != nil {
@@ -84,19 +69,12 @@ func startCmd(ctx context.Context) *cobra.Command {
 			}
 			defer natsClient.Close()
 
-			hops, _, err := initHopsFiles(viper.GetString("hops"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to read hops files")
-				return err
-			}
-
 			errs := make(chan error, 1)
 
 			go func() {
 				errs <- console(
-					appdirs,
 					viper.GetString("address"),
-					viper.GetString("hops"),
+					viper.GetString("hops"), // TODO: Replace with hops HclFiles loaded above
 					natsClient,
 					logger,
 				)
@@ -112,7 +90,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 			}()
 
 			go func() {
-				errs <- work(
+				errs <- worker(
 					ctx,
 					viper.GetString("kubeconfig"),
 					keyFile.NatsUrl(),
@@ -135,13 +113,4 @@ func startCmd(ctx context.Context) *cobra.Command {
 	viper.BindPFlag("address", startCmd.PersistentFlags().Lookup("address"))
 
 	return startCmd
-}
-
-func initHopsFiles(hopsFilePath string) (dsl.HclFiles, string, error) {
-	hops, hopsHash, err := dsl.ReadHopsFiles(hopsFilePath)
-	if err != nil {
-		return nil, "", fmt.Errorf("Failed to read hops file: %w", err)
-	}
-
-	return hops, hopsHash, err
 }

@@ -23,7 +23,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/hiphops-io/hops/internal/setup"
-	"github.com/hiphops-io/hops/internal/worker"
+	work "github.com/hiphops-io/hops/internal/worker"
 )
 
 const (
@@ -46,7 +46,7 @@ func workerCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			if err := work(
+			if err := worker(
 				ctx,
 				viper.GetString("kubeconfig"),
 				keyFile.NatsUrl(),
@@ -65,8 +65,8 @@ func workerCmd(ctx context.Context) *cobra.Command {
 	return workerCmd
 }
 
-func work(ctx context.Context, kubeConfPath string, natsUrl string, streamName string, requiresPortForward bool, logger zerolog.Logger) error {
-	worker, err := worker.NewWorker(ctx, natsUrl, streamName, kubeConfPath, requiresPortForward, logger)
+func worker(ctx context.Context, kubeConfPath string, natsUrl string, streamName string, requiresPortForward bool, logger zerolog.Logger) error {
+	worker, err := work.NewWorker(ctx, natsUrl, streamName, kubeConfPath, requiresPortForward, logger)
 	if err != nil {
 		return err
 	}

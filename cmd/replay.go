@@ -19,15 +19,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/hiphops-io/hops/dsl"
-	"github.com/hiphops-io/hops/internal/orchestrator"
 	"github.com/hiphops-io/hops/internal/setup"
-	undist "github.com/hiphops-io/hops/undistribute"
+	"github.com/hiphops-io/hops/nats"
 )
 
 const (
@@ -40,7 +37,10 @@ Example use:
 hops replay -e SEQUENCE_ID`
 )
 
-// replayCmd replays a sequence of events against the local hops instance
+// replayCmd replays a source event against the local hops instance
+//
+// Identical to server, except the NATS Client is configured to use an ephemeral
+// consumer with the source event republished under a replay sequence ID
 func replayCmd(ctx context.Context) *cobra.Command {
 	replayCmd := &cobra.Command{
 		Use:   "replay",
@@ -49,33 +49,31 @@ func replayCmd(ctx context.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
 
-			appdirs, err := setup.NewAppDirs(viper.GetString("rootdir"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to create app dirs")
-				return err
-			}
-
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			replayRunner, lease, err := setupReplay(
-				ctx,
-				appdirs,
-				keyFile,
-				viper.GetString("hops"),
-				viper.GetString("event"),
-				viper.GetBool("debug"),
-				logger,
-			)
-			defer lease.Close()
+			hops, _, err := dsl.ReadHopsFiles(viper.GetString("hops"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return fmt.Errorf("Failed to read hops file: %w", err)
+			}
 
-			if err := replay(
+			natsClient, err := nats.NewReplayClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, viper.GetString("event"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to start NATS client")
+				return err
+			}
+			defer natsClient.Close()
+
+			logger.Info().Msgf("Starting replay of sequence: %s", viper.GetString("event"))
+
+			if err := server(
 				ctx,
-				replayRunner,
-				lease,
+				hops,
+				natsClient,
 				logger,
 			); err != nil {
 				logger.Error().Err(err).Msg("Replay failed")
@@ -86,47 +84,9 @@ func replayCmd(ctx context.Context) *cobra.Command {
 		},
 	}
 
-	replayCmd.Flags().StringP("event", "e", "", "[REQUIRED] The event sequence ID to replay - usually the hash of the source event")
+	replayCmd.Flags().StringP("event", "e", "", "[REQUIRED] The event sequence ID to replay")
 	viper.BindPFlag("event", replayCmd.Flags().Lookup("event"))
 	replayCmd.MarkFlagRequired("event")
 
 	return replayCmd
-}
-
-func setupReplay(ctx context.Context, appdirs setup.AppDirs, keyFile setup.KeyFile, hopsFilePath string, eventSequence string, debug bool, logger zerolog.Logger) (*orchestrator.Runner, *undist.Lease, error) {
-	hops, _, err := dsl.ReadHopsFiles(hopsFilePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to read hops file: %w", err)
-	}
-
-	replayId := uuid.NewString()
-
-	leaseConf := undist.LeaseConfig{
-		NatsUrl:             keyFile.NatsUrl(),
-		StreamName:          keyFile.AccountId,
-		LeaseDurability:     undist.Ephemeral,
-		SourceSubject:       "*",
-		SourceFilter:        fmt.Sprintf("%s.>", eventSequence),
-		SourceDurability:    undist.Ephemeral,
-		SourceDeliverPolicy: undist.DeliverAllPolicy,
-		SourceConsumerName:  replayId,
-		RootDir:             appdirs.WorkspaceDir,
-		Seed:                []byte(replayId),
-	}
-
-	runner, lease, err := orchestrator.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
-
-	return runner, lease, err
-}
-
-func replay(ctx context.Context, runner *orchestrator.Runner, lease *undist.Lease, logger zerolog.Logger) error {
-	logger.Info().Msgf("Replaying events - Replay ID: %s", lease.Config().SourceConsumerName)
-
-	callback := orchestrator.CreateRunnerCallback(runner, lease.Dir(), logger)
-	err := lease.Consume(ctx, callback)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

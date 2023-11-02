@@ -59,6 +59,15 @@ func TestClientConsume(t *testing.T) {
 	}
 }
 
+type testSequenceHandler struct {
+	receivedChan chan MessageBundle
+}
+
+func (t *testSequenceHandler) SequenceCallback(ctx context.Context, sequenceId string, msgBundle MessageBundle) error {
+	t.receivedChan <- msgBundle
+	return nil
+}
+
 func TestClientConsumeSequences(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -81,11 +90,10 @@ func TestClientConsumeSequences(t *testing.T) {
 		"event-three": []byte("Three"),
 	}
 
+	sqncHandler := &testSequenceHandler{receivedChan: receivedChan}
+
 	go func() {
-		hopsNats.ConsumeSequences(ctx, func(ctx context.Context, sequenceId string, msgBundle MessageBundle) error {
-			receivedChan <- msgBundle
-			return nil
-		})
+		hopsNats.ConsumeSequences(ctx, sqncHandler)
 	}()
 
 	_, err := hopsNats.Publish(ctx, []byte("One"), ChannelNotify, "SEQ_ID", "event")

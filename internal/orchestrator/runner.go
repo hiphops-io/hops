@@ -36,18 +36,18 @@ func NewRunner(natsClient NatsClient, hopsFiles dsl.HclFiles, logger zerolog.Log
 	return runner, nil
 }
 
-func (r *Runner) Run(ctx context.Context) {
-	r.natsClient.ConsumeSequences(ctx, r)
+func (r *Runner) Run(ctx context.Context) error {
+	return r.natsClient.ConsumeSequences(ctx, r)
 }
 
 func (r *Runner) SequenceCallback(
 	ctx context.Context,
 	sequenceId string,
-	eventBundle nats.MessageBundle,
+	msgBundle nats.MessageBundle,
 ) error {
 	logger := r.logger.With().Str("sequence_id", sequenceId).Logger()
 
-	hop, err := dsl.ParseHops(ctx, r.hopsFiles, eventBundle, logger)
+	hop, err := dsl.ParseHops(ctx, r.hopsFiles, msgBundle, logger)
 	if err != nil {
 		return err
 	}

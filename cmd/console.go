@@ -44,12 +44,6 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
 
-			appdirs, err := setup.NewAppDirs(viper.GetString("rootdir"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to create app dirs")
-				return err
-			}
-
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
@@ -64,7 +58,6 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 			defer natsClient.Close()
 
 			if err := console(
-				appdirs,
 				viper.GetString("address"),
 				viper.GetString("hops"), // TODO: Replace this with pre-loaded HclFiles (as in start cmd)
 				natsClient,
@@ -81,6 +74,6 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 	return consoleCmd
 }
 
-func console(appdirs setup.AppDirs, address string, hopsFilePath string, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
-	return httpserver.Serve(appdirs, address, hopsFilePath, natsClient, logger)
+func console(address string, hopsFilePath string, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
+	return httpserver.Serve(address, hopsFilePath, natsClient, logger)
 }

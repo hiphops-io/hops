@@ -11,7 +11,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
-	"github.com/hiphops-io/hops/internal/setup"
 	"github.com/hiphops-io/hops/logs"
 )
 
@@ -20,7 +19,7 @@ type NatsClient interface {
 	CheckConnection() bool
 }
 
-func Serve(appdirs setup.AppDirs, addr string, hopsFilePath string, natsClient NatsClient, logger zerolog.Logger) error {
+func Serve(addr string, hopsFilePath string, natsClient NatsClient, logger zerolog.Logger) error {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RedirectSlashes)

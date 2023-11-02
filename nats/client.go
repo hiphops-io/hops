@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -38,6 +39,30 @@ func NewClient(ctx context.Context, natsUrl string, accountId string) (*Client, 
 	}
 
 	err = natsClient.initConsumer(ctx, accountId)
+	if err != nil {
+		defer natsClient.Close()
+		return nil, err
+	}
+
+	return natsClient, err
+}
+
+func NewReplayClient(ctx context.Context, natsUrl string, accountId string, sequenceId string) (*Client, error) {
+	natsClient := &Client{
+		accountId: accountId,
+	}
+	err := natsClient.initNatsConnection(natsUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	err = natsClient.initJetStream()
+	if err != nil {
+		defer natsClient.Close()
+		return nil, err
+	}
+
+	err = natsClient.initReplayConsumer(ctx, accountId, sequenceId)
 	if err != nil {
 		defer natsClient.Close()
 		return nil, err
@@ -143,7 +168,7 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *Msg) (MessageBu
 		}
 
 		// Add to the message bundle
-		msgBundle[msg.MessageId] = msg.Msg.Data()
+		msgBundle[msg.MessageId] = m.Data()
 
 		// If we're at the newMsg, we can stop
 		if msg.StreamSequence == newMsg.StreamSequence {
@@ -194,5 +219,46 @@ func (c *Client) initNatsConnection(natsUrl string) error {
 	}
 
 	c.NatsConn = nc
+	return nil
+}
+
+func (c *Client) initReplayConsumer(ctx context.Context, accountId string, sequenceId string) error {
+	// Get the source message from the stream
+	stream, err := c.JetStream.Stream(ctx, accountId)
+	if err != nil {
+		return err
+	}
+
+	// Get the source message to be replayed from the stream
+	sourceMsgSubject := SourceEventSubject(accountId, sequenceId)
+	rawMsg, err := stream.GetLastMsgForSubject(ctx, sourceMsgSubject)
+	if err != nil {
+		return fmt.Errorf("Failed to fetch source event: %w", err)
+	}
+	if rawMsg == nil {
+		return fmt.Errorf("No source event found for subject '%s'", sourceMsgSubject)
+	}
+
+	// Create a new, random replay sequence ID
+	replaySequenceId := fmt.Sprintf("replay-%s", uuid.NewString()[:20])
+
+	// Create ephemeral consumer filtered by replayed sequence ID
+	consumerCfg := jetstream.ConsumerConfig{
+		Name:          replaySequenceId,
+		Description:   fmt.Sprintf("Replay request for sequence: '%s'", sequenceId),
+		FilterSubject: ReplayFilterSubject(accountId, replaySequenceId),
+		DeliverPolicy: jetstream.DeliverAllPolicy,
+	}
+	consumer, err := c.JetStream.CreateConsumer(ctx, accountId, consumerCfg)
+	if err != nil {
+		return err
+	}
+
+	// Publish the source message with replayed sequence ID so it's picked up by
+	// ephemeral consumer
+	c.Publish(ctx, rawMsg.Data, ChannelNotify, replaySequenceId, "event")
+
+	// Set the consumer on the client
+	c.Consumer = consumer
 	return nil
 }

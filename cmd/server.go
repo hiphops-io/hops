@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -44,36 +45,29 @@ func serverCmd(ctx context.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
 
-			appdirs, err := setup.NewAppDirs(viper.GetString("rootdir"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to create app dirs")
-				return err
-			}
-
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			serverRunner, lease, err := setupServer(
-				ctx,
-				appdirs,
-				keyFile.NatsUrl(),
-				keyFile.AccountId,
-				viper.GetString("hops"),
-				logger,
-			)
+			hops, _, err := dsl.ReadHopsFiles(viper.GetString("hops"))
 			if err != nil {
-				logger.Error().Err(err).Msg("Failed to setup server")
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return fmt.Errorf("Failed to read hops file: %w", err)
+			}
+
+			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
-			defer lease.Close()
+			defer natsClient.Close()
 
 			if err := server(
 				ctx,
-				serverRunner,
-				lease,
+				hops,
+				natsClient,
 				logger,
 			); err != nil {
 				logger.Error().Err(err).Msg("Server start failed")
@@ -87,31 +81,9 @@ func serverCmd(ctx context.Context) *cobra.Command {
 	return serverCmd
 }
 
-// TODO: Delete
-// func setupServer(ctx context.Context, appdirs setup.AppDirs, natsUrl string, streamName string, hopsFilePath string, logger zerolog.Logger) (*orchestrator.Runner, *undist.Lease, error) {
-// 	hops, hopsHash, err := dsl.ReadHopsFiles(hopsFilePath)
-// 	if err != nil {
-// 		return nil, nil, fmt.Errorf("Failed to read hops file: %w", err)
-// 	}
-
-// 	leaseConf := undist.LeaseConfig{
-// 		NatsUrl:    natsUrl,
-// 		StreamName: streamName,
-// 		RootDir:    appdirs.WorkspaceDir,
-// 		Seed:       []byte(hopsHash),
-// 	}
-
-// 	server, lease, err := orchestrator.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	return server, lease, nil
-// }
-
 // TODO: Add context cancellation with cleanup on SIGINT/SIGTERM https://medium.com/@matryer/make-ctrl-c-cancel-the-context-context-bd006a8ad6ff
 func server(ctx context.Context, hopsFiles dsl.HclFiles, natsClient *nats.Client, logger zerolog.Logger) error {
-	logger.Info().Msg("Listening for new events")
+	logger.Info().Msg("Listening for events")
 
 	runner, err := orchestrator.NewRunner(natsClient, hopsFiles, logger)
 	if err != nil {

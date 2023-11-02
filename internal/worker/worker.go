@@ -15,6 +15,12 @@ import (
 	undist "github.com/hiphops-io/hops/undistribute"
 )
 
+// TODO:
+// Workers need the following abilities -
+// A consumer on the request subject for their app/handler
+
+// Publish on the notify subject
+
 type TaskResponse struct {
 	Status     string      `json:"status"`
 	StartedAt  time.Time   `json:"started_at"`
@@ -68,6 +74,7 @@ func NewWorker(ctx context.Context, natsUrl string, streamName string, kubeConfP
 
 // initNats initialises the nats connection, streams, and consumers required by a worker.
 func (w *Worker) initNats(ctx context.Context, natsUrl string, streamName string) error {
+	// TODO: Swap to new nats.Client and add required capabilities
 	leaseConf := undist.LeaseConfig{
 		NatsUrl:    natsUrl,
 		StreamName: streamName,

@@ -96,3 +96,24 @@ func (m *Msg) initTokens() error {
 		return fmt.Errorf("Invalid message subject (unknown channel %s): %s", m.Channel, m.Msg.Subject())
 	}
 }
+
+func ReplayFilterSubject(accountId string, sequenceId string) string {
+	tokens := []string{
+		accountId,
+		"*",
+		sequenceId,
+		">",
+	}
+
+	return strings.Join(tokens, ".")
+}
+
+func SourceEventSubject(accountId string, sequenceId string) string {
+	tokens := []string{
+		accountId,
+		ChannelNotify,
+		sequenceId,
+		"event",
+	}
+	return strings.Join(tokens, ".")
+}
