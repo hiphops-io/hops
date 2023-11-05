@@ -35,8 +35,7 @@ type fileContent struct {
 // ReadHopsFiles loads and pre-parses the content of .hops files either from a
 // single file or from all .hops files in a directory.
 // It returns a reference to the parsed files `HclFiles` and a sha hash of the contents
-func ReadHopsFiles(filePath string) (HclFiles, string, error) {
-	var concatenated []byte
+func ReadHopsFiles(filePath string) (hcl.Body, string, error) {
 	var files []fileContent
 
 	info, err := os.Stat(filePath)
@@ -46,24 +45,25 @@ func ReadHopsFiles(filePath string) (HclFiles, string, error) {
 
 	// read in the hops files and prepare for parsing
 	if info.IsDir() {
-		files, concatenated, err = concatenateHopsFiles(filePath)
+		files, err = readHopsDir(filePath)
 		if err != nil {
 			return nil, "", err
 		}
 	} else {
-		concatenated, err = os.ReadFile(filePath)
+		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, "", err
 		}
+
 		files = []fileContent{{
 			file:    filePath,
-			content: concatenated,
+			content: content,
 		}}
 	}
 
-	var hopsFiles HclFiles
-
+	hopsBodies := []hcl.Body{}
 	parser := hclparse.NewParser()
+	sha1Hash := sha1.New()
 
 	// parse the hops files
 	for _, file := range files {
@@ -72,16 +72,71 @@ func ReadHopsFiles(filePath string) (HclFiles, string, error) {
 		if diags != nil && diags.HasErrors() {
 			return nil, "", errors.New(diags.Error())
 		}
-		hopsFiles = append(hopsFiles, hopsFile)
+		hopsBodies = append(hopsBodies, hopsFile.Body)
+
+		sha1Hash.Write(file.content)
 	}
 
-	filesSha := sha1.Sum(concatenated)
+	filesSha := sha1Hash.Sum(nil)
 	filesShaHex := hex.EncodeToString(filesSha[:])
 
-	return hopsFiles, filesShaHex, nil
+	body := hcl.MergeBodies(hopsBodies)
+
+	return body, filesShaHex, nil
 }
 
-func ParseHops(ctx context.Context, hopsFiles HclFiles, eventBundle map[string][]byte, logger zerolog.Logger) (*HopAST, error) {
+// readHopsDir retrieves the content of all .hops files in a directory,
+// including sub directories, and returns then as a slice of fileContents
+func readHopsDir(dirPath string) ([]fileContent, error) {
+	var filePaths []string
+
+	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// Exclude directories whose name starts with '..'
+		// This is because kubernetes configMaps create a set of symlinked
+		// directories for the mapped files and we don't want to pick those
+		// up. Those directories are named '..<various names>'
+		// Example:
+		// /my-config-map-dir
+		// |-- my-key -> ..data/my-key
+		// |-- ..data -> ..2023_10_19_12_34_56.789012345
+		// |-- ..2023_10_19_12_34_56.789012345
+		// |   |-- my-key
+		if d.IsDir() && strings.HasPrefix(d.Name(), "..") {
+			return filepath.SkipDir
+		}
+		if !d.IsDir() && filepath.Ext(path) == ".hops" {
+			filePaths = append(filePaths, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort the file paths to ensure consistent order
+	sort.Strings(filePaths)
+
+	files := []fileContent{}
+
+	// Read and store filename and content of each file
+	for _, filePath := range filePaths {
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, fileContent{
+			file:    filePath,
+			content: content,
+		})
+	}
+
+	return files, nil
+}
+
+func ParseHops(ctx context.Context, hopsBody hcl.Body, eventBundle map[string][]byte, logger zerolog.Logger) (*HopAST, error) {
 	hop := &HopAST{
 		SlugRegister: make(map[string]bool),
 	}
@@ -96,22 +151,17 @@ func ParseHops(ctx context.Context, hopsFiles HclFiles, eventBundle map[string][
 		Variables: ctxVariables,
 	}
 
-	// unique id for blocks
-	var idx int
-
-	for _, hopsFile := range hopsFiles {
-		err := DecodeHopsBody(ctx, &idx, hop, hopsFile.Body, evalctx, logger)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to decode hops file")
-			logger.Debug().RawJSON("source_event", eventBundle["event"]).Msg("Parse failed on source event")
-			return hop, err
-		}
+	err = DecodeHopsBody(ctx, hop, hopsBody, evalctx, logger)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to decode hops file")
+		logger.Debug().RawJSON("source_event", eventBundle["event"]).Msg("Parse failed on source event")
+		return hop, err
 	}
 
 	return hop, nil
 }
 
-func DecodeHopsBody(ctx context.Context, idx *int, hop *HopAST, body hcl.Body, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+func DecodeHopsBody(ctx context.Context, hop *HopAST, body hcl.Body, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	bc, d := body.Content(HopSchema)
 	if d.HasErrors() {
 		return d.Errs()[0]
@@ -122,12 +172,11 @@ func DecodeHopsBody(ctx context.Context, idx *int, hop *HopAST, body hcl.Body, e
 	}
 
 	onBlocks := bc.Blocks.OfType(OnID)
-	for _, onBlock := range onBlocks {
-		err := DecodeOnBlock(ctx, hop, onBlock, *idx, evalctx, logger)
+	for idx, onBlock := range onBlocks {
+		err := DecodeOnBlock(ctx, hop, onBlock, idx, evalctx, logger)
 		if err != nil {
 			return err
 		}
-		*idx++
 	}
 
 	return nil
@@ -354,62 +403,4 @@ func scopedEvalContext(evalCtx *hcl.EvalContext, scopePath ...string) *hcl.EvalC
 	scopedEvalCtx.Variables = scopedVars
 
 	return scopedEvalCtx
-}
-
-// concatenateHopsFiles retrieves the content of all .hops files in a directory,
-// including sub directories, and concatenates them with a newline separator, and
-// returns them as a single byte slice.
-func concatenateHopsFiles(dirPath string) ([]fileContent, []byte, error) {
-	var filePaths []string
-
-	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		// Exclude directories whose name starts with '..'
-		// This is because kubernetes configMaps create a set of symlinked
-		// directories for the mapped files and we don't want to pick those
-		// up. Those directories are named '..<various names>'
-		// Example:
-		// /my-config-map-dir
-		// |-- my-key -> ..data/my-key
-		// |-- ..data -> ..2023_10_19_12_34_56.789012345
-		// |-- ..2023_10_19_12_34_56.789012345
-		// |   |-- my-key
-		if d.IsDir() && strings.HasPrefix(d.Name(), "..") {
-			return filepath.SkipDir
-		}
-		if !d.IsDir() && filepath.Ext(path) == ".hops" {
-			filePaths = append(filePaths, path)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Sort the file paths to ensure consistent order
-	sort.Strings(filePaths)
-
-	var (
-		files       []fileContent
-		concatenate []byte
-	)
-
-	// Read and store filename and content of each file
-	for _, filePath := range filePaths {
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, nil, err
-		}
-		files = append(files, fileContent{
-			file:    filePath,
-			content: content,
-		})
-		// separate each file with a newline
-		concatenate = append(concatenate, content...)
-		concatenate = append(concatenate, '\n')
-	}
-
-	return files, concatenate, nil
 }

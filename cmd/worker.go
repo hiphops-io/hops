@@ -50,7 +50,7 @@ func workerCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			natsClient, err := nats.NewWorkerClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, "k8s", &zlog)
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog, nats.WorkerClient("k8s"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err

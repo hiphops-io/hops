@@ -15,7 +15,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-func ParseHopsTasks(ctx context.Context, hopsFiles HclFiles) (*HopAST, error) {
+func ParseHopsTasks(ctx context.Context, hops hcl.Body) (*HopAST, error) {
 	logger := zerolog.Ctx(ctx)
 
 	hop := &HopAST{
@@ -26,12 +26,10 @@ func ParseHopsTasks(ctx context.Context, hopsFiles HclFiles) (*HopAST, error) {
 		Functions: DefaultFunctions,
 	}
 
-	for _, hopsFile := range hopsFiles {
-		err := DecodeTasks(ctx, hop, hopsFile.Body, evalctx)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to decode hops tasks")
-			return hop, err
-		}
+	err := DecodeTasks(ctx, hop, hops, evalctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to decode hops tasks")
+		return hop, err
 	}
 
 	return hop, nil

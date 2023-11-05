@@ -52,7 +52,7 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, &zlog)
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err

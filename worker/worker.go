@@ -13,6 +13,7 @@ type (
 		Handlers() map[string]Handler
 	}
 
+	// TODO: Update function to return a pointer to a ResultMsg
 	Handler func(context.Context, jetstream.Msg) error
 
 	Worker struct {

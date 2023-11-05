@@ -252,7 +252,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			}
 
 			// Run the function
-			resultFileContent, resultContent, err := concatenateHopsFiles(tmpDir)
+			resultFileContent, err := readHopsDir(tmpDir)
 
 			// Check for an unexpected error
 			if !tt.expectError {
@@ -260,9 +260,6 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			} else {
 				require.Error(t, err)
 			}
-
-			// Compare the result with the expected content
-			assert.Equal(t, tt.expectedContent, string(resultContent))
 
 			// Compare the result with the expected file content
 			assert.Equal(t, tt.expectedRows, len(resultFileContent))

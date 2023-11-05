@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -324,7 +325,7 @@ task foo {
 	}
 }
 
-func createTmpHopsFile(content string, t *testing.T) (HclFiles, string) {
+func createTmpHopsFile(content string, t *testing.T) (hcl.Body, string) {
 	dir := t.TempDir()
 	f, err := os.CreateTemp(dir, "*")
 	require.NoError(t, err)

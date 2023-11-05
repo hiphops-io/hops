@@ -64,14 +64,14 @@ func startCmd(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("Failed to read hops file: %w", err)
 			}
 
-			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, &zlog)
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
 			defer natsClient.Close()
 
-			natsWorkerClient, err := nats.NewWorkerClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, "k8s", &zlog)
+			natsWorkerClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog, nats.WorkerClient("k8s"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS worker client")
 				return err

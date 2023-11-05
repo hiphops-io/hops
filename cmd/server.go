@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -59,7 +60,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("Failed to read hops file: %w", err)
 			}
 
-			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, &zlog)
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
@@ -84,10 +85,10 @@ func serverCmd(ctx context.Context) *cobra.Command {
 }
 
 // TODO: Add context cancellation with cleanup on SIGINT/SIGTERM https://medium.com/@matryer/make-ctrl-c-cancel-the-context-context-bd006a8ad6ff
-func server(ctx context.Context, hopsFiles dsl.HclFiles, natsClient *nats.Client, logger zerolog.Logger) error {
+func server(ctx context.Context, hops hcl.Body, natsClient *nats.Client, logger zerolog.Logger) error {
 	logger.Info().Msg("Listening for events")
 
-	runner, err := runner.NewRunner(natsClient, hopsFiles, logger)
+	runner, err := runner.NewRunner(natsClient, hops, logger)
 	if err != nil {
 		return err
 	}

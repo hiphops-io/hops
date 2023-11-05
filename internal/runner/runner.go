@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/hcl/v2"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 
@@ -22,14 +23,14 @@ type NatsClient interface {
 
 type Runner struct {
 	logger     zerolog.Logger
-	hopsFiles  dsl.HclFiles
+	hops       hcl.Body
 	natsClient NatsClient
 }
 
-func NewRunner(natsClient NatsClient, hopsFiles dsl.HclFiles, logger zerolog.Logger) (*Runner, error) {
+func NewRunner(natsClient NatsClient, hops hcl.Body, logger zerolog.Logger) (*Runner, error) {
 	runner := &Runner{
 		logger:     logger,
-		hopsFiles:  hopsFiles,
+		hops:       hops,
 		natsClient: natsClient,
 	}
 
@@ -47,7 +48,12 @@ func (r *Runner) SequenceCallback(
 ) error {
 	logger := r.logger.With().Str("sequence_id", sequenceId).Logger()
 
-	hop, err := dsl.ParseHops(ctx, r.hopsFiles, msgBundle, logger)
+	hops, err := r.sequenceHops(msgBundle)
+	if err != nil {
+		return err
+	}
+
+	hop, err := dsl.ParseHops(ctx, hops, msgBundle, logger)
 	if err != nil {
 		return err
 	}
@@ -71,8 +77,8 @@ func (r *Runner) dispatchCalls(ctx context.Context, sensor *dsl.OnAST, sequenceI
 	var wg sync.WaitGroup
 	var errs error
 
-	logger = logger.With().Str("sensor", sensor.Slug).Logger()
-	logger.Info().Msg("Running sensor calls")
+	logger = logger.With().Str("on", sensor.Slug).Logger()
+	logger.Info().Msg("Running on calls")
 
 	numTasks := len(sensor.Calls)
 	errorchan := make(chan error, numTasks)
@@ -117,4 +123,13 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 	}
 
 	errorchan <- nil
+}
+
+func (r *Runner) sequenceHops(msgBundle nats.MessageBundle) (hcl.Body, error) {
+	_, ok := msgBundle["hops"]
+	if !ok {
+		return r.hops, nil
+	}
+
+	return r.hops, nil
 }

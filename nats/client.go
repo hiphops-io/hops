@@ -17,20 +17,38 @@ const (
 	ChannelRequest = "request"
 )
 
-type Client struct {
-	NatsConn  *nats.Conn
-	JetStream jetstream.JetStream
-	Consumer  jetstream.Consumer
-	accountId string
-	logger    Logger
-}
+type (
+	Client struct {
+		NatsConn    *nats.Conn
+		JetStream   jetstream.JetStream
+		Consumer    jetstream.Consumer
+		SysObjStore nats.ObjectStore
+		accountId   string
+		logger      Logger
+	}
 
-// TODO: NewClient/NewReplayClient/NewWorkerClient could become a single function
-// with the use of variadic opt functions that init the appropriate consumer(s)
-// This would reduce duplication.
+	// ClientOpt functions configure a nats.Client via NewClient()
+	ClientOpt func(*Client) error
 
-// NewClient returns a new hiphops NATS client with an account prefixed consumer on the `notify` subject
-func NewClient(ctx context.Context, natsUrl string, accountId string, logger Logger) (*Client, error) {
+	// MessageBundle is a map of messageIDs and the data that message contained
+	//
+	// MessageBundle is designed to be passed to a runner to ensure it has the aggregate state
+	// of a hiphops sequence of messages.
+	MessageBundle map[string][]byte
+
+	// SequenceHandler is a function that receives the sequenceId and message bundle for a sequence of messages
+	SequenceHandler interface {
+		SequenceCallback(context.Context, string, MessageBundle) error
+	}
+)
+
+// NewClient returns a new hiphops specific NATS client
+//
+// By default it is configured as a runner consumer (listening for incoming source events)
+// Passing *any* ClientOpts will override this default.
+func NewClient(natsUrl string, accountId string, logger Logger, clientOpts ...ClientOpt) (*Client, error) {
+	ctx := context.Background()
+
 	natsClient := &Client{
 		accountId: accountId,
 		logger:    logger,
@@ -52,60 +70,22 @@ func NewClient(ctx context.Context, natsUrl string, accountId string, logger Log
 		return nil, err
 	}
 
-	return natsClient, err
-}
-
-// NewReplayClient returns a new hiphops NATS client with an ephemeral consumer containing a replayed source event
-func NewReplayClient(ctx context.Context, natsUrl string, accountId string, sequenceId string, logger Logger) (*Client, error) {
-	natsClient := &Client{
-		accountId: accountId,
-		logger:    logger,
-	}
-	err := natsClient.initNatsConnection(natsUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	err = natsClient.initJetStream()
+	err = natsClient.initObjectStore(ctx, accountId)
 	if err != nil {
 		defer natsClient.Close()
 		return nil, err
 	}
 
-	err = natsClient.initReplayConsumer(ctx, accountId, sequenceId)
-	if err != nil {
-		defer natsClient.Close()
-		return nil, err
+	if len(clientOpts) == 0 {
+		clientOpts = DefaultClientOpts()
 	}
 
-	return natsClient, err
-}
-
-// NewWorkerClient returns a new hiphops NATS client with a consumer on the account.request subject
-// for each app worker
-//
-// appName is the name of the app the worker is handling messages for,
-// e.g. our github app's worker would use appName='github'
-func NewWorkerClient(ctx context.Context, natsUrl string, accountId string, appName string, logger Logger) (*Client, error) {
-	natsClient := &Client{
-		accountId: accountId,
-		logger:    logger,
-	}
-	err := natsClient.initNatsConnection(natsUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	err = natsClient.initJetStream()
-	if err != nil {
-		defer natsClient.Close()
-		return nil, err
-	}
-
-	err = natsClient.initWorkerConsumer(ctx, accountId, appName)
-	if err != nil {
-		defer natsClient.Close()
-		return nil, err
+	for _, opt := range clientOpts {
+		err := opt(natsClient)
+		if err != nil {
+			defer natsClient.Close()
+			return nil, err
+		}
 	}
 
 	return natsClient, err
@@ -135,18 +115,6 @@ func (c *Client) Consume(ctx context.Context, callback jetstream.MessageHandler)
 	<-ctx.Done()
 
 	return nil
-}
-
-// MessageBundle is a map of messageIDs and the data that message contained
-//
-// MessageBundle is designed to be passed to a runner to ensure it has the aggregate state
-// of a hiphops sequence of messages.
-type MessageBundle map[string][]byte
-
-// SequenceHandler is a function that receives the sequenceId and message bundle for a sequence of messages
-// type SequenceHandler func(context.Context, string, MessageBundle) error
-type SequenceHandler interface {
-	SequenceCallback(context.Context, string, MessageBundle) error
 }
 
 // ConsumeSequences is a wrapper around consume that presents the aggregate state of a sequence to the callback
@@ -262,7 +230,7 @@ func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string)
 	return puback, err, sent
 }
 
-// PublishResult is a convenience wrapper that json encodes a ResultMsg it and publishes
+// PublishResult is a convenience wrapper that json encodes a ResultMsg and publishes it
 func (c *Client) PublishResult(ctx context.Context, result *ResultMsg, subjTokens ...string) (error, bool) {
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
@@ -306,6 +274,26 @@ func (c *Client) initNatsConnection(natsUrl string) error {
 	}
 
 	c.NatsConn = nc
+	return nil
+}
+
+// initObjectStore initialises required system object store in NATS for a client
+func (c *Client) initObjectStore(ctx context.Context, accountId string) error {
+	js, err := c.NatsConn.JetStream()
+	if err != nil {
+		return err
+	}
+
+	sysObjConf := nats.ObjectStoreConfig{
+		Bucket: "system",
+	}
+	sysObj, err := js.CreateObjectStore(&sysObjConf)
+	if err != nil {
+		return err
+	}
+
+	// Set the system object store on the client
+	c.SysObjStore = sysObj
 	return nil
 }
 
@@ -366,4 +354,45 @@ func (c *Client) initWorkerConsumer(ctx context.Context, accountId string, appNa
 
 	c.Consumer = consumer
 	return nil
+}
+
+// ClientOpts
+
+func DefaultClientOpts() []ClientOpt {
+	return []ClientOpt{
+		RunnerClient(),
+	}
+}
+
+// ReplayClient initialises the client with a consumer for replaying a sequence
+func ReplayClient(sequenceId string) ClientOpt {
+	return func(c *Client) error {
+		err := c.initReplayConsumer(context.Background(), c.accountId, sequenceId)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+// RunnerClient initialises the client with a consumer for running pipelines
+func RunnerClient() ClientOpt {
+	return func(c *Client) error {
+		err := c.initConsumer(context.Background(), c.accountId)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+// WorkerClient initialises the client with a consumer to receive call requests for a worker
+func WorkerClient(appName string) ClientOpt {
+	return func(c *Client) error {
+		err := c.initWorkerConsumer(context.Background(), c.accountId, appName)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 }
