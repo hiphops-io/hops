@@ -22,9 +22,6 @@ import (
 
 const hopsMetadataKey = "hops"
 
-// Array of parsed .hops files
-type HclFiles []*hcl.File
-
 // can be in a list of filenames and content
 // needed for parsing
 type fileContent struct {
@@ -34,7 +31,7 @@ type fileContent struct {
 
 // ReadHopsFiles loads and pre-parses the content of .hops files either from a
 // single file or from all .hops files in a directory.
-// It returns a reference to the parsed files `HclFiles` and a sha hash of the contents
+// It returns a merged hcl.Body and a sha hash of the contents
 func ReadHopsFiles(filePath string) (hcl.Body, string, error) {
 	var files []fileContent
 
