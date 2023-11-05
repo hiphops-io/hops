@@ -80,8 +80,6 @@ func ReadHopsFiles(filePath string) (hcl.Body, string, error) {
 	filesSha := sha1Hash.Sum(nil)
 	filesShaHex := hex.EncodeToString(filesSha)
 
-	fmt.Println("Sha is:", filesShaHex)
-
 	body := hcl.MergeBodies(hopsBodies)
 
 	return body, filesShaHex, nil
