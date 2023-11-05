@@ -114,7 +114,6 @@ func (k *K8sHandler) RunPod(ctx context.Context, msg jetstream.Msg) error {
 		return fmt.Errorf("Failed to parse memory limit: %w", err)
 	}
 
-	// responseSubject, err := ParseResponseSubject(msg)
 	parsedMsg, err := nats.Parse(msg)
 	if err != nil {
 		return fmt.Errorf("Unable to parse response subject from message %s", msg.Subject())
