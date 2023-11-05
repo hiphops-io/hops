@@ -24,6 +24,7 @@ import (
 
 	"github.com/hiphops-io/hops/internal/httpserver"
 	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 )
 
@@ -43,6 +44,7 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 		Long:  consoleLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			zlog := logs.NewNatsZeroLogger(logger)
 
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
@@ -50,7 +52,7 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId)
+			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err

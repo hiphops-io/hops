@@ -1,8 +1,0 @@
-{
-  "image": "bash",
-  "command": [
-    "bash",
-    "-c",
-    "echo '{\"hello\":\"world\"}' > /hiphops/result.json"
-  ]
-}

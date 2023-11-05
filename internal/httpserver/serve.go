@@ -15,7 +15,7 @@ import (
 )
 
 type NatsClient interface {
-	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error)
+	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error, bool)
 	CheckConnection() bool
 }
 

@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ type Client struct {
 	JetStream jetstream.JetStream
 	Consumer  jetstream.Consumer
 	accountId string
+	logger    Logger
 }
 
 // TODO: NewClient/NewReplayClient/NewWorkerClient could become a single function
@@ -28,9 +30,10 @@ type Client struct {
 // This would reduce duplication.
 
 // NewClient returns a new hiphops NATS client with an account prefixed consumer on the `notify` subject
-func NewClient(ctx context.Context, natsUrl string, accountId string) (*Client, error) {
+func NewClient(ctx context.Context, natsUrl string, accountId string, logger Logger) (*Client, error) {
 	natsClient := &Client{
 		accountId: accountId,
+		logger:    logger,
 	}
 	err := natsClient.initNatsConnection(natsUrl)
 	if err != nil {
@@ -53,9 +56,10 @@ func NewClient(ctx context.Context, natsUrl string, accountId string) (*Client, 
 }
 
 // NewReplayClient returns a new hiphops NATS client with an ephemeral consumer containing a replayed source event
-func NewReplayClient(ctx context.Context, natsUrl string, accountId string, sequenceId string) (*Client, error) {
+func NewReplayClient(ctx context.Context, natsUrl string, accountId string, sequenceId string, logger Logger) (*Client, error) {
 	natsClient := &Client{
 		accountId: accountId,
+		logger:    logger,
 	}
 	err := natsClient.initNatsConnection(natsUrl)
 	if err != nil {
@@ -82,9 +86,10 @@ func NewReplayClient(ctx context.Context, natsUrl string, accountId string, sequ
 //
 // appName is the name of the app the worker is handling messages for,
 // e.g. our github app's worker would use appName='github'
-func NewWorkerClient(ctx context.Context, natsUrl string, accountId string, appName string) (*Client, error) {
+func NewWorkerClient(ctx context.Context, natsUrl string, accountId string, appName string, logger Logger) (*Client, error) {
 	natsClient := &Client{
 		accountId: accountId,
+		logger:    logger,
 	}
 	err := natsClient.initNatsConnection(natsUrl)
 	if err != nil {
@@ -152,14 +157,27 @@ func (c *Client) ConsumeSequences(ctx context.Context, handler SequenceHandler) 
 		if err != nil {
 			// If parsing is failing, there's no point retrying the message
 			msg.Term()
+			c.logger.Errf(err, "Unable to parse message")
+			return
 		}
 
 		msgBundle, err := c.FetchMessageBundle(ctx, hopsMsg)
 		if err != nil {
 			msg.NakWithDelay(3 * time.Second)
+			c.logger.Errf(err, "Unable to fetch message bundle")
+			// TODO: Remove this panic, just for debugging
+			panic(err)
+			// return
 		}
 
-		handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
+		err = handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
+		if err != nil {
+			c.logger.Errf(err, "Failed to process message")
+			msg.NakWithDelay(3 * time.Second)
+			return
+		}
+
+		msg.Ack()
 	}
 
 	return c.Consume(ctx, wrappedCB)
@@ -168,7 +186,7 @@ func (c *Client) ConsumeSequences(ctx context.Context, handler SequenceHandler) 
 // FetchMessageBundle pulls all historic messages for a sequenceId from the stream, converting them to a message bundle
 //
 // The returned message bundle will contain all previous messages in addition to the newly received message
-func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgFmt) (MessageBundle, error) {
+func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (MessageBundle, error) {
 	filter := newMsg.SequenceFilter()
 
 	// TODO: Create a deadline for the context
@@ -177,16 +195,21 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgFmt) (Messag
 		FilterSubjects: []string{filter},
 		DeliverPolicy:  jetstream.DeliverAllPolicy,
 	}
-	cons, err := c.JetStream.OrderedConsumer(ctx, "hops-account", consumerConf)
+	cons, err := c.JetStream.OrderedConsumer(ctx, c.accountId, consumerConf)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
 	}
 
 	msgBundle := MessageBundle{}
 
+	msgCtx, err := cons.Messages()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read back messages: %w", err)
+	}
+
 	for {
 		// Get the next message in the sequence
-		m, err := cons.Next()
+		m, err := msgCtx.Next()
 		if err != nil {
 			return nil, err
 		}
@@ -214,11 +237,40 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgFmt) (Messag
 	return msgBundle, nil
 }
 
-func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string) (*jetstream.PubAck, error) {
-	// Prefix subject with accountID
-	tokens := append([]string{c.accountId}, subjTokens...)
-	subject := strings.Join(tokens, ".")
-	return c.JetStream.Publish(ctx, subject, data)
+func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string) (*jetstream.PubAck, error, bool) {
+	sent := true
+	subject := ""
+	isFullSubject := len(subjTokens) == 1 && strings.Contains(subjTokens[0], ".")
+
+	// If we have individual subject tokens, construct into string and prefix with accountId
+	if !isFullSubject {
+		tokens := append([]string{c.accountId}, subjTokens...)
+		subject = strings.Join(tokens, ".")
+	} else {
+		subject = subjTokens[0]
+	}
+
+	puback, err := c.JetStream.Publish(ctx, subject, data)
+	if err != nil && strings.Contains(err.Error(), "maximum messages per subject exceeded") {
+		err = nil
+		sent = false
+		c.logger.Debugf("Skipping duplicate message %s", subject)
+	} else if err == nil {
+		c.logger.Debugf("Message sent %s", subject)
+	}
+
+	return puback, err, sent
+}
+
+// PublishResult is a convenience wrapper that json encodes a ResultMsg it and publishes
+func (c *Client) PublishResult(ctx context.Context, result *ResultMsg, subjTokens ...string) (error, bool) {
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return err, false
+	}
+
+	_, err, sent := c.Publish(ctx, resultBytes, subjTokens...)
+	return err, sent
 }
 
 func (c *Client) initConsumer(ctx context.Context, accountId string) error {
@@ -305,6 +357,7 @@ func (c *Client) initWorkerConsumer(ctx context.Context, accountId string, appNa
 		Name:          name,
 		Durable:       name,
 		FilterSubject: WorkerRequestSubject(accountId, appName, "*"),
+		AckWait:       1 * time.Minute,
 	}
 	consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, accountId, consumerCfg)
 	if err != nil {

@@ -1,24 +1,19 @@
 // This file is a WIP - The tests in this file don't current test anything of use (TODO).
-package orchestrator
+package runner
 
 import (
-	"context"
 	"os"
 	"testing"
-
-	"github.com/nats-io/nats.go/jetstream"
-
-	undist "github.com/hiphops-io/hops/undistribute"
 )
 
-type LeaseStub struct {
-	calledWith []map[string]string
-}
+// type LeaseStub struct {
+// 	calledWith []map[string]string
+// }
 
-func (l *LeaseStub) Publish(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte, appendTokens ...string) (*jetstream.PubAck, error) {
-	// TODO: Append sequenceID and msgId to l.calledWith
-	return nil, nil
-}
+// func (l *LeaseStub) Publish(ctx context.Context, channel undist.Channel, sequenceId string, msgId string, data []byte, appendTokens ...string) (*jetstream.PubAck, error) {
+// 	// TODO: Append sequenceID and msgId to l.calledWith
+// 	return nil, nil
+// }
 
 func TestTaskDispatch(t *testing.T) {
 	// TODO: Replace these tests (or make real ones)

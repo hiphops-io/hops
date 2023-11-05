@@ -24,8 +24,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/hiphops-io/hops/dsl"
-	"github.com/hiphops-io/hops/internal/orchestrator"
+	"github.com/hiphops-io/hops/internal/runner"
 	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 )
 
@@ -44,6 +45,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 		Long:  serverLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			zlog := logs.NewNatsZeroLogger(logger)
 
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
@@ -57,7 +59,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("Failed to read hops file: %w", err)
 			}
 
-			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId)
+			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
@@ -85,7 +87,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 func server(ctx context.Context, hopsFiles dsl.HclFiles, natsClient *nats.Client, logger zerolog.Logger) error {
 	logger.Info().Msg("Listening for events")
 
-	runner, err := orchestrator.NewRunner(natsClient, hopsFiles, logger)
+	runner, err := runner.NewRunner(natsClient, hopsFiles, logger)
 	if err != nil {
 		return err
 	}

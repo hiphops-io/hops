@@ -14,7 +14,7 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/rs/zerolog"
 	"github.com/zclconf/go-cty/cty/gocty"
 	ctyjson "github.com/zclconf/go-cty/cty/json"
@@ -63,13 +63,12 @@ func ReadHopsFiles(filePath string) (HclFiles, string, error) {
 
 	var hopsFiles HclFiles
 
+	parser := hclparse.NewParser()
+
 	// parse the hops files
 	for _, file := range files {
-		hopsFile, diags := hclsyntax.ParseConfig(
-			file.content,
-			file.file,
-			hcl.Pos{Line: 1, Column: 1, Byte: 0},
-		)
+		hopsFile, diags := parser.ParseHCL(file.content, file.file)
+
 		if diags != nil && diags.HasErrors() {
 			return nil, "", errors.New(diags.Error())
 		}

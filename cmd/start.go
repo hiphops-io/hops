@@ -24,6 +24,7 @@ import (
 
 	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 )
 
@@ -49,6 +50,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 		Long:  serverLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			zlog := logs.NewNatsZeroLogger(logger)
 
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
@@ -62,12 +64,19 @@ func startCmd(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("Failed to read hops file: %w", err)
 			}
 
-			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId)
+			natsClient, err := nats.NewClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
 			defer natsClient.Close()
+
+			natsWorkerClient, err := nats.NewWorkerClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, "k8s", &zlog)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to start NATS worker client")
+				return err
+			}
+			defer natsWorkerClient.Close()
 
 			errs := make(chan error, 1)
 
@@ -92,8 +101,8 @@ func startCmd(ctx context.Context) *cobra.Command {
 			go func() {
 				errs <- worker(
 					ctx,
+					natsWorkerClient,
 					viper.GetString("kubeconfig"),
-					keyFile.NatsUrl(),
 					keyFile.AccountId,
 					viper.GetBool("port-forward"),
 					logger,

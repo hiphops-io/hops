@@ -24,6 +24,7 @@ import (
 
 	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 )
 
@@ -48,6 +49,7 @@ func replayCmd(ctx context.Context) *cobra.Command {
 		Long:  replayLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			zlog := logs.NewNatsZeroLogger(logger)
 
 			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
@@ -61,7 +63,7 @@ func replayCmd(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("Failed to read hops file: %w", err)
 			}
 
-			natsClient, err := nats.NewReplayClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, viper.GetString("event"))
+			natsClient, err := nats.NewReplayClient(ctx, keyFile.NatsUrl(), keyFile.AccountId, viper.GetString("event"), &zlog)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err

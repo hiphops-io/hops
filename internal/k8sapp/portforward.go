@@ -1,4 +1,4 @@
-package worker
+package k8sapp
 
 import (
 	"errors"

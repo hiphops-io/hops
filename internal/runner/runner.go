@@ -1,4 +1,4 @@
-package orchestrator
+package runner
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 )
 
 type NatsClient interface {
-	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error)
+	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error, bool)
 	ConsumeSequences(context.Context, nats.SequenceHandler) error
 }
 
@@ -102,7 +102,7 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 		return
 	}
 
-	_, err := r.natsClient.Publish(ctx, call.Inputs, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
+	_, err, _ := r.natsClient.Publish(ctx, call.Inputs, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
 
 	// At the time of writing, the go client does not contain an error matching
 	// the 'maximum massages per subject exceeded' error.

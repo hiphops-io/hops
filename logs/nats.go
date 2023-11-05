@@ -6,9 +6,8 @@ type NatsZeroLogger struct {
 	zerolog.Logger
 }
 
-func NewNatsZeroLogger(logger zerolog.Logger, from string) NatsZeroLogger {
-	ctxLogger := logger.With().Str("from", from).Logger()
-	return NatsZeroLogger{ctxLogger}
+func NewNatsZeroLogger(logger zerolog.Logger) NatsZeroLogger {
+	return NatsZeroLogger{logger}
 }
 
 func (n *NatsZeroLogger) Debugf(format string, v ...interface{}) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hiphops-io/hops/logs"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,7 +52,7 @@ func TestClientConsume(t *testing.T) {
 		})
 	}()
 
-	_, err := hopsNats.Publish(ctx, []byte("Hello world"), ChannelNotify, "SEQ_ID", "MSG_ID")
+	_, err, _ := hopsNats.Publish(ctx, []byte("Hello world"), ChannelNotify, "SEQ_ID", "MSG_ID")
 	if assert.NoError(t, err, "Message should be published without errror") {
 		receivedMsg := <-receivedChan
 		assert.Contains(t, receivedMsg.subject, "SEQ_ID.MSG_ID")
@@ -96,19 +97,19 @@ func TestClientConsumeSequences(t *testing.T) {
 		hopsNats.ConsumeSequences(ctx, sqncHandler)
 	}()
 
-	_, err := hopsNats.Publish(ctx, []byte("One"), ChannelNotify, "SEQ_ID", "event")
+	_, err, _ := hopsNats.Publish(ctx, []byte("One"), ChannelNotify, "SEQ_ID", "event")
 	if assert.NoError(t, err, "Message should be published without error") {
 		receivedMsgBundle := <-receivedChan
 		assert.Equal(t, receivedMsgBundle, expectedBundleOne)
 	}
 
-	_, err = hopsNats.Publish(ctx, []byte("Two"), ChannelNotify, "SEQ_ID", "event-two")
+	_, err, _ = hopsNats.Publish(ctx, []byte("Two"), ChannelNotify, "SEQ_ID", "event-two")
 	if assert.NoError(t, err, "Second message in sequence should be published without error") {
 		receivedMsgBundle := <-receivedChan
 		assert.Equal(t, receivedMsgBundle, expectedBundleTwo)
 	}
 
-	_, err = hopsNats.Publish(ctx, []byte("Three"), ChannelNotify, "SEQ_ID", "event-three")
+	_, err, _ = hopsNats.Publish(ctx, []byte("Three"), ChannelNotify, "SEQ_ID", "event-three")
 	if assert.NoError(t, err, "Third message in sequence should be published without error") {
 		receivedMsgBundle := <-receivedChan
 		assert.Equal(t, receivedMsgBundle, expectedBundleThree)
@@ -119,13 +120,16 @@ func TestClientConsumeSequences(t *testing.T) {
 func setupClient(ctx context.Context, t *testing.T) (*Client, func()) {
 	localNats := setupLocalNatsServer(t)
 
+	logger := logs.NoOpLogger()
+	natsLogger := logs.NewNatsZeroLogger(logger)
+
 	authUrl, err := localNats.AuthUrl("")
 	require.NoError(t, err, "Test setup: Should have valid auth URL for NATS")
 
 	user, err := localNats.User("")
 	require.NoError(t, err, "Test setup: Should have valid NATS user")
 
-	hopsNats, err := NewClient(ctx, authUrl, user.Account.Name)
+	hopsNats, err := NewClient(ctx, authUrl, user.Account.Name, &natsLogger)
 	require.NoError(t, err, "Test setup: HopsNats should initialise without error")
 
 	cleanup := func() {
