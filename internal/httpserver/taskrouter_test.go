@@ -120,11 +120,11 @@ package httpserver
 
 // func initTaskHops(content string, t *testing.T) (*dsl.HopAST, error) {
 // 	ctx := context.Background()
-// 	hopsHcl, _ := initTmpHopsFile(content, t)
+// 	hopsHcl := initTmpHopsFile(content, t)
 // 	return dsl.ParseHopsTasks(ctx, hopsHcl)
 // }
 
-// func initTmpHopsFile(content string, t *testing.T) (dsl.HclFiles, string) {
+// func initTmpHopsFile(content string, t *testing.T) dsl.HclFiles {
 // 	// TODO: This is a duplicate of the createTmpHopsFile func in the dsl package
 // 	// we move to a sensible location and consolidate
 // 	dir := t.TempDir()
@@ -133,7 +133,7 @@ package httpserver
 
 // 	f.WriteString(content)
 
-// 	hclFile, hash, err := dsl.ReadHopsFiles(f.Name())
+// 	hclFile, _, err := dsl.ReadHopsFiles(f.Name())
 // 	require.NoError(t, err)
 
 // 	return hclFile, hash

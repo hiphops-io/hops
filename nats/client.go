@@ -356,8 +356,9 @@ func (c *Client) initWorkerConsumer(ctx context.Context, accountId string, appNa
 	return nil
 }
 
-// ClientOpts
+// ClientOpts - passed through to NewClient() to configure the client setup
 
+// DefaultClientOpts configures the hiphops nats.Client as a RunnerClient
 func DefaultClientOpts() []ClientOpt {
 	return []ClientOpt{
 		RunnerClient(),

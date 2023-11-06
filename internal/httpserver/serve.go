@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/internal/hopsfile"
 	"github.com/hiphops-io/hops/logs"
 )
 
@@ -53,11 +54,11 @@ func Serve(addr string, hopsFilePath string, natsClient NatsClient, logger zerol
 
 func parseTasks(hopsFilePath string) (*dsl.HopAST, error) {
 	ctx := context.Background()
-	hops, _, err := dsl.ReadHopsFiles(hopsFilePath)
+	hops, err := hopsfile.ReadHopsFiles(hopsFilePath)
 	if err != nil {
 		return nil, err
 	}
-	taskHops, err := dsl.ParseHopsTasks(ctx, hops)
+	taskHops, err := dsl.ParseHopsTasks(ctx, hops.Body)
 	if err != nil {
 		return nil, err
 	}

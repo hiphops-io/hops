@@ -22,7 +22,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/internal/hopsfile"
 	"github.com/hiphops-io/hops/internal/setup"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
@@ -57,7 +57,7 @@ func replayCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			hops, _, err := dsl.ReadHopsFiles(viper.GetString("hops"))
+			hops, err := hopsfile.ReadHopsFiles(viper.GetString("hops"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to read hops files")
 				return fmt.Errorf("Failed to read hops file: %w", err)
@@ -74,7 +74,7 @@ func replayCmd(ctx context.Context) *cobra.Command {
 
 			if err := server(
 				ctx,
-				hops,
+				hops.Body,
 				natsClient,
 				logger,
 			); err != nil {

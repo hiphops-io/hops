@@ -22,7 +22,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/internal/hopsfile"
 	"github.com/hiphops-io/hops/internal/setup"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
@@ -58,12 +58,6 @@ func startCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			hops, _, err := dsl.ReadHopsFiles(viper.GetString("hops"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to read hops files")
-				return fmt.Errorf("Failed to read hops file: %w", err)
-			}
-
 			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
@@ -77,6 +71,12 @@ func startCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 			defer natsWorkerClient.Close()
+
+			hops, err := hopsfile.ReadHopsFiles(viper.GetString("hops"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return fmt.Errorf("Failed to read hops file: %w", err)
+			}
 
 			errs := make(chan error, 1)
 
@@ -92,7 +92,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 			go func() {
 				errs <- server(
 					ctx,
-					hops,
+					hops.Body,
 					natsClient,
 					logger,
 				)
