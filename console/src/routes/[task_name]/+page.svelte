@@ -16,7 +16,6 @@
 	import Input from '$lib/tasks/Input.svelte';
 	import { PUBLIC_BACKEND_URL } from '$env/static/public';
 	import ky, { HTTPError } from 'ky';
-	import { enhance } from '$app/forms';
 
 	export let data: PageData;
 	export let task = data.task as Task;
