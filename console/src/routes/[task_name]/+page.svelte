@@ -16,6 +16,7 @@
 	import Input from '$lib/tasks/Input.svelte';
 	import { PUBLIC_BACKEND_URL } from '$env/static/public';
 	import ky, { HTTPError } from 'ky';
+	import { enhance } from '$app/forms';
 
 	export let data: PageData;
 	export let task = data.task as Task;
@@ -150,7 +151,7 @@
 					(task.params.length !== 0 ? 'float-right mt-12' : 'w-80 justify-between')}
 				type="submit"
 				disabled={formStatus !== 'ready'}
-				on:click|preventDefault={onSubmit}
+				on:click={onSubmit}
 			>
 				{#if formStatus === 'submitting'}
 					Working on it
