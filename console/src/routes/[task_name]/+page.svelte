@@ -150,7 +150,7 @@
 					(task.params.length !== 0 ? 'float-right mt-12' : 'w-80 justify-between')}
 				type="submit"
 				disabled={formStatus !== 'ready'}
-				on:click|preventDefault={onSubmit}
+				on:click={onSubmit}
 			>
 				{#if formStatus === 'submitting'}
 					Working on it
