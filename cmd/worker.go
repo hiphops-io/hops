@@ -23,7 +23,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/hiphops-io/hops/internal/k8sapp"
-	"github.com/hiphops-io/hops/internal/setup"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 	work "github.com/hiphops-io/hops/worker"
@@ -44,7 +43,7 @@ func workerCmd(ctx context.Context) *cobra.Command {
 			logger := cmdLogger()
 			zlog := logs.NewNatsZeroLogger(logger)
 
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err

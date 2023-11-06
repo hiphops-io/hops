@@ -18,7 +18,6 @@ package cmd
 import (
 	"os"
 
-	"github.com/hiphops-io/hops/internal/setup"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -57,13 +56,7 @@ func addkeyCmd() *cobra.Command {
 func addkey(cmd *cobra.Command, args []string) error {
 	logger := cmdLogger()
 
-	_, err := setup.NewAppDirs(viper.GetString("rootdir"))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create app dirs")
-		return err
-	}
-
-	err = overwriteFile(viper.GetString("keyfile"), []byte(viper.GetString("keydata")))
+	err := overwriteFile(viper.GetString("keyfile"), []byte(viper.GetString("keydata")))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to write keyfile")
 		return err

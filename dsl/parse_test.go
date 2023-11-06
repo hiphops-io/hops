@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hiphops-io/hops/internal/hopsfile"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +30,7 @@ func TestValidParse(t *testing.T) {
 			"event": eventData,
 		}
 
-		hopsFiles, err := hopsfile.ReadHopsFiles(hopsFile)
+		hopsFiles, err := ReadHopsFilePath(hopsFile)
 		assert.NoError(t, err)
 
 		hop, err := ParseHops(ctx, hopsFiles.Body, eventBundle, logger)
@@ -86,7 +85,7 @@ func TestValidParseResponseStep(t *testing.T) {
 		"a_sensor-first_task": responseData,
 	}
 
-	hopsFiles, err := hopsfile.ReadHopsFiles(hopsFile)
+	hopsFiles, err := ReadHopsFilePath(hopsFile)
 	assert.NoError(t, err)
 
 	hop, err := ParseHops(ctx, hopsFiles.Body, eventBundle, logger)
@@ -115,7 +114,7 @@ func TestInvalidParse(t *testing.T) {
 		"event": eventData,
 	}
 
-	hopsFiles, err := hopsfile.ReadHopsFiles(hopsFile)
+	hopsFiles, err := ReadHopsFilePath(hopsFile)
 	assert.NoError(t, err)
 
 	hop, err := ParseHops(ctx, hopsFiles.Body, eventBundle, logger)

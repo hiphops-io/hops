@@ -6,32 +6,50 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/hcl/v2"
+	natsgo "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/nats"
 )
 
-type NatsClient interface {
-	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error, bool)
-	ConsumeSequences(context.Context, nats.SequenceHandler) error
-}
+type (
+	NatsClient interface {
+		ConsumeSequences(context.Context, nats.SequenceHandler) error
+		GetSysObject(key string) ([]byte, error)
+		Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error, bool)
+		PutSysObject(string, []byte) (*natsgo.ObjectInfo, error)
+	}
 
-type Runner struct {
-	logger     zerolog.Logger
-	hops       hcl.Body
-	natsClient NatsClient
-}
+	Runner struct {
+		cache      *cache.Cache
+		hops       hcl.Body
+		hopsHash   string
+		logger     zerolog.Logger
+		natsClient NatsClient
+	}
+)
 
-func NewRunner(natsClient NatsClient, hops hcl.Body, logger zerolog.Logger) (*Runner, error) {
+func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger) (*Runner, error) {
 	runner := &Runner{
+		hops:       hops.Body,
+		hopsHash:   hops.Hash,
 		logger:     logger,
-		hops:       hops,
 		natsClient: natsClient,
+	}
+
+	runner.initCache()
+
+	err := runner.initHopsBackup(hops)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to store hops filesL %w", err)
 	}
 
 	return runner, nil
@@ -123,6 +141,77 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 	}
 
 	errorchan <- nil
+}
+
+func (r *Runner) getHopsBody(key string) (hcl.Body, error) {
+	if storedBody, found := r.cache.Get(key); found {
+		body := storedBody.(hcl.Body)
+		return body, nil
+	}
+
+	// No locally cached copy, fetch from object store
+	body, err := r.getHopsBodyFromStore(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	r.cache.Set(key, body, cache.DefaultExpiration)
+
+	return body, nil
+}
+
+func (r *Runner) getHopsBodyFromStore(key string) (hcl.Body, error) {
+	hopsFileB, err := r.natsClient.GetSysObject(key)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to retrieve hops config '%s': %w", key, err)
+	}
+
+	hopsFiles := []dsl.FileContent{}
+	err = json.Unmarshal(hopsFileB, &hopsFiles)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to decode retrieved hops config '%s': %w", key, err)
+	}
+
+	body, hash, err := dsl.ReadHopsFileContents(hopsFiles)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read retrieved hops config '%s': '%w'", key, err)
+	}
+	// Validate the integrity. Hash should be identical to hash found in key
+	if !strings.Contains(key, hash) {
+		return nil, fmt.Errorf("Invalid hash for stored hops config, hash was '%s' but key was '%s'", hash, key)
+	}
+
+	return body, nil
+}
+
+func (r *Runner) initCache() {
+	r.cache = cache.New(2*time.Hour, 4*time.Hour)
+}
+
+func (r *Runner) initHopsBackup(hops *dsl.HopsFiles) error {
+	key := fmt.Sprintf("hopsconf-%s", hops.Hash)
+
+	hopsFileB, err := json.Marshal(hops.Files)
+	if err != nil {
+		return err
+	}
+
+	// Store in object store
+	_, err = r.natsClient.PutSysObject(key, hopsFileB)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.getHopsBody(key)
+	if err != nil {
+		fmt.Println("Failed to get hops body", err)
+	}
+
+	// Store hcl.Body in cache
+	r.cache.Set(key, hops.Body, cache.NoExpiration)
+
+	return nil
 }
 
 func (r *Runner) sequenceHops(msgBundle nats.MessageBundle) (hcl.Body, error) {

@@ -7,11 +7,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/hashicorp/hcl/v2"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
-	"github.com/hiphops-io/hops/internal/hopsfile"
 	"github.com/hiphops-io/hops/logs"
 )
 
@@ -20,7 +20,7 @@ type NatsClient interface {
 	CheckConnection() bool
 }
 
-func Serve(addr string, hopsFilePath string, natsClient NatsClient, logger zerolog.Logger) error {
+func Serve(addr string, hops hcl.Body, natsClient NatsClient, logger zerolog.Logger) error {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RedirectSlashes)
@@ -41,7 +41,7 @@ func Serve(addr string, hopsFilePath string, natsClient NatsClient, logger zerol
 	r.Mount("/console", ConsoleRouter(logger))
 
 	// Serve the tasks API
-	taskHops, err := parseTasks(hopsFilePath)
+	taskHops, err := parseTasks(hops)
 	if err != nil {
 		return err
 	}
@@ -52,13 +52,9 @@ func Serve(addr string, hopsFilePath string, natsClient NatsClient, logger zerol
 	return http.ListenAndServe(addr, r)
 }
 
-func parseTasks(hopsFilePath string) (*dsl.HopAST, error) {
+func parseTasks(hops hcl.Body) (*dsl.HopAST, error) {
 	ctx := context.Background()
-	hops, err := hopsfile.ReadHopsFiles(hopsFilePath)
-	if err != nil {
-		return nil, err
-	}
-	taskHops, err := dsl.ParseHopsTasks(ctx, hops.Body)
+	taskHops, err := dsl.ParseHopsTasks(ctx, hops)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package hopsfile
+package dsl
 
 import (
 	"os"

@@ -19,14 +19,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/hiphops-io/hops/internal/hopsfile"
+	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/runner"
-	"github.com/hiphops-io/hops/internal/setup"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 )
@@ -48,13 +46,13 @@ func serverCmd(ctx context.Context) *cobra.Command {
 			logger := cmdLogger()
 			zlog := logs.NewNatsZeroLogger(logger)
 
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			hops, err := hopsfile.ReadHopsFiles(viper.GetString("hops"))
+			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to read hops files")
 				return fmt.Errorf("Failed to read hops file: %w", err)
@@ -69,7 +67,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 
 			if err := server(
 				ctx,
-				hops.Body,
+				hops,
 				natsClient,
 				logger,
 			); err != nil {
@@ -85,7 +83,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 }
 
 // TODO: Add context cancellation with cleanup on SIGINT/SIGTERM https://medium.com/@matryer/make-ctrl-c-cancel-the-context-context-bd006a8ad6ff
-func server(ctx context.Context, hops hcl.Body, natsClient *nats.Client, logger zerolog.Logger) error {
+func server(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Client, logger zerolog.Logger) error {
 	logger.Info().Msg("Listening for events")
 
 	runner, err := runner.NewRunner(natsClient, hops, logger)

@@ -22,8 +22,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/hiphops-io/hops/internal/hopsfile"
-	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 )
@@ -52,7 +51,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 			logger := cmdLogger()
 			zlog := logs.NewNatsZeroLogger(logger)
 
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
@@ -72,7 +71,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 			}
 			defer natsWorkerClient.Close()
 
-			hops, err := hopsfile.ReadHopsFiles(viper.GetString("hops"))
+			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to read hops files")
 				return fmt.Errorf("Failed to read hops file: %w", err)
@@ -83,7 +82,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 			go func() {
 				errs <- console(
 					viper.GetString("address"),
-					viper.GetString("hops"), // TODO: Replace with hops HclFiles loaded above
+					hops.Body,
 					natsClient,
 					logger,
 				)
@@ -92,7 +91,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 			go func() {
 				errs <- server(
 					ctx,
-					hops.Body,
+					hops,
 					natsClient,
 					logger,
 				)

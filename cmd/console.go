@@ -17,13 +17,15 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/httpserver"
-	"github.com/hiphops-io/hops/internal/setup"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 )
@@ -46,7 +48,7 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 			logger := cmdLogger()
 			zlog := logs.NewNatsZeroLogger(logger)
 
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
@@ -59,9 +61,15 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 			}
 			defer natsClient.Close()
 
+			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return fmt.Errorf("Failed to read hops file: %w", err)
+			}
+
 			if err := console(
 				viper.GetString("address"),
-				viper.GetString("hops"), // TODO: Replace this with pre-loaded HclFiles (as in start cmd)
+				hops.Body,
 				natsClient,
 				logger,
 			); err != nil {
@@ -76,6 +84,6 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 	return consoleCmd
 }
 
-func console(address string, hopsFilePath string, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
-	return httpserver.Serve(address, hopsFilePath, natsClient, logger)
+func console(address string, hops hcl.Body, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
+	return httpserver.Serve(address, hops, natsClient, logger)
 }

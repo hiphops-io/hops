@@ -22,8 +22,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/hiphops-io/hops/internal/hopsfile"
-	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
 )
@@ -51,13 +50,13 @@ func replayCmd(ctx context.Context) *cobra.Command {
 			logger := cmdLogger()
 			zlog := logs.NewNatsZeroLogger(logger)
 
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			hops, err := hopsfile.ReadHopsFiles(viper.GetString("hops"))
+			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to read hops files")
 				return fmt.Errorf("Failed to read hops file: %w", err)
@@ -74,7 +73,7 @@ func replayCmd(ctx context.Context) *cobra.Command {
 
 			if err := server(
 				ctx,
-				hops.Body,
+				hops,
 				natsClient,
 				logger,
 			); err != nil {

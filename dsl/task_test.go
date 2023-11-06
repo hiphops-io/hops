@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
-	"github.com/hiphops-io/hops/internal/hopsfile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -333,7 +332,7 @@ func createTmpHopsFile(content string, t *testing.T) (hcl.Body, string) {
 
 	f.WriteString(content)
 
-	hops, err := hopsfile.ReadHopsFiles(f.Name())
+	hops, err := ReadHopsFilePath(f.Name())
 	require.NoError(t, err)
 
 	return hops.Body, hops.Hash

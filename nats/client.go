@@ -205,6 +205,10 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 	return msgBundle, nil
 }
 
+func (c *Client) GetSysObject(key string) ([]byte, error) {
+	return c.SysObjStore.GetBytes(key)
+}
+
 func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string) (*jetstream.PubAck, error, bool) {
 	sent := true
 	subject := ""
@@ -239,6 +243,10 @@ func (c *Client) PublishResult(ctx context.Context, result *ResultMsg, subjToken
 
 	_, err, sent := c.Publish(ctx, resultBytes, subjTokens...)
 	return err, sent
+}
+
+func (c *Client) PutSysObject(name string, data []byte) (*nats.ObjectInfo, error) {
+	return c.SysObjStore.PutBytes(name, data)
 }
 
 func (c *Client) initConsumer(ctx context.Context, accountId string) error {

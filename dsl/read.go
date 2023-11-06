@@ -1,4 +1,4 @@
-package hopsfile
+package dsl
 
 import (
 	"crypto/sha1"
@@ -24,30 +24,47 @@ type (
 	}
 
 	FileContent struct {
-		File    string
-		Content []byte
+		File    string `json:"file"`
+		Content []byte `json:"content"`
 	}
 )
 
-// ReadHopsFiles loads and pre-parses the content of .hops files either from a
+// ReadHopsFilePath loads and pre-parses the content of .hops files either from a
 // single file or from all .hops files in a directory.
 // It returns a merged hcl.Body and a sha hash of the contents
-func ReadHopsFiles(filePath string) (*HopsFiles, error) {
+func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 	files, err := readHops(filePath)
 	if err != nil {
 		return nil, err
 	}
 
+	body, hash, err := ReadHopsFileContents(files)
+	if err != nil {
+		return nil, err
+	}
+
+	// Would store files in object store here, with hash suffixed key
+	// Pre-populate cache here, store hcl.Body with hash suffixed key
+	hopsFiles := &HopsFiles{
+		Hash:  hash,
+		Body:  body,
+		Files: files,
+	}
+
+	return hopsFiles, nil
+}
+
+func ReadHopsFileContents(hopsFileContent []FileContent) (hcl.Body, string, error) {
 	hopsBodies := []hcl.Body{}
 	parser := hclparse.NewParser()
 	sha1Hash := sha1.New()
 
 	// parse the hops files
-	for _, file := range files {
+	for _, file := range hopsFileContent {
 		hopsFile, diags := parser.ParseHCL(file.Content, file.File)
 
 		if diags != nil && diags.HasErrors() {
-			return nil, errors.New(diags.Error())
+			return nil, "", errors.New(diags.Error())
 		}
 		hopsBodies = append(hopsBodies, hopsFile.Body)
 
@@ -58,15 +75,7 @@ func ReadHopsFiles(filePath string) (*HopsFiles, error) {
 	filesShaHex := hex.EncodeToString(filesSha)
 	body := hcl.MergeBodies(hopsBodies)
 
-	// Would store files in object store here, with hash suffixed key
-	// Pre-populate cache here, store hcl.Body with hash suffixed key
-	hopsFiles := &HopsFiles{
-		Hash:  filesShaHex,
-		Body:  body,
-		Files: files,
-	}
-
-	return hopsFiles, nil
+	return body, filesShaHex, nil
 }
 
 func readHops(hopsPath string) ([]FileContent, error) {
