@@ -325,7 +325,7 @@ task foo {
 	}
 }
 
-func createTmpHopsFile(content string, t *testing.T) (hcl.Body, string) {
+func createTmpHopsFile(content string, t *testing.T) (*hcl.BodyContent, string) {
 	dir := t.TempDir()
 	f, err := os.CreateTemp(dir, "*")
 	require.NoError(t, err)
@@ -335,5 +335,5 @@ func createTmpHopsFile(content string, t *testing.T) (hcl.Body, string) {
 	hops, err := ReadHopsFilePath(f.Name())
 	require.NoError(t, err)
 
-	return hops.Body, hops.Hash
+	return hops.BodyContent, hops.Hash
 }

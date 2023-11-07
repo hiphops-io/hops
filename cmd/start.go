@@ -82,7 +82,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 			go func() {
 				errs <- console(
 					viper.GetString("address"),
-					hops.Body,
+					hops.BodyContent,
 					natsClient,
 					logger,
 				)

@@ -15,7 +15,7 @@ import (
 
 const hopsMetadataKey = "hops"
 
-func ParseHops(ctx context.Context, hopsBody hcl.Body, eventBundle map[string][]byte, logger zerolog.Logger) (*HopAST, error) {
+func ParseHops(ctx context.Context, hopsContent *hcl.BodyContent, eventBundle map[string][]byte, logger zerolog.Logger) (*HopAST, error) {
 	hop := &HopAST{
 		SlugRegister: make(map[string]bool),
 	}
@@ -30,7 +30,7 @@ func ParseHops(ctx context.Context, hopsBody hcl.Body, eventBundle map[string][]
 		Variables: ctxVariables,
 	}
 
-	err = DecodeHopsBody(ctx, hop, hopsBody, evalctx, logger)
+	err = DecodeHopsBody(ctx, hop, hopsContent, evalctx, logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops file")
 		logger.Debug().RawJSON("source_event", eventBundle["event"]).Msg("Parse failed on source event")
@@ -40,17 +40,8 @@ func ParseHops(ctx context.Context, hopsBody hcl.Body, eventBundle map[string][]
 	return hop, nil
 }
 
-func DecodeHopsBody(ctx context.Context, hop *HopAST, body hcl.Body, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
-	bc, d := body.Content(HopSchema)
-	if d.HasErrors() {
-		return d.Errs()[0]
-	}
-
-	if len(bc.Blocks) == 0 {
-		return errors.New("At least one resource must be defined")
-	}
-
-	onBlocks := bc.Blocks.OfType(OnID)
+func DecodeHopsBody(ctx context.Context, hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+	onBlocks := hopsContent.Blocks.OfType(OnID)
 	for idx, onBlock := range onBlocks {
 		err := DecodeOnBlock(ctx, hop, onBlock, idx, evalctx, logger)
 		if err != nil {

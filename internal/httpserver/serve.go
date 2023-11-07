@@ -16,11 +16,11 @@ import (
 )
 
 type NatsClient interface {
-	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error, bool)
+	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, bool, error)
 	CheckConnection() bool
 }
 
-func Serve(addr string, hops hcl.Body, natsClient NatsClient, logger zerolog.Logger) error {
+func Serve(addr string, hopsContent *hcl.BodyContent, natsClient NatsClient, logger zerolog.Logger) error {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RedirectSlashes)
@@ -41,7 +41,7 @@ func Serve(addr string, hops hcl.Body, natsClient NatsClient, logger zerolog.Log
 	r.Mount("/console", ConsoleRouter(logger))
 
 	// Serve the tasks API
-	taskHops, err := parseTasks(hops)
+	taskHops, err := parseTasks(hopsContent)
 	if err != nil {
 		return err
 	}
@@ -52,9 +52,9 @@ func Serve(addr string, hops hcl.Body, natsClient NatsClient, logger zerolog.Log
 	return http.ListenAndServe(addr, r)
 }
 
-func parseTasks(hops hcl.Body) (*dsl.HopAST, error) {
+func parseTasks(hopsContent *hcl.BodyContent) (*dsl.HopAST, error) {
 	ctx := context.Background()
-	taskHops, err := dsl.ParseHopsTasks(ctx, hops)
+	taskHops, err := dsl.ParseHopsTasks(ctx, hopsContent)
 	if err != nil {
 		return nil, err
 	}

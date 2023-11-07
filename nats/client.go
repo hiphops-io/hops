@@ -129,13 +129,22 @@ func (c *Client) ConsumeSequences(ctx context.Context, handler SequenceHandler) 
 			return
 		}
 
+		if hopsMsg.MessageId == HopsMessageId {
+			c.logger.Debugf("Skipping hops assignment message")
+
+			err := DoubleAck(ctx, msg)
+			if err != nil {
+				c.logger.Errf(err, "Unable to ack hops assignment message")
+			}
+
+			return
+		}
+
 		msgBundle, err := c.FetchMessageBundle(ctx, hopsMsg)
 		if err != nil {
 			msg.NakWithDelay(3 * time.Second)
 			c.logger.Errf(err, "Unable to fetch message bundle")
-			// TODO: Remove this panic, just for debugging
-			panic(err)
-			// return
+			return
 		}
 
 		err = handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
@@ -145,7 +154,7 @@ func (c *Client) ConsumeSequences(ctx context.Context, handler SequenceHandler) 
 			return
 		}
 
-		msg.Ack()
+		DoubleAck(ctx, msg)
 	}
 
 	return c.Consume(ctx, wrappedCB)
@@ -205,11 +214,23 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 	return msgBundle, nil
 }
 
+func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error) {
+	stream, err := c.JetStream.Stream(ctx, c.accountId)
+	if err != nil {
+		return nil, err
+	}
+
+	tokens := append([]string{c.accountId}, subjTokens...)
+	subject := strings.Join(tokens, ".")
+
+	return stream.GetLastMsgForSubject(ctx, subject)
+}
+
 func (c *Client) GetSysObject(key string) ([]byte, error) {
 	return c.SysObjStore.GetBytes(key)
 }
 
-func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string) (*jetstream.PubAck, error, bool) {
+func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string) (*jetstream.PubAck, bool, error) {
 	sent := true
 	subject := ""
 	isFullSubject := len(subjTokens) == 1 && strings.Contains(subjTokens[0], ".")
@@ -231,7 +252,7 @@ func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string)
 		c.logger.Debugf("Message sent %s", subject)
 	}
 
-	return puback, err, sent
+	return puback, sent, err
 }
 
 // PublishResult is a convenience wrapper that json encodes a ResultMsg and publishes it
@@ -241,7 +262,7 @@ func (c *Client) PublishResult(ctx context.Context, result *ResultMsg, subjToken
 		return err, false
 	}
 
-	_, err, sent := c.Publish(ctx, resultBytes, subjTokens...)
+	_, sent, err := c.Publish(ctx, resultBytes, subjTokens...)
 	return err, sent
 }
 

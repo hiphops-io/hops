@@ -69,7 +69,7 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 
 			if err := console(
 				viper.GetString("address"),
-				hops.Body,
+				hops.BodyContent,
 				natsClient,
 				logger,
 			); err != nil {
@@ -84,6 +84,6 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 	return consoleCmd
 }
 
-func console(address string, hops hcl.Body, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
-	return httpserver.Serve(address, hops, natsClient, logger)
+func console(address string, hopsContent *hcl.BodyContent, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
+	return httpserver.Serve(address, hopsContent, natsClient, logger)
 }

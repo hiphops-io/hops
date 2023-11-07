@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	serverShortDesc = "Start the hops orchestration server & listens for events"
+	serverShortDesc = "Start the hops orchestration server & listen for events"
 	serverLongDesc  = `Start an instance of the hops orchestration server to process events and run workflows.
 	
 Hops can run locally only, or connect with a cluster and share workloads.`

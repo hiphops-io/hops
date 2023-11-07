@@ -8,6 +8,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+const HopsMessageId = "hops"
+
 type (
 	MsgMeta struct {
 		AccountId        string
@@ -133,6 +135,14 @@ func ReplayFilterSubject(accountId string, sequenceId string) string {
 	}
 
 	return strings.Join(tokens, ".")
+}
+
+func SequenceHopsKeyTokens(sequenceId string) []string {
+	return []string{
+		ChannelNotify,
+		sequenceId,
+		HopsMessageId,
+	}
 }
 
 func SourceEventSubject(accountId string, sequenceId string) string {

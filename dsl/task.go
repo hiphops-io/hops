@@ -15,7 +15,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-func ParseHopsTasks(ctx context.Context, hops hcl.Body) (*HopAST, error) {
+func ParseHopsTasks(ctx context.Context, hopsContent *hcl.BodyContent) (*HopAST, error) {
 	logger := zerolog.Ctx(ctx)
 
 	hop := &HopAST{
@@ -26,7 +26,7 @@ func ParseHopsTasks(ctx context.Context, hops hcl.Body) (*HopAST, error) {
 		Functions: DefaultFunctions,
 	}
 
-	err := DecodeTasks(ctx, hop, hops, evalctx)
+	err := DecodeTasks(ctx, hop, hopsContent, evalctx)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops tasks")
 		return hop, err
@@ -35,17 +35,8 @@ func ParseHopsTasks(ctx context.Context, hops hcl.Body) (*HopAST, error) {
 	return hop, nil
 }
 
-func DecodeTasks(ctx context.Context, hop *HopAST, body hcl.Body, evalctx *hcl.EvalContext) error {
-	bc, d := body.Content(HopSchema)
-	if d.HasErrors() {
-		return d.Errs()[0]
-	}
-
-	if len(bc.Blocks) == 0 {
-		return errors.New("At least one resource must be defined")
-	}
-
-	blocks := bc.Blocks.OfType(TaskID)
+func DecodeTasks(ctx context.Context, hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.EvalContext) error {
+	blocks := hopsContent.Blocks.OfType(TaskID)
 	for _, block := range blocks {
 		err := DecodeTaskBlock(ctx, hop, block, evalctx)
 		if err != nil {

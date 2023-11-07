@@ -33,7 +33,7 @@ func TestValidParse(t *testing.T) {
 		hopsFiles, err := ReadHopsFilePath(hopsFile)
 		assert.NoError(t, err)
 
-		hop, err := ParseHops(ctx, hopsFiles.Body, eventBundle, logger)
+		hop, err := ParseHops(ctx, hopsFiles.BodyContent, eventBundle, logger)
 		assert.NoError(t, err)
 
 		// Test we parsed the correct number of matching on blocks.
@@ -88,7 +88,7 @@ func TestValidParseResponseStep(t *testing.T) {
 	hopsFiles, err := ReadHopsFilePath(hopsFile)
 	assert.NoError(t, err)
 
-	hop, err := ParseHops(ctx, hopsFiles.Body, eventBundle, logger)
+	hop, err := ParseHops(ctx, hopsFiles.BodyContent, eventBundle, logger)
 	assert.NoError(t, err)
 
 	// Test we parsed the correct number of matching on blocks.
@@ -117,7 +117,7 @@ func TestInvalidParse(t *testing.T) {
 	hopsFiles, err := ReadHopsFilePath(hopsFile)
 	assert.NoError(t, err)
 
-	hop, err := ParseHops(ctx, hopsFiles.Body, eventBundle, logger)
+	hop, err := ParseHops(ctx, hopsFiles.BodyContent, eventBundle, logger)
 	assert.Error(t, err)
 	assert.Nil(t, hop.Ons)
 }

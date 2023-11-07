@@ -14,13 +14,11 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 )
 
-// can be in a list of filenames and content
-// needed for parsing
 type (
 	HopsFiles struct {
-		Hash  string
-		Body  hcl.Body
-		Files []FileContent
+		Hash        string
+		BodyContent *hcl.BodyContent
+		Files       []FileContent
 	}
 
 	FileContent struct {
@@ -38,23 +36,21 @@ func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 		return nil, err
 	}
 
-	body, hash, err := ReadHopsFileContents(files)
+	content, hash, err := ReadHopsFileContents(files)
 	if err != nil {
 		return nil, err
 	}
 
-	// Would store files in object store here, with hash suffixed key
-	// Pre-populate cache here, store hcl.Body with hash suffixed key
 	hopsFiles := &HopsFiles{
-		Hash:  hash,
-		Body:  body,
-		Files: files,
+		Hash:        hash,
+		BodyContent: content,
+		Files:       files,
 	}
 
 	return hopsFiles, nil
 }
 
-func ReadHopsFileContents(hopsFileContent []FileContent) (hcl.Body, string, error) {
+func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, string, error) {
 	hopsBodies := []hcl.Body{}
 	parser := hclparse.NewParser()
 	sha1Hash := sha1.New()
@@ -71,11 +67,20 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (hcl.Body, string, erro
 		sha1Hash.Write(file.Content)
 	}
 
+	body := hcl.MergeBodies(hopsBodies)
+	content, diags := body.Content(HopSchema)
+	if diags.HasErrors() {
+		return nil, "", errors.New(diags.Error())
+	}
+
+	if len(content.Blocks) == 0 {
+		return nil, "", errors.New("At least one resource must be defined in your hops config(s)")
+	}
+
 	filesSha := sha1Hash.Sum(nil)
 	filesShaHex := hex.EncodeToString(filesSha)
-	body := hcl.MergeBodies(hopsBodies)
 
-	return body, filesShaHex, nil
+	return content, filesShaHex, nil
 }
 
 func readHops(hopsPath string) ([]FileContent, error) {

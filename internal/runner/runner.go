@@ -23,26 +23,27 @@ import (
 type (
 	NatsClient interface {
 		ConsumeSequences(context.Context, nats.SequenceHandler) error
+		GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error)
 		GetSysObject(key string) ([]byte, error)
-		Publish(context.Context, []byte, ...string) (*jetstream.PubAck, error, bool)
+		Publish(context.Context, []byte, ...string) (*jetstream.PubAck, bool, error)
 		PutSysObject(string, []byte) (*natsgo.ObjectInfo, error)
 	}
 
 	Runner struct {
-		cache      *cache.Cache
-		hops       hcl.Body
-		hopsHash   string
-		logger     zerolog.Logger
-		natsClient NatsClient
+		cache       *cache.Cache
+		hopsContent *hcl.BodyContent
+		hopsKey     string
+		logger      zerolog.Logger
+		natsClient  NatsClient
 	}
 )
 
 func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger) (*Runner, error) {
 	runner := &Runner{
-		hops:       hops.Body,
-		hopsHash:   hops.Hash,
-		logger:     logger,
-		natsClient: natsClient,
+		hopsKey:     fmt.Sprintf("hopsconf-%s", hops.Hash),
+		hopsContent: hops.BodyContent,
+		logger:      logger,
+		natsClient:  natsClient,
 	}
 
 	runner.initCache()
@@ -66,14 +67,14 @@ func (r *Runner) SequenceCallback(
 ) error {
 	logger := r.logger.With().Str("sequence_id", sequenceId).Logger()
 
-	hops, err := r.sequenceHops(msgBundle)
+	hops, err := r.sequenceHops(ctx, sequenceId, msgBundle)
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable to fetch assigned hops file for sequence: %w", err)
 	}
 
 	hop, err := dsl.ParseHops(ctx, hops, msgBundle, logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error parsing hops config: %w", err)
 	}
 
 	r.logger.Debug().Msg("Successfully parsed hops file")
@@ -126,7 +127,7 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 		return
 	}
 
-	_, err, _ := r.natsClient.Publish(ctx, call.Inputs, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
+	_, _, err := r.natsClient.Publish(ctx, call.Inputs, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
 
 	// At the time of writing, the go client does not contain an error matching
 	// the 'maximum massages per subject exceeded' error.
@@ -143,25 +144,91 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 	errorchan <- nil
 }
 
-func (r *Runner) getHopsBody(key string) (hcl.Body, error) {
-	if storedBody, found := r.cache.Get(key); found {
-		body := storedBody.(hcl.Body)
-		return body, nil
-	}
-
-	// No locally cached copy, fetch from object store
-	body, err := r.getHopsBodyFromStore(key)
-	if err != nil {
-		return nil, err
-	}
-
-	// Store in cache
-	r.cache.Set(key, body, cache.DefaultExpiration)
-
-	return body, nil
+func (r *Runner) initCache() {
+	r.cache = cache.New(5*time.Minute, 10*time.Minute)
 }
 
-func (r *Runner) getHopsBodyFromStore(key string) (hcl.Body, error) {
+func (r *Runner) initHopsBackup(hops *dsl.HopsFiles) error {
+	hopsFileB, err := json.Marshal(hops.Files)
+	if err != nil {
+		return err
+	}
+
+	// Store in object store
+	_, err = r.natsClient.PutSysObject(r.hopsKey, hopsFileB)
+	if err != nil {
+		return err
+	}
+
+	// Pre-populate local cache (local hops cache item should never expire)
+	r.logger.Debug().Msgf("Populating local cache with hops config: %s", r.hopsKey)
+	r.cache.Set(r.hopsKey, hops.BodyContent, cache.NoExpiration)
+
+	return nil
+}
+
+// sequenceHops attempts to assign the local hops config to a sequence,
+// returning either the newly assigned hops body or the existing one if present.
+func (r *Runner) sequenceHops(ctx context.Context, sequenceId string, msgBundle nats.MessageBundle) (*hcl.BodyContent, error) {
+	key, err := r.sequenceHopsKey(ctx, sequenceId, msgBundle)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to decide hops config for pipeline: %w", err)
+	}
+
+	// Attempt to fetch from cache
+	content := r.sequenceHopsCached(key)
+	if content != nil {
+		r.logger.Debug().Msg("Using cached hops config")
+		return content, nil
+	}
+
+	// No cached copy, fetch from object store
+	r.logger.Debug().Msg("Using remote stored hops config")
+	return r.sequenceHopsStored(key)
+}
+
+// sequenceHopsKey gets or sets the hops key for a sequence, returning the final key
+func (r *Runner) sequenceHopsKey(ctx context.Context, sequenceId string, msgBundle nats.MessageBundle) (string, error) {
+	hopsKeyB, ok := msgBundle["hops"]
+	if ok {
+		return hopsKeyFromBytes(hopsKeyB)
+	}
+
+	tokens := nats.SequenceHopsKeyTokens(sequenceId)
+
+	hopsJson := fmt.Sprintf("\"%s\"", r.hopsKey)
+	_, sent, err := r.natsClient.Publish(ctx, []byte(hopsJson), tokens...)
+	if err != nil {
+		return "", fmt.Errorf("Unable to assign hops config to pipeline: %w", err)
+	}
+
+	// If the message was successfully sent, it means we assigned first and can continue
+	if sent {
+		return r.hopsKey, nil
+	}
+
+	// Otherwise it means another client won the race - we need to get that hops key
+	msg, err := r.natsClient.GetMsg(ctx, tokens...)
+	if err != nil {
+		return "", fmt.Errorf("Unable to fetch assigned hops config for pipeline: %w", err)
+	}
+
+	return hopsKeyFromBytes(msg.Data)
+}
+
+// sequenceHopsCached gets the hops config assigned to a sequence by key,
+// first looking up in the cache, then falling back to object store
+func (r *Runner) sequenceHopsCached(key string) *hcl.BodyContent {
+	if cachedContent, found := r.cache.Get(key); found {
+		return cachedContent.(*hcl.BodyContent)
+	}
+
+	return nil
+}
+
+// sequenceHopsFromStore gets the hops config assigned to a sequence by key,
+// fetching from the object store
+func (r *Runner) sequenceHopsStored(key string) (*hcl.BodyContent, error) {
 	hopsFileB, err := r.natsClient.GetSysObject(key)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve hops config '%s': %w", key, err)
@@ -173,52 +240,28 @@ func (r *Runner) getHopsBodyFromStore(key string) (hcl.Body, error) {
 		return nil, fmt.Errorf("Unable to decode retrieved hops config '%s': %w", key, err)
 	}
 
-	body, hash, err := dsl.ReadHopsFileContents(hopsFiles)
+	hopsContent, hash, err := dsl.ReadHopsFileContents(hopsFiles)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to read retrieved hops config '%s': '%w'", key, err)
 	}
+
 	// Validate the integrity. Hash should be identical to hash found in key
 	if !strings.Contains(key, hash) {
 		return nil, fmt.Errorf("Invalid hash for stored hops config, hash was '%s' but key was '%s'", hash, key)
 	}
 
-	return body, nil
+	// Store in cache
+	r.logger.Debug().Msg("Caching stored hops locally")
+	r.cache.Set(key, hopsContent, cache.DefaultExpiration)
+
+	return hopsContent, nil
 }
 
-func (r *Runner) initCache() {
-	r.cache = cache.New(2*time.Hour, 4*time.Hour)
-}
-
-func (r *Runner) initHopsBackup(hops *dsl.HopsFiles) error {
-	key := fmt.Sprintf("hopsconf-%s", hops.Hash)
-
-	hopsFileB, err := json.Marshal(hops.Files)
+func hopsKeyFromBytes(keyB []byte) (string, error) {
+	key := ""
+	err := json.Unmarshal(keyB, &key)
 	if err != nil {
-		return err
+		err = fmt.Errorf("Unable to decode hops key %w", err)
 	}
-
-	// Store in object store
-	_, err = r.natsClient.PutSysObject(key, hopsFileB)
-	if err != nil {
-		return err
-	}
-
-	_, err = r.getHopsBody(key)
-	if err != nil {
-		fmt.Println("Failed to get hops body", err)
-	}
-
-	// Store hcl.Body in cache
-	r.cache.Set(key, hops.Body, cache.NoExpiration)
-
-	return nil
-}
-
-func (r *Runner) sequenceHops(msgBundle nats.MessageBundle) (hcl.Body, error) {
-	_, ok := msgBundle["hops"]
-	if !ok {
-		return r.hops, nil
-	}
-
-	return r.hops, nil
+	return key, err
 }
