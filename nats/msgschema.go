@@ -11,6 +11,13 @@ import (
 const HopsMessageId = "hops"
 
 type (
+	// HopsResultMeta is metadata included in the top level of a result message
+	HopsResultMeta struct {
+		Error      error     `json:"error,omitempty"`
+		FinishedAt time.Time `json:"finished_at"`
+		StartedAt  time.Time `json:"started_at"`
+	}
+
 	MsgMeta struct {
 		AccountId        string
 		AppName          string
@@ -24,16 +31,13 @@ type (
 	}
 
 	// ResultMsg is the schema for handler call result messages
-	// TODO: Convert to new format properly
 	ResultMsg struct {
-		Completed  bool        `json:"completed"`
-		Done       bool        `json:"done"`
-		Error      error       `json:"error,omitempty"`
-		Errored    bool        `json:"errored"`
-		FinishedAt time.Time   `json:"finished_at"`
-		Result     interface{} `json:"result,omitempty"`
-		StartedAt  time.Time   `json:"started_at"`
-		Status     string      `json:"status"`
+		Completed bool           `json:"completed"`
+		Done      bool           `json:"done"`
+		Errored   bool           `json:"errored"`
+		Hops      HopsResultMeta `json:"hops"`
+		JSON      interface{}    `json:"json,omitempty"`
+		Body      string         `json:"body"`
 	}
 )
 

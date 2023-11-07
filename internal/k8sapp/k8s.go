@@ -353,7 +353,7 @@ func (k *K8sHandler) watchPods(ctx context.Context) {
 	for event := range watcher.ResultChan() {
 		if event.Type == watch.Deleted {
 			// Skip processing deleted pods, not much we can do with them as we
-			// wouldn't even know where to send an error response.
+			// won't have details of where to send a response.
 			continue
 		}
 
@@ -370,8 +370,9 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 	markedForDelete := false
 
 	result := &nats.ResultMsg{
-		Status:    "UNKNOWN",
-		StartedAt: pod.CreationTimestamp.Time,
+		Hops: nats.HopsResultMeta{
+			StartedAt: pod.CreationTimestamp.Time,
+		},
 	}
 
 	responseSubject, err := k.getPodEnvVar(pod, sidecarName, responseEnvVarName)
@@ -387,18 +388,16 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 
 	switch pod.Status.Phase {
 	case corev1.PodFailed:
-		result.Status = "FAILURE"
-		result.Error = errors.New("Task pod failed")
-		result.FinishedAt = time.Now()
+		result.Hops.Error = errors.New("Task pod failed")
+		result.Hops.FinishedAt = time.Now()
 
 		markedForDelete = true
 
 	case corev1.PodSucceeded:
 		// Pod success is a failure state, as the sidecar should keep the pod running
 		// indefinitely (until we manually gather results and delete)
-		result.Status = "FAILURE"
-		result.Error = errors.New("Task pod completed before results were gathered")
-		result.FinishedAt = time.Now()
+		result.Hops.Error = errors.New("Task pod completed before results were gathered")
+		result.Hops.FinishedAt = time.Now()
 
 		markedForDelete = true
 
@@ -407,9 +406,8 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 		// Otherwise kill it. Most often long pending states are due to incorrect
 		// config or missing images.
 		if time.Now().Sub(pod.CreationTimestamp.Time) > beginWorkTimeout {
-			result.Status = "FAILURE"
-			result.Error = errors.New("Task pod failed to start in time")
-			result.FinishedAt = time.Now()
+			result.Hops.Error = errors.New("Task pod failed to start in time")
+			result.Hops.FinishedAt = time.Now()
 
 			markedForDelete = true
 		}
@@ -434,8 +432,8 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 			deleteErr = k.deletePod(ctx, pod)
 		}
 
-		if sent && result.Status == "FAILURE" {
-			k.logger.Info().Err(result.Error).Msgf("K8s pod run failed")
+		if sent && result.Errored {
+			k.logger.Info().Err(result.Hops.Error).Msgf("K8s pod run failed")
 		}
 
 		if deleteErr != nil {
@@ -460,9 +458,8 @@ func (k *K8sHandler) processWatchedPodContainers(
 	for _, container := range pod.Status.ContainerStatuses {
 		if container.Name == sidecarName && container.State.Running == nil {
 			// Can't do anything with this as there's no sidecar to grab results
-			result.Status = "FAILURE"
-			result.Error = errors.New("Hiphops sidecar has stopped unexpectedly")
-			result.FinishedAt = time.Now()
+			result.Hops.Error = errors.New("Hiphops sidecar has stopped unexpectedly")
+			result.Hops.FinishedAt = time.Now()
 
 			final = true
 			break
@@ -482,9 +479,8 @@ func (k *K8sHandler) processWatchedPodContainers(
 		// Kill pods that have waited too long, otherwise leave them to run
 		if container.State.Waiting != nil {
 			if time.Now().Sub(pod.CreationTimestamp.Time) > beginWorkTimeout {
-				result.Status = "FAILURE"
-				result.Error = errors.New("Task pod failed to start work before deadline")
-				result.FinishedAt = time.Now()
+				result.Hops.Error = errors.New("Task pod failed to start work before deadline")
+				result.Hops.FinishedAt = time.Now()
 
 				final = true
 				break
@@ -550,16 +546,14 @@ func (k *K8sHandler) deletePod(ctx context.Context, pod *corev1.Pod) error {
 func (k *K8sHandler) writePodResult(ctx context.Context, pod *corev1.Pod, result *nats.ResultMsg) {
 	outputPath, err := k.getPodEnvVar(pod, "main", resultPathEnvVarName)
 	if err != nil {
-		result.Status = "FAILURE"
-		result.Error = err
+		result.Hops.Error = err
 		result.Errored = true
 		return
 	}
 
 	url, close, err := k.getPodUrl(pod, outputPath)
 	if err != nil {
-		result.Status = "FAILURE"
-		result.Error = err
+		result.Hops.Error = err
 		result.Errored = true
 		return
 	}
@@ -580,8 +574,7 @@ func (k *K8sHandler) writePodResult(ctx context.Context, pod *corev1.Pod, result
 	}
 	if err != nil {
 		k.logger.Debug().Err(err).Msgf("Failed to get result for pod %s", pod.Name)
-		result.Status = "FAILURE"
-		result.Error = err
+		result.Hops.Error = err
 		return
 	}
 
@@ -590,14 +583,12 @@ func (k *K8sHandler) writePodResult(ctx context.Context, pod *corev1.Pod, result
 		// Not found isn't an error state, it just means there's no output.
 		// If output was expected but not present, that's left to the logic in
 		// the user's pipelines to handle
-		result.Status = "COMPLETE"
 		result.Completed = true
 		result.Done = true
 	case http.StatusOK:
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
-			result.Status = "FAILURE"
-			result.Error = err
+			result.Hops.Error = err
 			result.Done = true
 			break
 		}
@@ -608,12 +599,10 @@ func (k *K8sHandler) writePodResult(ctx context.Context, pod *corev1.Pod, result
 			break
 		}
 
-		result.Status = "COMPLETE"
-		result.Result = string(b)
+		result.Body = string(b)
 		result.Completed = true
 	default:
-		result.Status = "FAILURE"
-		result.Error = fmt.Errorf("Unable to fetch result from task pod, status code: %d", resp.StatusCode)
+		result.Hops.Error = fmt.Errorf("Unable to fetch result from task pod, status code: %d", resp.StatusCode)
 	}
 }
 
@@ -639,13 +628,11 @@ func (k *K8sHandler) parseResultJSON(body []byte, result *nats.ResultMsg) {
 
 	err := json.Unmarshal(body, &resultData)
 	if err != nil {
-		result.Status = "FAILURE"
-		result.Error = errors.New("Invalid JSON")
+		result.Hops.Error = errors.New("Invalid JSON")
 		return
 	}
 
-	result.Status = "COMPLETE"
-	result.Result = resultData
+	result.JSON = resultData
 }
 
 func (k *K8sHandler) getPodEnvVar(pod *corev1.Pod, containerName string, varName string) (string, error) {

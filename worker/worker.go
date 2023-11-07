@@ -54,7 +54,9 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 
 		result := &nats.ResultMsg{
-			StartedAt: time.Now(),
+			Hops: nats.HopsResultMeta{
+				StartedAt: time.Now(),
+			},
 		}
 
 		// Get the handler function if it exists. Terminate if not as there's nothing
@@ -71,9 +73,8 @@ func (w *Worker) Run(ctx context.Context) error {
 		err = w.runHandler(ctx, msg, handler, ackDeadline)
 		if err != nil {
 			w.logger.Errf(err, "Failed to handle request %s", subject)
-			result.Status = "FAILURE"
-			result.Error = err
-			result.FinishedAt = time.Now()
+			result.Hops.Error = err
+			result.Hops.FinishedAt = time.Now()
 			err, _ := w.natsClient.PublishResult(ctx, result, parsedMsg.ResponseSubject())
 			replyErr = err
 		}
