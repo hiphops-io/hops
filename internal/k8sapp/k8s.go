@@ -1,4 +1,4 @@
-package worker
+package k8sapp
 
 import (
 	"context"
@@ -16,6 +16,8 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/hiphops-io/hops/nats"
+	"github.com/hiphops-io/hops/worker"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	corev1 "k8s.io/api/core/v1"
@@ -42,24 +44,40 @@ const (
 	runUUIDLabel         = "hiphops-io/uuid"
 )
 
-type K8sHandler struct {
-	clientset           *kubernetes.Clientset
-	cfg                 *rest.Config
-	responseCallback    responseCallback
-	logger              zerolog.Logger
-	portForward         *PortForward
-	requiresPortForward bool
-}
+type (
+	K8sHandler struct {
+		clientset           *kubernetes.Clientset
+		cfg                 *rest.Config
+		logger              zerolog.Logger
+		natsClient          *nats.Client
+		portForward         *PortForward
+		requiresPortForward bool
+	}
+
+	RunPodInput struct {
+		Image       string            `json:"image" validate:"required"`
+		Command     []string          `json:"command,omitempty"`
+		Args        []string          `json:"args,omitempty"`
+		Namespace   string            `json:"namespace,omitempty" validate:"omitempty,hostname_rfc1123"`
+		InDir       string            `json:"in_dir,omitempty" validate:"omitempty,dirpath,min=1"`
+		InFiles     map[string]string `json:"in_files,omitempty" validate:"omitempty,dive,keys,filepath,min=1,endkeys"`
+		OutDir      string            `json:"out_dir,omitempty" validate:"omitempty,dirpath,min=1"`
+		ResultPath  string            `json:"out_path,omitempty" validate:"omitempty,filepath,min=1"`
+		CpuLimit    string            `json:"cpu,omitempty"`
+		MemLimit    string            `json:"memory,omitempty"`
+		SkipCleanup bool              `json:"skip_cleanup"`
+	}
+)
 
 func NewK8sHandler(
 	ctx context.Context,
+	natsClient *nats.Client,
 	kubeConfPath string,
-	responseCallback responseCallback,
 	requiresPortForward bool,
 	logger zerolog.Logger,
 ) (*K8sHandler, error) {
 	k := &K8sHandler{
-		responseCallback:    responseCallback,
+		natsClient:          natsClient,
 		logger:              logger.With().Str("from", "k8s-handler").Logger(),
 		requiresPortForward: requiresPortForward,
 	}
@@ -76,18 +94,10 @@ func NewK8sHandler(
 	return k, nil
 }
 
-type RunPodInput struct {
-	Image       string            `json:"image" validate:"required"`
-	Command     []string          `json:"command,omitempty"`
-	Args        []string          `json:"args,omitempty"`
-	Namespace   string            `json:"namespace,omitempty" validate:"omitempty,hostname_rfc1123"`
-	InDir       string            `json:"in_dir,omitempty" validate:"omitempty,dirpath,min=1"`
-	InFiles     map[string]string `json:"in_files,omitempty" validate:"omitempty,dive,keys,filepath,min=1,endkeys"`
-	OutDir      string            `json:"out_dir,omitempty" validate:"omitempty,dirpath,min=1"`
-	ResultPath  string            `json:"out_path,omitempty" validate:"omitempty,filepath,min=1"`
-	CpuLimit    string            `json:"cpu,omitempty"`
-	MemLimit    string            `json:"memory,omitempty"`
-	SkipCleanup bool              `json:"skip_cleanup"`
+func (k *K8sHandler) Handlers() map[string]worker.Handler {
+	handlers := map[string]worker.Handler{}
+	handlers["run"] = k.RunPod
+	return handlers
 }
 
 func (k *K8sHandler) RunPod(ctx context.Context, msg jetstream.Msg) error {
@@ -104,13 +114,9 @@ func (k *K8sHandler) RunPod(ctx context.Context, msg jetstream.Msg) error {
 		return fmt.Errorf("Failed to parse memory limit: %w", err)
 	}
 
-	responseSubject, err := ParseResponseSubject(msg)
+	parsedMsg, err := nats.Parse(msg)
 	if err != nil {
 		return fmt.Errorf("Unable to parse response subject from message %s", msg.Subject())
-	}
-	sequenceId, err := ParseSequenceID(msg)
-	if err != nil {
-		return fmt.Errorf("Unable to parse sequence ID from message %s", msg.Subject())
 	}
 
 	pods := k.clientset.CoreV1().Pods(runPodInput.Namespace)
@@ -118,7 +124,7 @@ func (k *K8sHandler) RunPod(ctx context.Context, msg jetstream.Msg) error {
 
 	labels := map[string]string{
 		"hiphops-io/for":         "workflow-step",
-		"hiphops-io/sequence_id": sequenceId,
+		"hiphops-io/sequence_id": parsedMsg.SequenceId,
 		runUUIDLabel:             id,
 		skipCleanupLabel:         strconv.FormatBool(runPodInput.SkipCleanup),
 	}
@@ -188,7 +194,7 @@ func (k *K8sHandler) RunPod(ctx context.Context, msg jetstream.Msg) error {
 					Env: []corev1.EnvVar{
 						{
 							Name:  responseEnvVarName,
-							Value: responseSubject,
+							Value: parsedMsg.ResponseSubject(),
 						},
 						{
 							Name:  "PORT",
@@ -363,12 +369,12 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 	beginWorkTimeout := 2 * time.Minute
 	markedForDelete := false
 
-	response := &TaskResponse{
+	result := &nats.ResultMsg{
 		Status:    "UNKNOWN",
 		StartedAt: pod.CreationTimestamp.Time,
 	}
 
-	subject, err := k.getPodEnvVar(pod, sidecarName, responseEnvVarName)
+	responseSubject, err := k.getPodEnvVar(pod, sidecarName, responseEnvVarName)
 	if err != nil {
 		// We can't respond as we don't know the subject, so we'll just kill this and log
 		k.logger.Error().Err(err).Msg("Unable to process pod as cannot determine response subject")
@@ -378,22 +384,21 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 		}
 		return
 	}
-	response.subject = subject
 
 	switch pod.Status.Phase {
 	case corev1.PodFailed:
-		response.Status = "FAILURE"
-		response.Error = errors.New("Task pod failed")
-		response.FinishedAt = time.Now()
+		result.Status = "FAILURE"
+		result.Error = errors.New("Task pod failed")
+		result.FinishedAt = time.Now()
 
 		markedForDelete = true
 
 	case corev1.PodSucceeded:
 		// Pod success is a failure state, as the sidecar should keep the pod running
 		// indefinitely (until we manually gather results and delete)
-		response.Status = "FAILURE"
-		response.Error = errors.New("Task pod completed before results were gathered")
-		response.FinishedAt = time.Now()
+		result.Status = "FAILURE"
+		result.Error = errors.New("Task pod completed before results were gathered")
+		result.FinishedAt = time.Now()
 
 		markedForDelete = true
 
@@ -402,16 +407,16 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 		// Otherwise kill it. Most often long pending states are due to incorrect
 		// config or missing images.
 		if time.Now().Sub(pod.CreationTimestamp.Time) > beginWorkTimeout {
-			response.Status = "FAILURE"
-			response.Error = errors.New("Task pod failed to start in time")
-			response.FinishedAt = time.Now()
+			result.Status = "FAILURE"
+			result.Error = errors.New("Task pod failed to start in time")
+			result.FinishedAt = time.Now()
 
 			markedForDelete = true
 		}
 
 	case corev1.PodRunning:
 		// If pod is running (as expected) we must inspect each container to understand the outcome.
-		done := k.processWatchedPodContainers(ctx, pod, beginWorkTimeout, response)
+		done := k.processWatchedPodContainers(ctx, pod, beginWorkTimeout, result)
 		markedForDelete = done
 
 	default:
@@ -421,7 +426,7 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 	if markedForDelete {
 		var deleteErr error
 
-		err, sent := k.responseCallback(ctx, response)
+		err, sent := k.natsClient.PublishResult(ctx, result, responseSubject)
 		if err != nil {
 			k.logger.Error().Err(err).Msgf("Error sending response for pod %s", pod.Name)
 		} else {
@@ -429,8 +434,8 @@ func (k *K8sHandler) processWatchedPod(ctx context.Context, pod *corev1.Pod) {
 			deleteErr = k.deletePod(ctx, pod)
 		}
 
-		if sent && response.Status == "FAILURE" {
-			k.logger.Info().Err(response.Error).Msgf("K8s pod run failed")
+		if sent && result.Status == "FAILURE" {
+			k.logger.Info().Err(result.Error).Msgf("K8s pod run failed")
 		}
 
 		if deleteErr != nil {
@@ -447,7 +452,7 @@ func (k *K8sHandler) processWatchedPodContainers(
 	ctx context.Context,
 	pod *corev1.Pod,
 	beginWorkTimeout time.Duration,
-	response *TaskResponse,
+	result *nats.ResultMsg,
 ) bool {
 	final := false
 	sidecarRunning := false
@@ -455,9 +460,9 @@ func (k *K8sHandler) processWatchedPodContainers(
 	for _, container := range pod.Status.ContainerStatuses {
 		if container.Name == sidecarName && container.State.Running == nil {
 			// Can't do anything with this as there's no sidecar to grab results
-			response.Status = "FAILURE"
-			response.Error = errors.New("Hiphops sidecar has stopped unexpectedly")
-			response.FinishedAt = time.Now()
+			result.Status = "FAILURE"
+			result.Error = errors.New("Hiphops sidecar has stopped unexpectedly")
+			result.FinishedAt = time.Now()
 
 			final = true
 			break
@@ -477,9 +482,9 @@ func (k *K8sHandler) processWatchedPodContainers(
 		// Kill pods that have waited too long, otherwise leave them to run
 		if container.State.Waiting != nil {
 			if time.Now().Sub(pod.CreationTimestamp.Time) > beginWorkTimeout {
-				response.Status = "FAILURE"
-				response.Error = errors.New("Task pod failed to start work before deadline")
-				response.FinishedAt = time.Now()
+				result.Status = "FAILURE"
+				result.Error = errors.New("Task pod failed to start work before deadline")
+				result.FinishedAt = time.Now()
 
 				final = true
 				break
@@ -498,7 +503,7 @@ func (k *K8sHandler) processWatchedPodContainers(
 	}
 
 	if final && sidecarRunning {
-		k.writePodResult(ctx, pod, response)
+		k.writePodResult(ctx, pod, result)
 	}
 
 	return final
@@ -542,18 +547,20 @@ func (k *K8sHandler) deletePod(ctx context.Context, pod *corev1.Pod) error {
 	return err
 }
 
-func (k *K8sHandler) writePodResult(ctx context.Context, pod *corev1.Pod, response *TaskResponse) {
+func (k *K8sHandler) writePodResult(ctx context.Context, pod *corev1.Pod, result *nats.ResultMsg) {
 	outputPath, err := k.getPodEnvVar(pod, "main", resultPathEnvVarName)
 	if err != nil {
-		response.Status = "FAILURE"
-		response.Error = err
+		result.Status = "FAILURE"
+		result.Error = err
+		result.Errored = true
 		return
 	}
 
 	url, close, err := k.getPodUrl(pod, outputPath)
 	if err != nil {
-		response.Status = "FAILURE"
-		response.Error = err
+		result.Status = "FAILURE"
+		result.Error = err
+		result.Errored = true
 		return
 	}
 	if close != nil {
@@ -573,8 +580,8 @@ func (k *K8sHandler) writePodResult(ctx context.Context, pod *corev1.Pod, respon
 	}
 	if err != nil {
 		k.logger.Debug().Err(err).Msgf("Failed to get result for pod %s", pod.Name)
-		response.Status = "FAILURE"
-		response.Error = err
+		result.Status = "FAILURE"
+		result.Error = err
 		return
 	}
 
@@ -583,26 +590,30 @@ func (k *K8sHandler) writePodResult(ctx context.Context, pod *corev1.Pod, respon
 		// Not found isn't an error state, it just means there's no output.
 		// If output was expected but not present, that's left to the logic in
 		// the user's pipelines to handle
-		response.Status = "COMPLETE"
+		result.Status = "COMPLETE"
+		result.Completed = true
+		result.Done = true
 	case http.StatusOK:
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
-			response.Status = "FAILURE"
-			response.Error = err
+			result.Status = "FAILURE"
+			result.Error = err
+			result.Done = true
 			break
 		}
 
 		fileExtension := strings.ToLower(filepath.Ext(outputPath))
 		if fileExtension == ".json" {
-			k.parseResultJSON(b, response)
+			k.parseResultJSON(b, result)
 			break
 		}
 
-		response.Status = "COMPLETE"
-		response.Result = string(b)
+		result.Status = "COMPLETE"
+		result.Result = string(b)
+		result.Completed = true
 	default:
-		response.Status = "FAILURE"
-		response.Error = fmt.Errorf("Unable to fetch result from task pod, status code: %d", resp.StatusCode)
+		result.Status = "FAILURE"
+		result.Error = fmt.Errorf("Unable to fetch result from task pod, status code: %d", resp.StatusCode)
 	}
 }
 
@@ -623,18 +634,18 @@ func (k *K8sHandler) getPodUrl(pod *corev1.Pod, outputPath string) (string, func
 	return podUrl, nil, nil
 }
 
-func (k *K8sHandler) parseResultJSON(body []byte, response *TaskResponse) {
-	var result map[string]interface{}
+func (k *K8sHandler) parseResultJSON(body []byte, result *nats.ResultMsg) {
+	var resultData map[string]interface{}
 
-	err := json.Unmarshal(body, &result)
+	err := json.Unmarshal(body, &resultData)
 	if err != nil {
-		response.Status = "FAILURE"
-		response.Error = errors.New("Invalid JSON")
+		result.Status = "FAILURE"
+		result.Error = errors.New("Invalid JSON")
 		return
 	}
 
-	response.Status = "COMPLETE"
-	response.Result = result
+	result.Status = "COMPLETE"
+	result.Result = resultData
 }
 
 func (k *K8sHandler) getPodEnvVar(pod *corev1.Pod, containerName string, varName string) (string, error) {

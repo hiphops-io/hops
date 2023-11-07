@@ -1,17 +1,15 @@
 package httpserver
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/goccy/go-json"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
-	undist "github.com/hiphops-io/hops/undistribute"
+	"github.com/hiphops-io/hops/nats"
 )
 
 type taskReader interface {
@@ -19,17 +17,12 @@ type taskReader interface {
 	GetTask(string) (dsl.TaskAST, error)
 }
 
-type leasePublisher interface {
-	Publish(context.Context, undist.Channel, string, string, []byte, ...string) (*jetstream.PubAck, error)
-	PublishSource(context.Context, undist.Channel, string, string, []byte) (*jetstream.PubAck, error)
-}
-
-func TaskRouter(taskHops taskReader, lease leasePublisher, logger zerolog.Logger) chi.Router {
+func TaskRouter(taskHops taskReader, natsClient NatsClient, logger zerolog.Logger) chi.Router {
 	r := chi.NewRouter()
 	controller := &taskController{
-		logger: logger,
-		taskR:  taskHops,
-		lease:  lease,
+		logger:     logger,
+		taskR:      taskHops,
+		natsClient: natsClient,
 	}
 	r.Post("/{taskName}", controller.runTask)
 	r.Get("/", controller.listTasks)
@@ -45,9 +38,9 @@ type taskRunResponse struct {
 }
 
 type taskController struct {
-	taskR  taskReader
-	logger zerolog.Logger
-	lease  leasePublisher
+	taskR      taskReader
+	logger     zerolog.Logger
+	natsClient NatsClient
 }
 
 func (c *taskController) listTasks(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +97,7 @@ func (c *taskController) runTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Push the event message to the topic, including the hash as sequence ID and "event" as event ID
-	_, err = c.lease.PublishSource(r.Context(), undist.Notify, sequenceID, "event", sourceEvent)
+	_, _, err = c.natsClient.Publish(r.Context(), sourceEvent, nats.ChannelNotify, sequenceID, "event")
 	if err != nil {
 		runResponse.statusCode = http.StatusInternalServerError
 		runResponse.Message = fmt.Sprintf("Unable to publish event: %s", err.Error())

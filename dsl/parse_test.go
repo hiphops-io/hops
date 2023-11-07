@@ -3,17 +3,15 @@ package dsl
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/hiphops-io/hops/logs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestValidParse(t *testing.T) {
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 	ctx := context.Background()
 
 	// test that split hops files have identical result as single hops file
@@ -32,10 +30,10 @@ func TestValidParse(t *testing.T) {
 			"event": eventData,
 		}
 
-		hclFile, _, err := ReadHopsFiles(hopsFile)
+		hopsFiles, err := ReadHopsFilePath(hopsFile)
 		assert.NoError(t, err)
 
-		hop, err := ParseHops(ctx, hclFile, eventBundle, logger)
+		hop, err := ParseHops(ctx, hopsFiles.BodyContent, eventBundle, logger)
 		assert.NoError(t, err)
 
 		// Test we parsed the correct number of matching on blocks.
@@ -69,7 +67,7 @@ func TestValidParse(t *testing.T) {
 // Ideally we'll move them both to a single table based test, but there's a bit
 // of work there due to the nature of the test reaching into deep data structures to check values
 func TestValidParseResponseStep(t *testing.T) {
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 	ctx := context.Background()
 
 	hopsFile := "./testdata/valid.hops"
@@ -87,10 +85,10 @@ func TestValidParseResponseStep(t *testing.T) {
 		"a_sensor-first_task": responseData,
 	}
 
-	hclFile, _, err := ReadHopsFiles(hopsFile)
+	hopsFiles, err := ReadHopsFilePath(hopsFile)
 	assert.NoError(t, err)
 
-	hop, err := ParseHops(ctx, hclFile, eventBundle, logger)
+	hop, err := ParseHops(ctx, hopsFiles.BodyContent, eventBundle, logger)
 	assert.NoError(t, err)
 
 	// Test we parsed the correct number of matching on blocks.
@@ -107,7 +105,7 @@ func TestInvalidParse(t *testing.T) {
 	hopsFile := "./testdata/invalid.hops"
 	eventFile := "./testdata/raw_change_event.json"
 	ctx := context.Background()
-	logger := initTestLogger()
+	logger := logs.NoOpLogger()
 
 	eventData, err := os.ReadFile(eventFile)
 	require.NoError(t, err)
@@ -116,10 +114,10 @@ func TestInvalidParse(t *testing.T) {
 		"event": eventData,
 	}
 
-	hclFile, _, err := ReadHopsFiles(hopsFile)
+	hopsFiles, err := ReadHopsFilePath(hopsFile)
 	assert.NoError(t, err)
 
-	hop, err := ParseHops(ctx, hclFile, eventBundle, logger)
+	hop, err := ParseHops(ctx, hopsFiles.BodyContent, eventBundle, logger)
 	assert.Error(t, err)
 	assert.Nil(t, hop.Ons)
 }
@@ -136,142 +134,4 @@ func TestSlugify(t *testing.T) {
 
 	result = slugify("change_opened", "hello_world")
 	assert.Equal(t, "change_opened-hello_world", result)
-}
-
-func TestConcatenateHopsFiles(t *testing.T) {
-	tests := []struct {
-		name            string
-		files           map[string]string // filename -> content
-		expectedContent string
-		expectedRows    int
-		expectError     bool
-	}{
-		{
-			name:            "NoFiles",
-			files:           map[string]string{},
-			expectedContent: "",
-			expectedRows:    0,
-			expectError:     false,
-		},
-		{
-			name: "SingleFile",
-			files: map[string]string{
-				"a.hops": "content of a",
-			},
-			expectedContent: "content of a\n",
-			expectedRows:    1,
-			expectError:     false,
-		},
-		{
-			name: "MultipleFiles",
-			files: map[string]string{
-				"a.hops": "content of a",
-				"b.hops": "content of b",
-			},
-			expectedContent: "content of a\ncontent of b\n",
-			expectedRows:    2,
-			expectError:     false,
-		},
-		{
-			name: "FilesSortedByFilename",
-			files: map[string]string{
-				"b.hops": "content of b",
-				"a.hops": "content of a",
-			},
-			expectedContent: "content of a\ncontent of b\n",
-			expectedRows:    2,
-			expectError:     false,
-		},
-		{
-			name: "OnlyDotHopsFiles",
-			files: map[string]string{
-				"a.hops": "content of a",
-				"b.txt":  "content of b",
-				"c.hops": "content of c",
-			},
-			expectedContent: "content of a\ncontent of c\n",
-			expectedRows:    2,
-			expectError:     false,
-		},
-		{
-			name: "SubdirectoriesSearched",
-			files: map[string]string{
-				"subdir/b.hops": "content of b",
-				"a.hops":        "content of a",
-			},
-			expectedContent: "content of a\ncontent of b\n",
-			expectedRows:    2,
-			expectError:     false,
-		},
-		{
-			name: "MultipleFilesSubdirsSortedByNameIncludingSubdirs",
-			files: map[string]string{
-				"a.hops":      "content of a",
-				"sub2/b.hops": "content of b",
-				"sub1/c.hops": "content of c",
-				"sub3/d.hops": "content of d",
-			},
-			expectedContent: "content of a\ncontent of c\ncontent of b\ncontent of d\n",
-			expectedRows:    4,
-			expectError:     false,
-		},
-		{
-			name: "DontPickUpSubdirsFromKubernetesConfigMapsAKAWithLeadingDoubleDot",
-			files: map[string]string{
-				"..a.hops":          "content of a",
-				"..sub3/b.hops":     "content of b",
-				"sub4/..sub/c.hops": "content of c",
-				"d.hops":            "content of d",
-			},
-			expectedContent: "content of a\ncontent of d\n",
-			expectedRows:    2,
-			expectError:     false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// temporary directory
-			tmpDir, err := os.MkdirTemp("", "testdir")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %s", err)
-			}
-			defer os.RemoveAll(tmpDir)
-
-			// Create files in temp dir
-			for filename, content := range tt.files {
-				tmpFilename := filepath.Join(tmpDir, filename)
-
-				// Create subdirs
-				if err := os.MkdirAll(filepath.Dir(tmpFilename), 0755); err != nil {
-					t.Fatalf("Failed to create subdirectory for file %s: %s", tmpFilename, err)
-				}
-				err := os.WriteFile(tmpFilename, []byte(content), 0666)
-				if err != nil {
-					t.Fatalf("Failed to write to temp file %s: %s", tmpFilename, err)
-				}
-			}
-
-			// Run the function
-			resultFileContent, resultContent, err := concatenateHopsFiles(tmpDir)
-
-			// Check for an unexpected error
-			if !tt.expectError {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-			}
-
-			// Compare the result with the expected content
-			assert.Equal(t, tt.expectedContent, string(resultContent))
-
-			// Compare the result with the expected file content
-			assert.Equal(t, tt.expectedRows, len(resultFileContent))
-		})
-	}
-}
-
-func initTestLogger() zerolog.Logger {
-	zerolog.SetGlobalLevel(zerolog.Disabled)
-	return log.Logger
 }

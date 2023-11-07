@@ -22,8 +22,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/hiphops-io/hops/internal/setup"
-	"github.com/hiphops-io/hops/internal/worker"
+	"github.com/hiphops-io/hops/internal/k8sapp"
+	"github.com/hiphops-io/hops/logs"
+	"github.com/hiphops-io/hops/nats"
+	work "github.com/hiphops-io/hops/worker"
 )
 
 const (
@@ -39,17 +41,25 @@ func workerCmd(ctx context.Context) *cobra.Command {
 		Long:  workerLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			zlog := logs.NewNatsZeroLogger(logger)
 
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			if err := work(
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog, nats.WorkerClient("k8s"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to start NATS client")
+				return err
+			}
+			defer natsClient.Close()
+
+			if err := worker(
 				ctx,
+				natsClient,
 				viper.GetString("kubeconfig"),
-				keyFile.NatsUrl(),
 				keyFile.AccountId,
 				viper.GetBool("port-forward"),
 				logger,
@@ -65,17 +75,17 @@ func workerCmd(ctx context.Context) *cobra.Command {
 	return workerCmd
 }
 
-func work(ctx context.Context, kubeConfPath string, natsUrl string, streamName string, requiresPortForward bool, logger zerolog.Logger) error {
-	worker, err := worker.NewWorker(ctx, natsUrl, streamName, kubeConfPath, requiresPortForward, logger)
-	if err != nil {
-		return err
-	}
-	defer worker.Close()
+func worker(ctx context.Context, natsClient *nats.Client, kubeConfPath string, accountId string, requiresPortForward bool, logger zerolog.Logger) error {
+	logger = logger.With().Str("from", "worker").Logger()
 
-	err = worker.Run(ctx)
+	k8s, err := k8sapp.NewK8sHandler(ctx, natsClient, kubeConfPath, requiresPortForward, logger)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	zlogger := logs.NewNatsZeroLogger(logger)
+	worker := work.NewWorker(natsClient, k8s, &zlogger)
+
+	// Blocks until complete or errored
+	return worker.Run(ctx)
 }

@@ -20,13 +20,13 @@ require (
 	github.com/manterfield/fast-ctyjson v0.0.0-20230703095703-1b8072102e1c
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nats-io/nats.go v1.30.2
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/rs/zerolog v1.29.1
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/viper v1.16.0
 	github.com/stretchr/testify v1.8.4
 	github.com/valyala/fasttemplate v1.2.2
 	github.com/zclconf/go-cty v1.13.2
-	golang.org/x/sync v0.3.0
 	golang.org/x/text v0.13.0
 	k8s.io/api v0.28.2
 	k8s.io/apimachinery v0.28.2
@@ -71,6 +71,7 @@ require (
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
+	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
@@ -89,7 +90,6 @@ require (
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
@@ -103,7 +103,6 @@ require (
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/nats-io/jsm.go v0.0.35
 	github.com/nats-io/jwt/v2 v2.5.2 // indirect
 	github.com/nats-io/nats-server/v2 v2.10.2
 	github.com/nats-io/nkeys v0.4.5 // indirect

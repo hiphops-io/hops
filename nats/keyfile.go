@@ -1,4 +1,4 @@
-package setup
+package nats
 
 import (
 	"encoding/base64"

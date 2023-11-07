@@ -16,8 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +36,6 @@ func runCmd() *cobra.Command {
 		ValidArgs:          []string{"command"},
 		DisableFlagParsing: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("run called", args)
 		},
 	}
 

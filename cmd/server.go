@@ -24,19 +24,19 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/hiphops-io/hops/dsl"
-	"github.com/hiphops-io/hops/internal/setup"
-	"github.com/hiphops-io/hops/internal/workflow"
-	undist "github.com/hiphops-io/hops/undistribute"
+	"github.com/hiphops-io/hops/internal/runner"
+	"github.com/hiphops-io/hops/logs"
+	"github.com/hiphops-io/hops/nats"
 )
 
 const (
-	serverShortDesc = "Start the hops workflow server & listen for events"
-	serverLongDesc  = `Start an instance of the hops server to process events and run workflows.
+	serverShortDesc = "Start the hops orchestration server & listen for events"
+	serverLongDesc  = `Start an instance of the hops orchestration server to process events and run workflows.
 	
 Hops can run locally only, or connect with a cluster and share workloads.`
 )
 
-// serverCmd starts the hops workflow server, listening for and processing new events
+// serverCmd starts the hops orchestrator server, listening for and processing new events
 func serverCmd(ctx context.Context) *cobra.Command {
 	serverCmd := &cobra.Command{
 		Use:   "server",
@@ -44,37 +44,31 @@ func serverCmd(ctx context.Context) *cobra.Command {
 		Long:  serverLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			zlog := logs.NewNatsZeroLogger(logger)
 
-			appdirs, err := setup.NewAppDirs(viper.GetString("rootdir"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to create app dirs")
-				return err
-			}
-
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			serverRunner, lease, err := setupServer(
-				ctx,
-				appdirs,
-				keyFile.NatsUrl(),
-				keyFile.AccountId,
-				viper.GetString("hops"),
-				logger,
-			)
+			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
 			if err != nil {
-				logger.Error().Err(err).Msg("Failed to setup server")
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return fmt.Errorf("Failed to read hops file: %w", err)
+			}
+
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
-			defer lease.Close()
+			defer natsClient.Close()
 
 			if err := server(
 				ctx,
-				serverRunner,
-				lease,
+				hops,
+				natsClient,
 				logger,
 			); err != nil {
 				logger.Error().Err(err).Msg("Server start failed")
@@ -88,36 +82,14 @@ func serverCmd(ctx context.Context) *cobra.Command {
 	return serverCmd
 }
 
-func setupServer(ctx context.Context, appdirs setup.AppDirs, natsUrl string, streamName string, hopsFilePath string, logger zerolog.Logger) (*workflow.Runner, *undist.Lease, error) {
-	hops, hopsHash, err := dsl.ReadHopsFiles(hopsFilePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to read hops file: %w", err)
-	}
-
-	leaseConf := undist.LeaseConfig{
-		NatsUrl:    natsUrl,
-		StreamName: streamName,
-		RootDir:    appdirs.WorkspaceDir,
-		Seed:       []byte(hopsHash),
-	}
-
-	server, lease, err := workflow.InitLeasedRunner(ctx, leaseConf, appdirs, hops, logger)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return server, lease, nil
-}
-
 // TODO: Add context cancellation with cleanup on SIGINT/SIGTERM https://medium.com/@matryer/make-ctrl-c-cancel-the-context-context-bd006a8ad6ff
-func server(ctx context.Context, server *workflow.Runner, lease *undist.Lease, logger zerolog.Logger) error {
-	logger.Info().Msg("Listening for new events")
+func server(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Client, logger zerolog.Logger) error {
+	logger.Info().Msg("Listening for events")
 
-	callback := workflow.CreateRunnerCallback(server, lease.Dir(), logger)
-	err := lease.Consume(ctx, callback)
+	runner, err := runner.NewRunner(natsClient, hops, logger)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return runner.Run(ctx)
 }

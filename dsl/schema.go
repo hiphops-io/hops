@@ -89,7 +89,7 @@ func (h *HopAST) ListTasks() []TaskAST {
 }
 
 func (h *HopAST) GetTask(taskName string) (TaskAST, error) {
-	// TODO: This currently searches all tasks rather map lookup. Improve in future
+	// TODO: This currently searches all tasks rather than map lookup. Improve in future
 	for _, task := range h.Tasks {
 		if task.Name == taskName {
 			return task, nil

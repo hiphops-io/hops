@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/hiphops-io/hops/internal/logs"
+	"github.com/hiphops-io/hops/logs"
 	"github.com/mitchellh/go-homedir"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"

@@ -17,23 +17,25 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/httpserver"
-	"github.com/hiphops-io/hops/internal/setup"
-	undist "github.com/hiphops-io/hops/undistribute"
+	"github.com/hiphops-io/hops/logs"
+	"github.com/hiphops-io/hops/nats"
 )
 
 const (
 	consoleShortDesc = "Start the hops console locally"
 	consoleLongDesc  = `Start the hops console to interact with the UI.
 		
-This does *not* start the hops workflow server.
-The console provides credential helpers (allowing users to manually sign-in and authenticate)
-in addition to info on stored secrets.`
+This does *not* start the hops orchestration server.
+The console provides access to the hops UI and the backend APIs needed to serve it`
 )
 
 // consoleCmd starts the hops console and required APIs
@@ -44,38 +46,31 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 		Long:  consoleLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			zlog := logs.NewNatsZeroLogger(logger)
 
-			appdirs, err := setup.NewAppDirs(viper.GetString("rootdir"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to create app dirs")
-				return err
-			}
-
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			_, lease, err := setupServer(
-				ctx,
-				appdirs,
-				keyFile.NatsUrl(),
-				keyFile.AccountId,
-				viper.GetString("hops"),
-				logger,
-			)
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
-				logger.Error().Err(err).Msg("Failed to setup server")
+				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
-			defer lease.Close()
+			defer natsClient.Close()
+
+			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return fmt.Errorf("Failed to read hops file: %w", err)
+			}
 
 			if err := console(
-				appdirs,
 				viper.GetString("address"),
-				viper.GetString("hops"),
-				lease,
+				hops.BodyContent,
+				natsClient,
 				logger,
 			); err != nil {
 				logger.Error().Err(err).Msg("Console failed to start")
@@ -89,6 +84,6 @@ func consoleCmd(ctx context.Context) *cobra.Command {
 	return consoleCmd
 }
 
-func console(appdirs setup.AppDirs, address string, hopsFilePath string, lease *undist.Lease, logger zerolog.Logger) error {
-	return httpserver.Serve(appdirs, address, hopsFilePath, lease, logger)
+func console(address string, hopsContent *hcl.BodyContent, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
+	return httpserver.Serve(address, hopsContent, natsClient, logger)
 }

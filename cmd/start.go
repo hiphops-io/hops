@@ -17,18 +17,21 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/hiphops-io/hops/internal/setup"
+	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/logs"
+	"github.com/hiphops-io/hops/nats"
 )
 
 const (
 	startShortDesc = "Start hops"
-	startLongDesc  = `Start the hops server, worker, & console in one instance.
+	startLongDesc  = `Start the hops orchestration server, worker, & console in one instance.
 
-Server, console, and worker can be started independently with subcommands:
+Orchestration server, console, and worker can be started independently with subcommands:
 
 hops start console
 
@@ -38,7 +41,7 @@ hops start worker
 	`
 )
 
-// startCmd starts the hops workflow server, listening for and processing new events
+// startCmd starts the hops orchestration server, listening for and processing new events
 func startCmd(ctx context.Context) *cobra.Command {
 	startCmd := &cobra.Command{
 		Use:   "start",
@@ -46,41 +49,41 @@ func startCmd(ctx context.Context) *cobra.Command {
 		Long:  serverLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := cmdLogger()
+			zlog := logs.NewNatsZeroLogger(logger)
 
-			appdirs, err := setup.NewAppDirs(viper.GetString("rootdir"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to create app dirs")
-				return err
-			}
-
-			keyFile, err := setup.NewKeyFile(viper.GetString("keyfile"))
+			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to load keyfile")
 				return err
 			}
 
-			serverRunner, lease, err := setupServer(
-				ctx,
-				appdirs,
-				keyFile.NatsUrl(),
-				keyFile.AccountId,
-				viper.GetString("hops"),
-				logger,
-			)
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog)
 			if err != nil {
-				logger.Error().Err(err).Msg("Failed to setup server")
+				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
-			defer lease.Close()
+			defer natsClient.Close()
+
+			natsWorkerClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog, nats.WorkerClient("k8s"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to start NATS worker client")
+				return err
+			}
+			defer natsWorkerClient.Close()
+
+			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to read hops files")
+				return fmt.Errorf("Failed to read hops file: %w", err)
+			}
 
 			errs := make(chan error, 1)
 
 			go func() {
 				errs <- console(
-					appdirs,
 					viper.GetString("address"),
-					viper.GetString("hops"),
-					lease,
+					hops.BodyContent,
+					natsClient,
 					logger,
 				)
 			}()
@@ -88,17 +91,17 @@ func startCmd(ctx context.Context) *cobra.Command {
 			go func() {
 				errs <- server(
 					ctx,
-					serverRunner,
-					lease,
+					hops,
+					natsClient,
 					logger,
 				)
 			}()
 
 			go func() {
-				errs <- work(
+				errs <- worker(
 					ctx,
+					natsWorkerClient,
 					viper.GetString("kubeconfig"),
-					keyFile.NatsUrl(),
 					keyFile.AccountId,
 					viper.GetBool("port-forward"),
 					logger,
