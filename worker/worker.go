@@ -22,8 +22,6 @@ type (
 		natsClient *nats.Client
 		handlers   map[string]Handler
 	}
-
-	resultCallback func(context.Context, *nats.ResultMsg) (error, bool)
 )
 
 func NewWorker(natsClient *nats.Client, app App, logger Logger) *Worker {
@@ -43,6 +41,8 @@ func (w *Worker) Run(ctx context.Context) error {
 	ackDeadline := w.natsClient.Consumer.CachedInfo().Config.AckWait
 
 	callback := func(msg jetstream.Msg) {
+		startedAt := time.Now()
+
 		subject := msg.Subject()
 		w.logger.Infof("Received request %s", subject)
 
@@ -51,12 +51,6 @@ func (w *Worker) Run(ctx context.Context) error {
 			w.logger.Errf(err, "Unable to handle request message: %s", subject)
 			msg.Nak()
 			return
-		}
-
-		result := &nats.ResultMsg{
-			Hops: nats.HopsResultMeta{
-				StartedAt: time.Now(),
-			},
 		}
 
 		// Get the handler function if it exists. Terminate if not as there's nothing
@@ -73,9 +67,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		err = w.runHandler(ctx, msg, handler, ackDeadline)
 		if err != nil {
 			w.logger.Errf(err, "Failed to handle request %s", subject)
-			result.Hops.Error = err
-			result.Hops.FinishedAt = time.Now()
-			err, _ := w.natsClient.PublishResult(ctx, result, parsedMsg.ResponseSubject())
+			err, _ := w.natsClient.PublishResult(ctx, startedAt, nil, err, parsedMsg.ResponseSubject())
 			replyErr = err
 		}
 
@@ -88,7 +80,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		err = nats.DoubleAck(ctx, msg)
 		if err != nil {
 			w.logger.Errf(err, "Unable to acknowledge request message: %s", subject)
-			// TODO: Nack message
+			msg.NakWithDelay(3 * time.Second)
 		}
 
 		w.logger.Debugf("Request message acknowledged (will not be re-sent) %s", subject)
