@@ -11,6 +11,13 @@ import (
 const HopsMessageId = "hops"
 
 type (
+	// HopsResultMeta is metadata included in the top level of a result message
+	HopsResultMeta struct {
+		Error      error     `json:"error,omitempty"`
+		FinishedAt time.Time `json:"finished_at"`
+		StartedAt  time.Time `json:"started_at"`
+	}
+
 	MsgMeta struct {
 		AccountId        string
 		AppName          string
@@ -24,16 +31,13 @@ type (
 	}
 
 	// ResultMsg is the schema for handler call result messages
-	// TODO: Convert to new format properly
 	ResultMsg struct {
-		Completed  bool        `json:"completed"`
-		Done       bool        `json:"done"`
-		Error      error       `json:"error,omitempty"`
-		Errored    bool        `json:"errored"`
-		FinishedAt time.Time   `json:"finished_at"`
-		Result     interface{} `json:"result,omitempty"`
-		StartedAt  time.Time   `json:"started_at"`
-		Status     string      `json:"status"`
+		Body      string         `json:"body"`
+		Completed bool           `json:"completed"`
+		Done      bool           `json:"done"`
+		Errored   bool           `json:"errored"`
+		Hops      HopsResultMeta `json:"hops"`
+		JSON      interface{}    `json:"json,omitempty"`
 	}
 )
 
@@ -124,6 +128,29 @@ func (m *MsgMeta) initTokens() error {
 	default:
 		return fmt.Errorf("Invalid message subject (unknown channel %s): %s", m.Channel, m.msg.Subject())
 	}
+}
+
+func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg {
+	var resultJson interface{}
+	resultStr, ok := result.(string)
+	if !ok {
+		resultJson = result
+	}
+
+	resultMsg := ResultMsg{
+		Body:      resultStr,
+		Completed: err == nil,
+		Done:      true,
+		Errored:   err != nil,
+		Hops: HopsResultMeta{
+			StartedAt:  startedAt,
+			FinishedAt: time.Now(),
+			Error:      err,
+		},
+		JSON: resultJson,
+	}
+
+	return resultMsg
 }
 
 func ReplayFilterSubject(accountId string, sequenceId string) string {

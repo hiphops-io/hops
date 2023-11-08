@@ -33,7 +33,12 @@ func ParseHops(ctx context.Context, hopsContent *hcl.BodyContent, eventBundle ma
 	err = DecodeHopsBody(ctx, hop, hopsContent, evalctx, logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops file")
-		logger.Debug().RawJSON("source_event", eventBundle["event"]).Msg("Parse failed on source event")
+
+		logger.Debug().Msg("Parse failed on pipeline, dumping state:")
+		for k, v := range eventBundle {
+			logger.Debug().RawJSON(k, v).Msgf("%s message content", k)
+		}
+
 		return hop, err
 	}
 
