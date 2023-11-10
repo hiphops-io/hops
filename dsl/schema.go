@@ -61,18 +61,20 @@ var (
 			{Name: "summary", Required: false},
 			{Name: "description", Required: false},
 			{Name: "emoji", Required: false},
-			{Name: "params", Required: false},
 		},
 	}
 
-	ParamID     = "param"
+	ParamID = "param"
+	// TODO: Check if this schema is actually used still.
+	// We might only be using the tags in the ParamAST
 	paramSchema = &hcl.BodySchema{
 		Attributes: []hcl.AttributeSchema{
 			{Name: "flag", Required: false},
+			{Name: "display_name", Required: false},
 			{Name: "type", Required: false},
 			{Name: "default", Required: false},
 			{Name: "help", Required: false},
-			{Name: "flag", Required: false},
+			{Name: "shortflag", Required: false},
 			{Name: "required", Required: false},
 		},
 	}

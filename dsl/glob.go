@@ -2,25 +2,25 @@
 //
 // Glob match syntax is:
 // pattern:
-//
-//	{ term }
-//
+
+// 	{ term }
+
 // term:
-//
-//	 '**'				matches any sequence of characters (including across /).
-//								must be a path component by itself. (e.g. "a/**/b" matches "a/x/b", "a/x/y/b", "a/b", but not "ab").
-//		'*'         matches any sequence of non-/ characters
-//		'?'         matches any single non-/ character
-//		'[' [ '^' ] { character-range } ']'
-//		            character class (must be non-empty)
-//		c           matches character c (c != '*', '?', '\\', '[')
-//		'\\' c      matches character c
-//
+
+// 	 '**'				matches any sequence of characters (including across /).
+// 								must be a path component by itself. (e.g. "a/**/b" matches "a/x/b", "a/x/y/b", "a/b", but not "ab").
+// 		'*'         matches any sequence of non-/ characters
+// 		'?'         matches any single non-/ character
+// 		'[' [ '^' ] { character-range } ']'
+// 		            character class (must be non-empty)
+// 		c           matches character c (c != '*', '?', '\\', '[')
+// 		'\\' c      matches character c
+
 // character-range:
-//
-//	c           matches character c (c != '\\', '-', ']')
-//	'\\' c      matches character c
-//	lo '-' hi   matches character c for lo <= c <= hi
+
+// c           matches character c (c != '\\', '-', ']')
+// '\\' c      matches character c
+// lo '-' hi   matches character c for lo <= c <= hi
 package dsl
 
 import (

@@ -11,7 +11,7 @@ import (
 	"github.com/zclconf/go-cty/cty/function"
 )
 
-// VersionTemplateFunc is a cty function that generates a calver version according to a template
+// VersionTemplateFunc generates a calver or pet version according to a template
 var VersionTemplateFunc = function.New(&function.Spec{
 	Params: []function.Parameter{
 		{
@@ -24,13 +24,13 @@ var VersionTemplateFunc = function.New(&function.Spec{
 		templateVal := args[0]
 		template := templateVal.AsString()
 
-		version, err := CalVer(template)
+		version, err := TemplateVersion(template)
 
 		return cty.StringVal(version), err
 	},
 })
 
-func CalVer(template string) (string, error) {
+func TemplateVersion(template string) (string, error) {
 	t, err := fasttemplate.NewTemplate(template, "[", "]")
 	if err != nil {
 		return "", fmt.Errorf("Invalid version template: %w", err)

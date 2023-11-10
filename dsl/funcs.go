@@ -40,7 +40,7 @@ var DefaultFunctions = map[string]function.Function{
 	"merge":           stdlib.MergeFunc,
 	"min":             stdlib.MinFunc,
 	"range":           stdlib.RangeFunc,
-	"regex":           stdlib.RegexFunc,
+	"regex":           stdlib.RegexAllFunc,
 	"regexreplace":    stdlib.RegexReplaceFunc,
 	"replace":         stdlib.ReplaceFunc,
 	"reverse":         stdlib.ReverseFunc,
