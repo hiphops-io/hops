@@ -4,7 +4,7 @@
 	import HopsNav from '$lib/nav/HopsNav.svelte';
 
 	//Set default tab
-	let defaultTab = 'Pipelines';
+	let tab = 'Events';
 
 	// Event logs table data
 	let tableData = [
@@ -75,19 +75,19 @@
 		<!--Tabs-->
 		<div class="mt-10">
 			<ul class="flex space-x-2">
-				<li>
+				<!-- <li>
 					<button
-						on:click={() => (defaultTab = 'Pipelines')}
-						class={defaultTab === 'Pipelines'
+						on:click={() => (tab = 'Pipelines')}
+						class={tab === 'Pipelines'
 							? 'bg-white text-black px-6 py-2 border border-black rounded-full font-semibold'
 							: 'text-white border border-white rounded-full px-6 py-2 font-medium'}
 						>Pipelines
 					</button>
-				</li>
+				</li> -->
 				<li>
 					<button
-						on:click={() => (defaultTab = 'Events')}
-						class={defaultTab === 'Events'
+						on:click={() => (tab = 'Events')}
+						class={tab === 'Events'
 							? 'bg-white text-black px-6 py-2 border border-black rounded-full font-semibold'
 							: 'text-white border border-white rounded-full px-6 py-2 font-medium'}
 						>Event logs
@@ -99,7 +99,7 @@
 
 	<!-- Container-->
 
-	{#if defaultTab === 'Pipelines'}
+	{#if tab === 'Pipelines'}
 		<div class="pl-8 pr-8 md:pl-20 md:pr-20 pb-16 text-white">
 			<!--Pipelines list container-->
 			{#each pipelineData as pipeline}
@@ -130,7 +130,7 @@
 		</div>
 	{/if}
 
-	{#if defaultTab === 'Events'}
+	{#if tab === 'Events'}
 		<div class="flex space-x-4 pl-8 pr-8 md:pl-20 md:pr-20 text-white">
 			<!--Events table container-->
 			<div
