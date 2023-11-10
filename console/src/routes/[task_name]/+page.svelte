@@ -167,24 +167,24 @@
 		</form>
 	{/if}
 
-	<!-- Configure response UI-->
+	<!-- <!- Configure response UI->
 
 	<div
 		class="md:w-2/4 mx-8 md:mx-auto p-6 bg-white bg-opacity-5 dark:bg-almostblack rounded-xl space-y-8 border border-purple h-fit"
 	>
-		<!--Running task/ Task ran alert-->
+		<!-Running task/ Task ran alert->
 		<div class="flex items-center space-x-4">
 			{#if taskRan}
 				<CheckCircleOutline class="w-8 h-8 dark:text-white text-almostblack" strokeWidth="1" />
 				<p class="font-medium dark:text-white text-grey">Task ran</p>
 			{:else}
-				<!--Dark mode spinner-->
+				<!-Dark mode spinner->
 				<img
 					src="/images/loading-white.svg"
 					alt="loading icon"
 					class="animate-[spin_2s_linear_infinite] hidden dark:block"
 				/>
-				<!--Light mode spinner-->
+				<!-Light mode spinner->
 				<img
 					src="/images/loading-black.svg"
 					alt="loading icon"
@@ -194,7 +194,7 @@
 			{/if}
 		</div>
 
-		<!--Configure response container-->
+		<!-Configure response container->
 		{#if taskRan}
 			<div class="flex space-x-4 place-items-start">
 				<MessageDotsOutline class="w-8 h-8 dark:text-white text-almostblack" strokeWidth="1" />
@@ -222,5 +222,5 @@
 		{/if}
 	</div>
 
-	<!-- End Configure response UI-->
+	<!- End Configure response UI-> -->
 </div>
