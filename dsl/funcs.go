@@ -7,6 +7,7 @@ import (
 	"github.com/zclconf/go-cty/cty/function/stdlib"
 )
 
+// TODO: Add encode/decode b64
 var DefaultFunctions = map[string]function.Function{
 	"abs":             stdlib.AbsoluteFunc,
 	"alltrue":         AllTrueFunc,
@@ -25,7 +26,6 @@ var DefaultFunctions = map[string]function.Function{
 	"format":          stdlib.FormatFunc,
 	"formatdate":      stdlib.FormatDateFunc,
 	"glob":            GlobFunc,
-	"hasindex":        stdlib.HasIndexFunc,
 	"indent":          stdlib.IndentFunc,
 	"index":           stdlib.IndexFunc,
 	"int":             stdlib.IntFunc,
