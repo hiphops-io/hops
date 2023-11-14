@@ -93,7 +93,7 @@ func TestVersion(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			v, err := CalVer(tc.template)
+			v, err := TemplateVersion(tc.template)
 			if !tc.valid {
 				assert.Error(t, err, "Invalid version template should return error")
 				return
