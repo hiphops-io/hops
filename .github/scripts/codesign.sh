@@ -2,7 +2,7 @@
 
 codesign -s "${APPLE_CODE_SIGNING_DEVELOPER_ID}" \
   --force --options runtime --timestamp \
-  --entitlements platforms/macos/hops.entitlements \
+  --entitlements .github/macos/hops.entitlements \
   "$1"
 
 echo "Verifying the signature..."
