@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiphops
+spec:
+  ports:
+  - name: http
+    port: 8916
+    targetPort: 8916
+    protocol: TCP
+  selector:
+    app: hiphops

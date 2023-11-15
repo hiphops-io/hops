@@ -1,0 +1,70 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hiphops
+spec:
+  selector:
+    matchLabels:
+      app: hiphops
+  template:
+    metadata:
+      labels:
+        app: hiphops
+    spec:
+      serviceAccountName: hiphops-worker
+      containers:
+      - name: hiphops
+        image: hiphops/hiphops:v0.3.0
+        command: ["/hops"]
+        args: ["start", "--address=0.0.0.0:8916", "--keyfile=/root/hiphops-key/hiphops.key", "--hops=/root/hops/"]
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8916
+
+        resources:
+          requests:
+            cpu: 50m
+            memory: 100Mi
+          limits:
+            cpu: 500m
+            memory: 500Mi
+
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8916
+          periodSeconds: 1
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8916
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 15
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8916
+            scheme: HTTP
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+
+        volumeMounts:
+        - name: hiphops-conf
+          mountPath: /root/hops/
+        - name: hiphops-key
+          mountPath: /root/hiphops-key
+
+      volumes:
+      - name: hiphops-conf
+        configMap:
+          name: hiphops-conf
+          items:
+            - key: main.hops
+              path: main.hops
+      - name: hiphops-key
+        secret:
+          secretName: hiphops-key
