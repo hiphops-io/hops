@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: hiphops
+
+resources:
+- namespace.yaml
+- secret.yaml
+- https://github.com/hiphops-io/hops.git//deploy/kustomize/
+
+configMapGenerator:
+  - name: hiphops-conf
+    namespace: hiphops
+    files:
+     - main.hops=hops_configs/main.hops
