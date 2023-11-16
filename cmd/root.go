@@ -18,6 +18,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 
 	"github.com/hiphops-io/hops/logs"
@@ -63,7 +64,6 @@ func rootCmd() cobra.Command {
 		Long:  rootLongDesc,
 	}
 
-	// rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path (default is $HOME/.hops/config.yaml)")
 	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 
@@ -105,7 +105,6 @@ func initConfig() error {
 	}
 
 	viper.SetDefault("rootdir", hopsDir)
-	// viper.SetDefault("kubeconfig", path.Join(homeDir, ".kube/config"))
 	viper.SetEnvPrefix(envPrefix)
 	viper.AutomaticEnv() // read in environment variables that match
 
@@ -113,6 +112,14 @@ func initConfig() error {
 	err = viper.ReadInConfig()
 	if err != nil && cfgFile != "" {
 		return fmt.Errorf("Config file not found: %s", viper.GetString("config"))
+	}
+
+	// Ensure the root dir exists
+	if hopsRootDir := viper.GetString("rootdir"); hopsRootDir != "" {
+		err := os.MkdirAll(hopsRootDir, os.ModePerm)
+		if err != nil {
+			return err
+		}
 	}
 
 	// file arg's default is dependent on the value of "rootdir", so we set it here
