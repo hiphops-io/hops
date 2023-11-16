@@ -83,6 +83,12 @@ func worker(ctx context.Context, natsClient *nats.Client, kubeConfPath string, a
 		return err
 	}
 
+	// Due to automated config loading, this worker may naturally decide to not work.
+	// This will be logged by the worker. We just need to move on.
+	if k8s == nil {
+		return nil
+	}
+
 	zlogger := logs.NewNatsZeroLogger(logger)
 	worker := work.NewWorker(natsClient, k8s, &zlogger)
 

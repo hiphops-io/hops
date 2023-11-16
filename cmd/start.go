@@ -80,25 +80,31 @@ func startCmd(ctx context.Context) *cobra.Command {
 			errs := make(chan error, 1)
 
 			go func() {
-				errs <- console(
+				err := console(
 					viper.GetString("address"),
 					hops.BodyContent,
 					natsClient,
 					logger,
 				)
+				if err != nil {
+					errs <- err
+				}
 			}()
 
 			go func() {
-				errs <- server(
+				err := server(
 					ctx,
 					hops,
 					natsClient,
 					logger,
 				)
+				if err != nil {
+					errs <- nil
+				}
 			}()
 
 			go func() {
-				errs <- worker(
+				err := worker(
 					ctx,
 					natsWorkerClient,
 					viper.GetString("kubeconfig"),
@@ -106,6 +112,9 @@ func startCmd(ctx context.Context) *cobra.Command {
 					viper.GetBool("port-forward"),
 					logger,
 				)
+				if err != nil {
+					errs <- err
+				}
 			}()
 
 			if err := <-errs; err != nil {

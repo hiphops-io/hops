@@ -83,6 +83,10 @@ func NewK8sHandler(
 	}
 
 	err := k.initKubeClient(kubeConfPath)
+	if err != nil && errors.Is(err, clientcmd.ErrEmptyConfig) {
+		k.logger.Info().Msg("No Kubernetes config provided or found. K8s worker will now stop.")
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
