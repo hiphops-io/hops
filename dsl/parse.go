@@ -108,24 +108,28 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, 
 	evalctx = scopedEvalContext(evalctx, on.EventType, on.Name)
 
 	ifClause := bc.Attributes[IfAttr]
-	if ifClause != nil {
-		val, err := DecodeConditionalAttr(ifClause, evalctx)
+	val, err := DecodeConditionalAttr(ifClause, true, evalctx)
+	if err != nil {
+		return err
+	}
+
+	// If condition is not met. Omit the block and stop parsing.
+	if !val {
+		logger.Debug().Msgf("%s 'if' not met", on.Slug)
+		return nil
+	}
+
+	on.IfClause = val
+
+	logger.Info().Msgf("%s matches event", on.Slug)
+
+	resultBlocks := bc.Blocks.OfType(ResultID)
+	for _, resultBlock := range resultBlocks {
+		err := DecodeResultBlock(ctx, hop, on, resultBlock, evalctx, logger)
 		if err != nil {
 			return err
 		}
-
-		// If condition is not met. Omit the block and stop parsing.
-		if !val {
-			logger.Debug().Msgf("%s 'if' not met", on.Slug)
-			return nil
-		}
-
-		on.IfClause = val
-	} else {
-		on.IfClause = true
 	}
-
-	logger.Info().Msgf("%s matches event", on.Slug)
 
 	callBlocks := bc.Blocks.OfType(CallID)
 	for idx, callBlock := range callBlocks {
@@ -171,25 +175,21 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 	}
 
 	ifClause := bc.Attributes[IfAttr]
-	if ifClause != nil {
-		val, err := DecodeConditionalAttr(ifClause, evalctx)
-		if err != nil {
-			logger.Debug().Msgf(
-				"%s 'if' not ready for evaluation, defaulting to false: %s",
-				call.Slug,
-				err.Error(),
-			)
-		}
-
-		if !val {
-			logger.Debug().Msgf("%s 'if' not met", call.Slug)
-			return nil
-		}
-
-		call.IfClause = val
-	} else {
-		call.IfClause = true
+	val, err := DecodeConditionalAttr(ifClause, true, evalctx)
+	if err != nil {
+		logger.Debug().Msgf(
+			"%s 'if' not ready for evaluation, defaulting to false: %s",
+			call.Slug,
+			err.Error(),
+		)
 	}
+
+	if !val {
+		logger.Debug().Msgf("%s 'if' not met", call.Slug)
+		return nil
+	}
+
+	call.IfClause = val
 
 	logger.Info().Msgf("%s matches event", call.Slug)
 
@@ -214,6 +214,57 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 	return nil
 }
 
+func DecodeResultBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Block, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+	result := &ResultAST{}
+
+	bc, d := block.Body.Content(resultSchema)
+	if d.HasErrors() {
+		return errors.New(d.Error())
+	}
+
+	erroredClause := bc.Attributes[ErroredAttr]
+	val, err := DecodeConditionalAttr(erroredClause, false, evalctx)
+	if err != nil {
+		logger.Debug().Err(err).Msg("default result errored to false")
+	}
+
+	result.Errored = val
+
+	completedClause := bc.Attributes[CompletedAttr]
+	val, err = DecodeConditionalAttr(completedClause, false, evalctx)
+	if err != nil {
+		logger.Debug().Err(err).Msg("defaulting result completed to false")
+	}
+
+	result.Completed = val
+
+	if result.Errored || result.Completed {
+		result.Done = true
+	}
+
+	// TODO: If we're not done, then we don't want to parse the outputs
+
+	outputs := bc.Attributes[OutputsAttr]
+	if outputs != nil {
+		val, d := outputs.Expr.Value(evalctx)
+		if d.HasErrors() {
+			return errors.New(d.Error())
+		}
+
+		jsonVal := ctyjson.SimpleJSONValue{Value: val}
+		inputs, err := jsonVal.MarshalJSON()
+
+		if err != nil {
+			return err
+		}
+
+		result.Outputs = inputs
+	}
+
+	on.Results = append(on.Results, *result)
+	return nil
+}
+
 func DecodeNameAttr(attr *hcl.Attribute) (string, error) {
 	if attr == nil {
 		// Not an error, as the attribute is not required
@@ -235,9 +286,9 @@ func DecodeNameAttr(attr *hcl.Attribute) (string, error) {
 	return value, nil
 }
 
-func DecodeConditionalAttr(attr *hcl.Attribute, ctx *hcl.EvalContext) (bool, error) {
+func DecodeConditionalAttr(attr *hcl.Attribute, defaultValue bool, ctx *hcl.EvalContext) (bool, error) {
 	if attr == nil {
-		return true, nil
+		return defaultValue, nil
 	}
 
 	v, diag := attr.Expr.Value(ctx)

@@ -99,6 +99,15 @@ func TestValidParseResponseStep(t *testing.T) {
 
 	// Ensure the slugs align with what we want
 	assert.Equal(t, hop.Ons[0].Calls[0].Slug, "a_sensor-first_task")
+
+	// Ensure the result is generated
+	// and finally check the result block
+	require.Len(t, hop.Ons[0].Results, 1)
+
+	result := hop.Ons[0].Results[0]
+	assert.True(t, result.Completed)
+	assert.False(t, result.Errored)
+	assert.True(t, result.Done)
 }
 
 func TestInvalidParse(t *testing.T) {
@@ -134,4 +143,8 @@ func TestSlugify(t *testing.T) {
 
 	result = slugify("change_opened", "hello_world")
 	assert.Equal(t, "change_opened-hello_world", result)
+}
+
+func TestResults(t *testing.T) {
+	t.Skip("Not implemented: Test result blocks have expected values")
 }

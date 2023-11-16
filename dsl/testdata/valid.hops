@@ -28,6 +28,15 @@ on change_merged {
     name = "depends"
     if = first_task.done
   }
+
+  result {
+    completed = first_task.completed
+    errored = first_task.errored
+
+    outputs = {
+      foo = "bar"
+    }
+  }
 }
 
 on change {
