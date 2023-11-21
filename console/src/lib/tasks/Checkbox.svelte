@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Writable } from 'svelte/store';
 	import { Checkbox } from 'flowbite-svelte';
+	import { onMount } from 'svelte';
 
 	import type { BoolParam } from './api';
 
@@ -15,6 +16,15 @@
 		label,
 		checked: param.default || false
 	};
+
+	onMount(() => {
+		const urlParams = new URLSearchParams(window.location.search);
+		for (const [key, value] of urlParams) {
+			if (key === param.name) {
+				fieldValue = value === 'true';
+			}
+		}
+	});
 
 	let fieldValue = param.default;
 	$: fieldValue, setValue();
