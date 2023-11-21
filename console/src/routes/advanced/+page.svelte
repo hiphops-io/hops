@@ -2,37 +2,16 @@
 	import TableHeadItem from '$lib/tables/TableHeadItem.svelte';
 	import TableDataCell from '$lib/tables/TableDataCell.svelte';
 	import HopsNav from '$lib/nav/HopsNav.svelte';
+	import type { PageData } from './$types';
 
 	//Set default tab
 	let tab = 'Events';
 
+	export let data: PageData;
+
 	// Event logs table data
-	let tableData = [
-		{
-			timestamp: '2023-10-10 10:00 AM',
-			eventId: 'Id name one',
-			eventName: 'Event name one',
-			source: 'source',
-			action: 'action',
-			JSON: {
-				status: 'Success',
-				duration: '2 hours 30 minutes',
-				logs: ['Data Ingestion started at 9:30 AM.', 'Data Processing completed at 12:00 PM.']
-			}
-		},
-		{
-			timestamp: '2023-10-10 11:00 AM',
-			eventId: 'Id name two',
-			eventName: 'Event name two',
-			source: 'source',
-			action: 'action',
-			JSON: {
-				status: 'Failure',
-				duration: '3 hours 10 minutes',
-				logs: ['Data Ingestion started at 9:30 AM.', 'Data Processing completed at 12:00 PM.']
-			}
-		}
-	];
+	$: tableData = data.tableData;
+	$: loading = data.tableData === undefined;
 
 	// Pipeline data
 	let pipelineData = [
@@ -53,7 +32,7 @@
 		}
 	];
 
-	let activeRow = tableData[0];
+	let activeRow = tableData?.[0];
 
 	function setActiveRow(row: any) {
 		activeRow = row;
@@ -131,59 +110,65 @@
 	{/if}
 
 	{#if tab === 'Events'}
-		<div class="flex space-x-4 pl-8 pr-8 md:pl-20 md:pr-20 text-white">
-			<!--Events table container-->
-			<div
-				class="w-1/2 dark:bg-[#191919] dark:border-none border border-lightrey overflow-scroll h-[60vh] rounded-lg"
-			>
-				<div class="w-full">
-					<table class="table-auto w-full">
-						<thead class="text-left">
-							<tr>
-								<TableHeadItem>Timestamp</TableHeadItem>
-								<TableHeadItem>ID</TableHeadItem>
-								<TableHeadItem>Event name</TableHeadItem>
-								<TableHeadItem>Source</TableHeadItem>
-								<TableHeadItem>Action</TableHeadItem>
-							</tr>
-						</thead>
-						<tbody>
-							{#each tableData as row (row.timestamp)}
-								<tr
-									class="hover:bg-lightgrey dark:hover:bg-almostblack {row === activeRow
-										? 'border-l-2 border-purple bg-lightgrey dark:bg-almostblack'
-										: ''}"
-									on:click={() => setActiveRow(row)}
-								>
-									<TableDataCell>{row.timestamp}</TableDataCell>
-									<TableDataCell>{row.eventId}</TableDataCell>
-									<TableDataCell>{row.eventName}</TableDataCell>
-									<TableDataCell>{row.source}</TableDataCell>
-									<TableDataCell>{row.action}</TableDataCell>
+		{#if loading}
+			<div class="flex justify-center items-center h-[60vh]">Loading...</div>
+		{:else}
+			<div class="flex space-x-4 pl-8 pr-8 md:pl-20 md:pr-20 text-white">
+				<!--Events table container-->
+				<div
+					class="w-1/2 dark:bg-[#191919] dark:border-none border border-lightrey overflow-scroll h-[60vh] rounded-lg"
+				>
+					<div class="w-full">
+						<table class="table-auto w-full">
+							<thead class="text-left">
+								<tr>
+									<TableHeadItem>Timestamp</TableHeadItem>
+									<TableHeadItem>ID</TableHeadItem>
+									<TableHeadItem>Event name</TableHeadItem>
+									<TableHeadItem>Source</TableHeadItem>
+									<TableHeadItem>Action</TableHeadItem>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			</div>
-
-			<!--Selected event detail container-->
-			<div
-				class="w-1/2 bg-white border border-lightrey dark:border-purple dark:bg-[#191919] overflow-scroll h-[60vh] text-black dark:text-white rounded-lg"
-			>
-				<div class="p-8">
-					<h2 class="text-2xl mb-8 text-grey dark:text-midgrey">{activeRow.eventId}</h2>
-					<!--Pipelines container-->
-
-					<div class="mt-4 mb-12">
-						<div
-							class="mt-4 mb-12 border-midgrey dark:border-almostblack py-1 text-sm text-grey dark:text-midgrey"
-						>
-							<pre>{JSON.stringify(activeRow.JSON, null, 2)}</pre>
-						</div>
+							</thead>
+							<tbody>
+								{#each tableData as row (row.timestamp)}
+									<tr
+										class="hover:bg-lightgrey dark:hover:bg-almostblack {row === activeRow
+											? 'border-l-2 border-purple bg-lightgrey dark:bg-almostblack'
+											: ''}"
+										on:click={() => setActiveRow(row)}
+									>
+										<TableDataCell>{row.timestamp}</TableDataCell>
+										<TableDataCell>{row.eventId}</TableDataCell>
+										<TableDataCell>{row.eventName}</TableDataCell>
+										<TableDataCell>{row.source}</TableDataCell>
+										<TableDataCell>{row.action}</TableDataCell>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
 					</div>
 				</div>
+
+				<!--Selected event detail container-->
+				{#if activeRow}
+					<div
+						class="w-1/2 bg-white border border-lightrey dark:border-purple dark:bg-[#191919] overflow-scroll h-[60vh] text-black dark:text-white rounded-lg"
+					>
+						<div class="p-8">
+							<h2 class="text-2xl mb-8 text-grey dark:text-midgrey">{activeRow.eventId}</h2>
+							<!--Pipelines container-->
+
+							<div class="mt-4 mb-12">
+								<div
+									class="mt-4 mb-12 border-midgrey dark:border-almostblack py-1 text-sm text-grey dark:text-midgrey"
+								>
+									<pre>{JSON.stringify(activeRow.JSON, null, 2)}</pre>
+								</div>
+							</div>
+						</div>
+					</div>
+				{/if}
 			</div>
-		</div>
+		{/if}
 	{/if}
 </div>

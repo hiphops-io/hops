@@ -153,6 +153,17 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 	return resultMsg
 }
 
+func EventFilter(accountId string) string {
+	tokens := []string{
+		accountId,
+		"notify",
+		"*",
+		"event",
+	}
+
+	return strings.Join(tokens, ".")
+}
+
 func ReplayFilterSubject(accountId string, sequenceId string) string {
 	tokens := []string{
 		accountId,

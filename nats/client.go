@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,6 +30,9 @@ type (
 
 	// ClientOpt functions configure a nats.Client via NewClient()
 	ClientOpt func(*Client) error
+
+	// Arbitrary json struct of event
+	Event map[string](interface{})
 
 	// MessageBundle is a map of messageIDs and the data that message contained
 	//
@@ -212,6 +216,52 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 	}
 
 	return msgBundle, nil
+}
+
+// GetEventHistory pulls all historic events from the stream, converting them to a reverse
+// ordered list
+//
+// Newest events are first in the list
+func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]Event, error) {
+	events := []Event{}
+
+	consumerConf := jetstream.OrderedConsumerConfig{
+		FilterSubjects: []string{EventFilter(c.accountId)},
+		DeliverPolicy:  jetstream.DeliverByStartTimePolicy,
+		OptStartTime:   &start,
+	}
+	cons, err := c.JetStream.OrderedConsumer(ctx, c.accountId, consumerConf)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
+	}
+
+	// Could figure out a better way to get all events to the end
+	msgs, _ := cons.FetchNoWait(1000000)
+	for m := range msgs.Messages() {
+		event := make(map[string](interface{}))
+		err := json.Unmarshal([]byte(m.Data()), &event)
+		if err != nil {
+			return nil, err
+		}
+		// Add to the events
+		events = append(events, event)
+	}
+	if err != nil {
+		return nil, err
+	}
+	c.logger.Debugf("Events received %d", len(events))
+
+	slices.Reverse(events)
+	return events, nil
+}
+
+// GetEventHistoryDefault pulls all historic events from the stream, converting them to a reverse
+// ordered list
+//
+// Newest events are first in the list
+// Pull time is from 1 hour ago
+func (c *Client) GetEventHistoryDefault(ctx context.Context) ([]Event, error) {
+	return c.GetEventHistory(ctx, time.Now().Add(-time.Hour))
 }
 
 func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error) {
