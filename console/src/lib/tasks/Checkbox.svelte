@@ -18,11 +18,13 @@
 		checked: param.default || false
 	};
 
-	onMount(() => {
-		fieldValue = $page.url.searchParams.get(param.name) === 'true';
-	});
+	let fieldValue = param.default || false;
+	if ($page.url.searchParams.get(param.name) === 'false') {
+		fieldValue = false;
+	} else if ($page.url.searchParams.get(param.name) === 'true') {
+		fieldValue = true;
+	}
 
-	let fieldValue = param.default;
 	$: fieldValue, setValue();
 
 	const setValue = () => {

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Writable } from 'svelte/store';
 	import { validators, required, type Validator, Hint } from 'svelte-use-form';
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import type { TextParam } from './api';
 
@@ -26,11 +25,7 @@
 		fieldValidators.push(required);
 	}
 
-	onMount(() => {
-		fieldValue = $page.url.searchParams.get(param.name) || '';
-	});
-
-	let fieldValue = param.default;
+	let fieldValue = $page.url.searchParams.get(param.name) || param.default;
 	$: fieldValue, setValue();
 
 	const setValue = () => {

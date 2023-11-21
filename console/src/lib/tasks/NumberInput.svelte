@@ -26,12 +26,9 @@
 		fieldValidators.push(required);
 	}
 
-	onMount(() => {
-		const valueFromUrl = $page.url.searchParams.get(param.name);
-		fieldValue = valueFromUrl ? Number(valueFromUrl) : undefined;
-	});
+	const valueFromUrl = $page.url.searchParams.get(param.name);
+	let fieldValue = valueFromUrl ? Number(valueFromUrl) : undefined || param.default;
 
-	let fieldValue = param.default;
 	$: fieldValue, setValue();
 
 	const setValue = () => {
