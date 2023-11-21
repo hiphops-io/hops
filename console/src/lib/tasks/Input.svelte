@@ -2,6 +2,7 @@
 	import type { Writable } from 'svelte/store';
 	import { validators, required, type Validator, Hint } from 'svelte-use-form';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 
 	import type { StrParam } from './api';
 
@@ -25,12 +26,7 @@
 	}
 
 	onMount(() => {
-		const urlParams = new URLSearchParams(window.location.search);
-		for (const [key, value] of urlParams) {
-			if (key === param.name) {
-				fieldValue = value;
-			}
-		}
+		fieldValue = $page.url.searchParams.get(param.name) || '';
 	});
 
 	let fieldValue = param.default;

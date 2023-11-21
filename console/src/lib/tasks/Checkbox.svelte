@@ -2,6 +2,7 @@
 	import type { Writable } from 'svelte/store';
 	import { Checkbox } from 'flowbite-svelte';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 
 	import type { BoolParam } from './api';
 
@@ -18,12 +19,7 @@
 	};
 
 	onMount(() => {
-		const urlParams = new URLSearchParams(window.location.search);
-		for (const [key, value] of urlParams) {
-			if (key === param.name) {
-				fieldValue = value === 'true';
-			}
-		}
+		fieldValue = $page.url.searchParams.get(param.name) === 'true';
 	});
 
 	let fieldValue = param.default;
