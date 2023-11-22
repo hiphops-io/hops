@@ -246,10 +246,11 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 	return msgBundle, nil
 }
 
-// GetEventHistory pulls all historic events from the stream, converting them to a reverse
-// ordered list
+// GetEventHistory pulls historic events from the stream starting from start time,
+// converting them to a reverse ordered list with most recent events first
 //
-// Newest events are first in the list
+// Additional metadata is added to indicate the start and end timestamps of the
+// event list
 func (c *Client) GetEventHistory(ctx context.Context, start time.Time) (*EventLog, error) {
 	events := []EventItem{}
 
@@ -263,7 +264,6 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) (*EventLo
 		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
 	}
 
-	// Could figure out a better way to get all events to the end
 	msgs, _ := cons.FetchNoWait(1000000)
 	for rawM := range msgs.Messages() {
 		m, err := Parse(rawM)
@@ -302,11 +302,11 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) (*EventLo
 	return &eventLog, nil
 }
 
-// GetEventHistoryDefault pulls all historic events from the stream, converting them to a reverse
-// ordered list
+// GetEventHistoryDefault pulls historic events from the stream starting from
+// 1 hour ago. The list is returned with most recent events first
 //
-// Newest events are first in the list
-// Pull time is from 1 hour ago
+// Additional metadata is added to indicate the start and end timestamps of the
+// event list
 func (c *Client) GetEventHistoryDefault(ctx context.Context) (*EventLog, error) {
 	return c.GetEventHistory(ctx, time.Now().Add(-time.Hour))
 }
