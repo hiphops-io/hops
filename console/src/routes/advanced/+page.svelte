@@ -12,6 +12,7 @@
 
 	// Event logs table data
 	$: tableData = data.tableData;
+	$: ago = data.ago;
 	$: loading = data.tableData === undefined;
 
 	// Dummy Pipeline data
@@ -56,7 +57,7 @@
 		<div class="md:pl-20 md:pr-20 mx-8 md:mx-auto mt-12 pb-4">
 			<h1 class="text-left text-5xl font-normal mb-2 dark:text-white">Advanced</h1>
 			<h2 class="text-2xl mb-4 text-grey dark:text-white dark:text-opacity-50">
-				Showing all events from the past hour
+				Showing all events since {ago}
 			</h2>
 
 			<!--Tabs-->
@@ -123,7 +124,7 @@
 				<div
 					class="bg-almostblack flex items-center justify-center text-center rounded-lg mt-4 py-60 md:!ml-0"
 				>
-					<p class="text-white text-base font-medium">No events yet</p>
+					<p class="text-white text-base font-medium">No events since {ago}</p>
 				</div>
 			</div>
 		{/if}

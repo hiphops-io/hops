@@ -13,8 +13,8 @@ import (
 
 type (
 	EventsClient interface {
-		GetEventHistory(ctx context.Context, start time.Time) ([]nats.EventLog, error)
-		GetEventHistoryDefault(ctx context.Context) ([]nats.EventLog, error)
+		GetEventHistory(ctx context.Context, start time.Time) (*nats.EventLog, error)
+		GetEventHistoryDefault(ctx context.Context) (*nats.EventLog, error)
 	}
 	eventController struct {
 		logger       zerolog.Logger

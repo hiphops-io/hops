@@ -34,8 +34,15 @@ type (
 	// Event is arbitrary json struct of event
 	Event map[string](interface{})
 
-	// EventLog includes metadata for /events api endpoint
+	// EventLog is a list of events with search start and search end timestamps
 	EventLog struct {
+		StartTimestamp time.Time   `json:"start_timestamp"`
+		EndTimestamp   time.Time   `json:"end_timestamp"`
+		EventItems     []EventItem `json:"event_items"`
+	}
+
+	// EventItem includes metadata for /events api endpoint
+	EventItem struct {
 		Event      Event     `json:"event"`
 		SequenceId string    `json:"sequence_id"`
 		Timestamp  time.Time `json:"timestamp"`
@@ -229,8 +236,8 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 // ordered list
 //
 // Newest events are first in the list
-func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]EventLog, error) {
-	events := []EventLog{}
+func (c *Client) GetEventHistory(ctx context.Context, start time.Time) (*EventLog, error) {
+	events := []EventItem{}
 
 	consumerConf := jetstream.OrderedConsumerConfig{
 		FilterSubjects: []string{EventFilter(c.accountId)},
@@ -256,14 +263,14 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]EventL
 		if err != nil {
 			return nil, err
 		}
-		eventLog := EventLog{
+		eventItem := EventItem{
 			Event:      event,
 			SequenceId: m.SequenceId,
 			Timestamp:  m.Timestamp,
 		}
 
 		// Add to the events
-		events = append(events, eventLog)
+		events = append(events, eventItem)
 	}
 	if err != nil {
 		return nil, err
@@ -271,7 +278,14 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]EventL
 	c.logger.Debugf("Events received %d", len(events))
 
 	slices.Reverse(events)
-	return events, nil
+
+	eventLog := EventLog{
+		EventItems:     events,
+		StartTimestamp: start,
+		EndTimestamp:   time.Now(),
+	}
+
+	return &eventLog, nil
 }
 
 // GetEventHistoryDefault pulls all historic events from the stream, converting them to a reverse
@@ -279,7 +293,7 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]EventL
 //
 // Newest events are first in the list
 // Pull time is from 1 hour ago
-func (c *Client) GetEventHistoryDefault(ctx context.Context) ([]EventLog, error) {
+func (c *Client) GetEventHistoryDefault(ctx context.Context) (*EventLog, error) {
 	return c.GetEventHistory(ctx, time.Now().Add(-time.Hour))
 }
 

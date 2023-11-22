@@ -1,3 +1,6 @@
+import TimeAgo from 'javascript-time-ago';
+import en from 'javascript-time-ago/locale/en';
+
 export interface Event {
 	hops: {
 		action: string;
@@ -12,6 +15,12 @@ export interface Event {
 }
 
 export interface EventLog {
+	start_timestamp: string;
+	end_timestamp: string;
+	event_items: EventItem[];
+}
+
+export interface EventItem {
 	event: Event;
 	sequence_id: string;
 	timestamp: string;
@@ -29,13 +38,38 @@ export interface EventTable {
 	};
 }
 
-export function eventToTable(eventLog: EventLog): EventTable {
+export function eventToTable(eventItem: EventItem): EventTable {
 	return {
-		timestamp: new Date(eventLog.timestamp).toLocaleString(),
-		eventId: eventLog.sequence_id,
-		event: eventLog.event.hops.event,
-		source: eventLog.event.hops.source,
-		action: eventLog.event.hops.action || '',
-		JSON: eventLog.event
+		timestamp: new Date(eventItem.timestamp).toLocaleString(),
+		eventId: eventItem.sequence_id,
+		event: eventItem.event.hops.event,
+		source: eventItem.event.hops.source,
+		action: eventItem.event.hops.action || '',
+		JSON: eventItem.event
 	};
+}
+
+// export function ago(timestamp: string): string {
+// 	const now = new Date();
+// 	const then = new Date(timestamp);
+// 	const diff = now.getTime() - then.getTime();
+// 	const seconds = Math.floor(diff / 1000);
+// 	const minutes = Math.floor(seconds / 60);
+// 	const hours = Math.floor(minutes / 60);
+// 	const days = Math.floor(hours / 24);
+
+// 	if (days > 0) return `${days} days ago`;
+// 	if (hours > 0) return `${hours} hours ago`;
+// 	if (minutes > 0) return `${minutes} minutes ago`;
+// 	if (seconds > 0) return `${seconds} seconds ago`;
+// 	return 'just now';
+// }
+
+TimeAgo.addLocale(en);
+const timeAgo = new TimeAgo('en');
+
+export function ago(startTimestamp: string): string {
+	const then = new Date(startTimestamp);
+	console.log(timeAgo.format(then));
+	return timeAgo.format(then);
 }

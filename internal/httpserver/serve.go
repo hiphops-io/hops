@@ -20,8 +20,8 @@ import (
 type NatsClient interface {
 	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, bool, error)
 	CheckConnection() bool
-	GetEventHistory(context.Context, time.Time) ([]nats.EventLog, error)
-	GetEventHistoryDefault(context.Context) ([]nats.EventLog, error)
+	GetEventHistory(context.Context, time.Time) (*nats.EventLog, error)
+	GetEventHistoryDefault(context.Context) (*nats.EventLog, error)
 }
 
 func Serve(addr string, hopsContent *hcl.BodyContent, natsClient NatsClient, logger zerolog.Logger) error {
