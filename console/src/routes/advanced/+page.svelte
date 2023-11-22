@@ -56,7 +56,7 @@
 		<div class="md:pl-20 md:pr-20 mx-8 md:mx-auto mt-12 pb-4">
 			<h1 class="text-left text-5xl font-normal mb-2 dark:text-white">Advanced</h1>
 			<h2 class="text-2xl mb-4 text-grey dark:text-white dark:text-opacity-50">
-				See what's happening in your event logs
+				Showing all events from the past hour
 			</h2>
 
 			<!--Tabs-->
@@ -117,7 +117,18 @@
 			</div>
 		{/if}
 
-		{#if tab === 'Events'}
+		<!--Tasks empty state -->
+		{#if tab === 'Events' && tableData.length == 0}
+			<div class="mx-8 md:mx-20 pb-20 md:space-x-4">
+				<div
+					class="bg-almostblack flex items-center justify-center text-center rounded-lg mt-4 py-60 md:!ml-0"
+				>
+					<p class="text-white text-base font-medium">No events yet</p>
+				</div>
+			</div>
+		{/if}
+
+		{#if tab === 'Events' && tableData.length !== 0}
 			<div class="flex space-x-4 pl-8 pr-8 md:pl-20 md:pr-20 text-white">
 				<!--Events table container-->
 				<div
