@@ -8,9 +8,9 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/hashicorp/hcl/v2"
+	"github.com/manterfield/fast-ctyjson/ctyjson"
 	"github.com/rs/zerolog"
 	"github.com/zclconf/go-cty/cty/gocty"
-	ctyjson "github.com/zclconf/go-cty/cty/json"
 )
 
 const hopsMetadataKey = "hops"
@@ -123,11 +123,19 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, 
 
 	logger.Info().Msgf("%s matches event", on.Slug)
 
-	resultBlocks := bc.Blocks.OfType(ResultID)
-	for _, resultBlock := range resultBlocks {
-		err := DecodeResultBlock(ctx, hop, on, resultBlock, evalctx, logger)
+	// Evaluate done blocks first, as we don't want to dispatch further calls
+	// after a pipeline is marked as done
+	doneBlocks := bc.Blocks.OfType(DoneID)
+	for _, doneBlock := range doneBlocks {
+		done, err := DecodeDoneBlock(ctx, hop, on, doneBlock, evalctx, logger)
 		if err != nil {
 			return err
+		}
+		// If any done block is not nil, then finish parsing
+		if done != nil {
+			on.Done = done
+			hop.Ons = append(hop.Ons, *on)
+			return nil
 		}
 	}
 
@@ -211,57 +219,6 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 	}
 
 	on.Calls = append(on.Calls, *call)
-	return nil
-}
-
-func DecodeResultBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Block, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
-	result := &ResultAST{}
-
-	bc, d := block.Body.Content(resultSchema)
-	if d.HasErrors() {
-		return errors.New(d.Error())
-	}
-
-	erroredClause := bc.Attributes[ErroredAttr]
-	val, err := DecodeConditionalAttr(erroredClause, false, evalctx)
-	if err != nil {
-		logger.Debug().Err(err).Msg("default result errored to false")
-	}
-
-	result.Errored = val
-
-	completedClause := bc.Attributes[CompletedAttr]
-	val, err = DecodeConditionalAttr(completedClause, false, evalctx)
-	if err != nil {
-		logger.Debug().Err(err).Msg("defaulting result completed to false")
-	}
-
-	result.Completed = val
-
-	if result.Errored || result.Completed {
-		result.Done = true
-	}
-
-	// TODO: If we're not done, then we don't want to parse the outputs
-
-	outputs := bc.Attributes[OutputsAttr]
-	if outputs != nil {
-		val, d := outputs.Expr.Value(evalctx)
-		if d.HasErrors() {
-			return errors.New(d.Error())
-		}
-
-		jsonVal := ctyjson.SimpleJSONValue{Value: val}
-		inputs, err := jsonVal.MarshalJSON()
-
-		if err != nil {
-			return err
-		}
-
-		result.Outputs = inputs
-	}
-
-	on.Results = append(on.Results, *result)
 	return nil
 }
 

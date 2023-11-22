@@ -7,11 +7,10 @@ import (
 )
 
 var (
-	CompletedAttr = "completed"
-	ErroredAttr   = "errored"
-	OutputsAttr   = "outputs"
-	IfAttr        = "if"
-	NameAttr      = "name"
+	ErrorAttr  = "error"
+	ResultAttr = "result"
+	IfAttr     = "if"
+	NameAttr   = "name"
 
 	HopSchema = &hcl.BodySchema{
 		Attributes: []hcl.AttributeSchema{},
@@ -35,7 +34,7 @@ var (
 				LabelNames: []string{"taskType"},
 			},
 			{
-				Type: ResultID,
+				Type: DoneID,
 			},
 		},
 		Attributes: []hcl.AttributeSchema{
@@ -54,13 +53,12 @@ var (
 		},
 	}
 
-	ResultID     = "result"
-	resultSchema = &hcl.BodySchema{
+	DoneID     = "done"
+	doneSchema = &hcl.BodySchema{
 		Blocks: []hcl.BlockHeaderSchema{},
 		Attributes: []hcl.AttributeSchema{
-			{Name: CompletedAttr, Required: false},
-			{Name: ErroredAttr, Required: false},
-			{Name: OutputsAttr, Required: false},
+			{Name: ErrorAttr, Required: false},
+			{Name: ResultAttr, Required: false},
 		},
 	}
 
@@ -109,7 +107,7 @@ type OnAST struct {
 	EventType string
 	Name      string
 	Calls     []CallAST
-	Results   []ResultAST
+	Done      *DoneAST
 	ConditionalAST
 }
 
@@ -121,11 +119,11 @@ type CallAST struct {
 	ConditionalAST
 }
 
-type ResultAST struct {
+type DoneAST struct {
 	Completed bool
 	Errored   bool
-	Done      bool
-	Outputs   []byte
+	Error     []byte
+	Result    []byte
 }
 
 type ConditionalAST struct {
