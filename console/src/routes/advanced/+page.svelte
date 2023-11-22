@@ -111,7 +111,13 @@
 
 	{#if tab === 'Events'}
 		{#if loading}
-			<div class="flex justify-center items-center h-[60vh]">Loading...</div>
+			<div class="flex justify-center items-center h-[60vh]">
+				<img
+					src="/images/inprogress.svg"
+					alt="loading icon"
+					class="animate-[spin_2s_linear_infinite] hidden dark:block"
+				/>
+			</div>
 		{:else}
 			<div class="flex space-x-4 pl-8 pr-8 md:pl-20 md:pr-20 text-white">
 				<!--Events table container-->
