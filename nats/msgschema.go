@@ -27,6 +27,7 @@ type (
 		MessageId        string
 		SequenceId       string
 		StreamSequence   uint64
+		Timestamp        time.Time
 		msg              jetstream.Msg
 	}
 
@@ -87,6 +88,7 @@ func (m *MsgMeta) initMetadata() error {
 
 	m.StreamSequence = meta.Sequence.Stream
 	m.ConsumerSequence = meta.Sequence.Consumer
+	m.Timestamp = meta.Timestamp
 
 	return nil
 }
@@ -151,6 +153,17 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 	}
 
 	return resultMsg
+}
+
+func EventFilter(accountId string) string {
+	tokens := []string{
+		accountId,
+		"notify",
+		"*",
+		"event",
+	}
+
+	return strings.Join(tokens, ".")
 }
 
 func ReplayFilterSubject(accountId string, sequenceId string) string {

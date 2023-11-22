@@ -18,10 +18,18 @@ const config = {
 				lightgrey: '#EEE',
 				midgrey: '#DDD',
 				black: '#000',
+				almostblack: '#282828',
 				white: '#fff',
 				error: '#FF4D4D'
 				// flowbite-svelte
-			}
+			},
+			backgroundImage: {
+				grain : "url('/images/light-grain.png')",
+			},
+			 boxShadow: {
+        'purpleglow': '0px 0px 24px 4px rgba(205, 114, 252)',
+		
+      }
 		}
 	}
 };

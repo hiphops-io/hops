@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -13,11 +14,14 @@ import (
 
 	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/logs"
+	"github.com/hiphops-io/hops/nats"
 )
 
 type NatsClient interface {
 	Publish(context.Context, []byte, ...string) (*jetstream.PubAck, bool, error)
 	CheckConnection() bool
+	GetEventHistory(context.Context, time.Time) (*nats.EventLog, error)
+	GetEventHistoryDefault(context.Context) (*nats.EventLog, error)
 }
 
 func Serve(addr string, hopsContent *hcl.BodyContent, natsClient NatsClient, logger zerolog.Logger) error {
@@ -46,7 +50,11 @@ func Serve(addr string, hopsContent *hcl.BodyContent, natsClient NatsClient, log
 		return err
 	}
 
+	// Serve the tasks API
 	r.Mount("/tasks", TaskRouter(taskHops, natsClient, logger))
+
+	// Serve the events API
+	r.Mount("/events", EventRouter(natsClient, logger))
 
 	logger.Info().Msgf("Console available on http://%s/console", addr)
 	return http.ListenAndServe(addr, r)
