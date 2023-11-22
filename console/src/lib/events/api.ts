@@ -11,10 +11,16 @@ export interface Event {
 	[key: string]: any;
 }
 
+export interface EventLog {
+	event: Event;
+	sequence_id: string;
+	timestamp: string;
+}
+
 export interface EventTable {
-	timestamp: string; // '2023-10-10 11:00 AM';
+	timestamp: string; // '2023-11-22T10:44:00.518137754Z';
 	eventId: string;
-	eventName: string;
+	event: string;
 	source: string;
 	action: string;
 	JSON: {
@@ -23,13 +29,13 @@ export interface EventTable {
 	};
 }
 
-export function eventToTable(event: Event): EventTable {
+export function eventToTable(eventLog: EventLog): EventTable {
 	return {
-		timestamp: new Date(event.timestamp).toLocaleString(),
-		eventId: event.hops.event,
-		eventName: event.hops.event,
-		source: event.hops.source,
-		action: event.hops.action,
-		JSON: event
+		timestamp: new Date(eventLog.timestamp).toLocaleString(),
+		eventId: eventLog.sequence_id,
+		event: eventLog.event.hops.event,
+		source: eventLog.event.hops.source,
+		action: eventLog.event.hops.action || '',
+		JSON: eventLog.event
 	};
 }

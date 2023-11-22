@@ -27,6 +27,7 @@ type (
 		MessageId        string
 		SequenceId       string
 		StreamSequence   uint64
+		Timestamp        time.Time
 		msg              jetstream.Msg
 	}
 
@@ -87,6 +88,7 @@ func (m *MsgMeta) initMetadata() error {
 
 	m.StreamSequence = meta.Sequence.Stream
 	m.ConsumerSequence = meta.Sequence.Consumer
+	m.Timestamp = meta.Timestamp
 
 	return nil
 }

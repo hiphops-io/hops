@@ -13,19 +13,12 @@ import (
 
 type (
 	EventsClient interface {
-		GetEventHistory(ctx context.Context, start time.Time) ([]nats.Event, error)
-		GetEventHistoryDefault(ctx context.Context) ([]nats.Event, error)
+		GetEventHistory(ctx context.Context, start time.Time) ([]nats.EventLog, error)
+		GetEventHistoryDefault(ctx context.Context) ([]nats.EventLog, error)
 	}
 	eventController struct {
 		logger       zerolog.Logger
 		eventsClient EventsClient
-	}
-
-	eventResponse struct {
-		Errors     map[string][]string `json:"errors"`
-		Message    string              `json:"message"`
-		SequenceID string              `json:"sequence_id"`
-		statusCode int
 	}
 )
 

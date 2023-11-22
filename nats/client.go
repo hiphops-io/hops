@@ -31,8 +31,15 @@ type (
 	// ClientOpt functions configure a nats.Client via NewClient()
 	ClientOpt func(*Client) error
 
-	// Arbitrary json struct of event
+	// Event is arbitrary json struct of event
 	Event map[string](interface{})
+
+	// EventLog includes metadata for /events api endpoint
+	EventLog struct {
+		Event      Event     `json:"event"`
+		SequenceId string    `json:"sequence_id"`
+		Timestamp  time.Time `json:"timestamp"`
+	}
 
 	// MessageBundle is a map of messageIDs and the data that message contained
 	//
@@ -222,8 +229,8 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 // ordered list
 //
 // Newest events are first in the list
-func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]Event, error) {
-	events := []Event{}
+func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]EventLog, error) {
+	events := []EventLog{}
 
 	consumerConf := jetstream.OrderedConsumerConfig{
 		FilterSubjects: []string{EventFilter(c.accountId)},
@@ -237,14 +244,26 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]Event,
 
 	// Could figure out a better way to get all events to the end
 	msgs, _ := cons.FetchNoWait(1000000)
-	for m := range msgs.Messages() {
+	for rawM := range msgs.Messages() {
+		m, err := Parse(rawM)
+		if err != nil {
+			c.logger.Errf(err, "Unable to parse message")
+			return nil, err
+		}
+
 		event := make(map[string](interface{}))
-		err := json.Unmarshal([]byte(m.Data()), &event)
+		err = json.Unmarshal([]byte(m.msg.Data()), &event)
 		if err != nil {
 			return nil, err
 		}
+		eventLog := EventLog{
+			Event:      event,
+			SequenceId: m.SequenceId,
+			Timestamp:  m.Timestamp,
+		}
+
 		// Add to the events
-		events = append(events, event)
+		events = append(events, eventLog)
 	}
 	if err != nil {
 		return nil, err
@@ -260,7 +279,7 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]Event,
 //
 // Newest events are first in the list
 // Pull time is from 1 hour ago
-func (c *Client) GetEventHistoryDefault(ctx context.Context) ([]Event, error) {
+func (c *Client) GetEventHistoryDefault(ctx context.Context) ([]EventLog, error) {
 	return c.GetEventHistory(ctx, time.Now().Add(-time.Hour))
 }
 
