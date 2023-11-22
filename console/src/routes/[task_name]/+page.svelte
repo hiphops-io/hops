@@ -73,7 +73,7 @@
 	<meta name="description" content="Run the '{task.display_name}' task" />
 </svelte:head>
 
-<div class="dark:bg-grain bg-cover bg-norepeat bg-fixed min-h-screen">
+<div class="dark:bg-grain bg-cover bg-norepeat bg-fixed min-h-screen pb-24">
 	<TaskNav />
 
 	<!--Page title-->
@@ -121,7 +121,7 @@
 		<form use:form>
 			<div
 				class={task.params.length !== 0
-					? 'md:w-2/4 mx-8 md:mx-auto mb-20 px-8 py-2 pb-32 md:space-x-4 bg-grey bg-opacity-5 dark:bg-white dark:bg-opacity-10 rounded-xl space-y-12 pt-12'
+					? 'md:w-2/4 mx-8 md:mx-auto px-8 py-2 pb-12 md:space-x-4 bg-grey bg-opacity-5 dark:bg-almostblack rounded-xl space-y-12 pt-12'
 					: 'md:w-2/4 md:mx-auto md:pb-24'}
 			>
 				{#each task.params as param}
@@ -145,7 +145,7 @@
 
 				<!--Run task button for a task with fields-->
 				<button
-					class={`rounded-md hover:border-b-4 border-b-4 border-midgrey hover:border-purple hover:shadow-purpleglow hover:transition hover:duration-500 mx-8 md:mx-0 px-6 py-4 pb-4 flex items-center font-semibold text-white dark:text-black bg-black dark:bg-white disabled:dark:bg-grey active:shadow-md active:shadow-purple active:disabled:shadow-black` +
+					class={`rounded-md hover:disabled:shadow-none hover:border-b-4 border-b-4 border-midgrey disabled:border-grey hover:border-purple hover:shadow-purpleglow hover:transition hover:duration-500 !mx-0 md:mx-0 px-6 py-4 pb-4 flex items-center font-semibold text-white dark:text-black bg-black dark:bg-white disabled:dark:bg-grey active:shadow-md active:shadow-purple` +
 						(task.params.length !== 0 ? 'float-right mt-12' : 'w-80 justify-between')}
 					type="submit"
 					disabled={formStatus !== 'ready'}

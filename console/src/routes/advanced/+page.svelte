@@ -14,7 +14,7 @@
 	$: tableData = data.tableData;
 	$: loading = data.tableData === undefined;
 
-	// Pipeline data
+	// Dummy Pipeline data
 	let pipelineData = [
 		{
 			name: 'Pipeline Name #1',
@@ -33,7 +33,8 @@
 		}
 	];
 
-	let activeRow = tableData?.[0];
+	let activeRow: any;
+	$: activeRow = tableData?.[0];
 
 	function setActiveRow(row: any) {
 		activeRow = row;
@@ -54,11 +55,14 @@
 		<!--Page title-->
 		<div class="md:pl-20 md:pr-20 mx-8 md:mx-auto mt-12 pb-4">
 			<h1 class="text-left text-5xl font-normal mb-2 dark:text-white">Advanced</h1>
+			<h2 class="text-2xl mb-4 text-grey dark:text-white dark:text-opacity-50">
+				See what's happening in your event logs
+			</h2>
 
 			<!--Tabs-->
-			<div class="mt-10">
-				<ul class="flex space-x-2">
-					<!-- <li>
+			<!-- <div class="mt-10">
+				<ul class="flex space-x-2"> -->
+			<!-- <li>
 						<button
 							on:click={() => (tab = 'Pipelines')}
 							class={tab === 'Pipelines'
@@ -67,7 +71,7 @@
 							>Pipelines
 						</button>
 					</li> -->
-					<li>
+			<!-- <li>
 						<button
 							on:click={() => (tab = 'Events')}
 							class={tab === 'Events'
@@ -75,9 +79,9 @@
 								: 'text-white border border-white rounded-full px-6 py-2 font-medium'}
 							>Event logs
 						</button>
-					</li>
-				</ul>
-			</div>
+					</li> -->
+			<!-- </ul>
+			</div> -->
 		</div>
 
 		<!-- Container-->
@@ -139,7 +143,7 @@
 										on:click={() => setActiveRow(row)}
 									>
 										<TableDataCell>{row.timestamp}</TableDataCell>
-										<TableDataCell>{row.eventId}</TableDataCell>
+										<TableDataCell>{row.eventId.slice(0, 7) + '...'}</TableDataCell>
 										<TableDataCell>{row.source}</TableDataCell>
 										<TableDataCell>{row.event}</TableDataCell>
 										<TableDataCell>{row.action}</TableDataCell>
@@ -156,7 +160,7 @@
 						class="w-1/2 bg-white border border-lightrey dark:border-purple dark:bg-[#191919] overflow-scroll h-[60vh] text-black dark:text-white rounded-lg"
 					>
 						<div class="p-8">
-							<h2 class="text-2xl mb-8 text-grey dark:text-midgrey">{activeRow.eventId}</h2>
+							<h2 class="text-xl mb-8 text-grey dark:text-midgrey">ID: {activeRow.eventId}</h2>
 							<!--Pipelines container-->
 
 							<div class="mt-4 mb-12">
