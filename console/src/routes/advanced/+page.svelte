@@ -4,6 +4,7 @@
 	import HopsNav from '$lib/nav/HopsNav.svelte';
 	import type { PageData } from './$types';
 	import Loading from '$lib/components/Loading.svelte';
+	import type { EventTable } from '$lib/events/api';
 
 	//Set default tab
 	let tab = 'Events';
@@ -34,10 +35,9 @@
 		}
 	];
 
-	let activeRow: any;
 	$: activeRow = tableData?.[0];
 
-	function setActiveRow(row: any) {
+	function setActiveRow(row: EventTable) {
 		activeRow = row;
 	}
 </script>
@@ -127,9 +127,7 @@
 					<p class="text-white text-base font-medium">No events since {ago}</p>
 				</div>
 			</div>
-		{/if}
-
-		{#if tab === 'Events' && tableData.length !== 0}
+		{:else}
 			<div class="flex space-x-4 pl-8 pr-8 md:pl-20 md:pr-20 text-white">
 				<!--Events table container-->
 				<div
