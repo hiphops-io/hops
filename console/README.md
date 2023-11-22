@@ -35,12 +35,6 @@ Then start hops console
 go run main.go start console -d --address=0.0.0.0:8916
 ```
 
-or the following to get the full capabilities.
-
-```bash
-go run main.go start -d --address=0.0.0.0:8916
-```
-
 Once you've installed dependencies with `pnpm install`, start a development server:
 
 ```bash
