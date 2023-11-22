@@ -3,7 +3,7 @@
 </script>
 
 <div
-	class="pl-8 pr-8 md:pl-20 md:pr-20 py-9 w-full flex justify-between border-solid border-b items-center border-lightgrey dark:border-white dark:border-opacity-10"
+	class="pl-8 pr-8 md:pl-20 md:pr-20 pt-8 pb-8 w-full flex justify-between border-solid border-b items-center border-lightgrey dark:border-white dark:border-opacity-20"
 >
 	<a href="/console/">
 		<ArrowLeftSolid class="dark:text-white text-black" />
