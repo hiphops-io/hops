@@ -93,7 +93,7 @@
 										class="animate-[spin_2s_linear_infinite] hidden dark:block"
 									/>
 								{:else if step.status === 'DNR'}
-									<img src="/images/DNR.svg" alt="Did not run icon" />
+									<img src="/images/dnr.svg" alt="Did not run icon" />
 								{/if}
 							</div>
 							<!--Step Title & metadata-->
