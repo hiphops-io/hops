@@ -254,34 +254,17 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]*MsgMe
 	if err != nil {
 		return nil, fmt.Errorf("Unable to get consumer info: %w", err)
 	}
+
 	n := info.NumPending
-
-	// Handle case where nextMsgWithTimeout times out
-	shouldStop := true
-
-	msgCtx, err := cons.Messages()
-	if msgCtx != nil {
-		defer func() {
-			if shouldStop {
-				msgCtx.Stop()
-			}
-		}()
+	if n == 0 {
+		return events, nil
 	}
+
+	msgs, err := cons.FetchNoWait(int(n))
 	if err != nil {
-		return nil, fmt.Errorf("Unable to read back messages: %w", err)
+		return nil, fmt.Errorf("Unable to fetch messages: %w", err)
 	}
-
-	for i := uint64(0); i < n; i++ {
-		// Get the next message in the sequence
-		rawM, err := nextMsgWithTimeout(msgCtx, time.Second)
-		if errors.Is(err, TimeoutError) {
-			// stop has already been called on msgCtx
-			shouldStop = false
-		}
-		if err != nil {
-			return nil, err
-		}
-
+	for rawM := range msgs.Messages() {
 		m, err := Parse(rawM)
 		if err != nil {
 			c.logger.Errf(err, "Unable to parse message")
@@ -510,37 +493,5 @@ func WorkerClient(appName string) ClientOpt {
 			return err
 		}
 		return nil
-	}
-}
-
-// nextMsgWithTimeout is a helper function to call Next() on a MessagesContext with a timeout
-func nextMsgWithTimeout(msgs jetstream.MessagesContext, timeoutDuration time.Duration) (jetstream.Msg, error) {
-	msgChan := make(chan jetstream.Msg, 1)
-	errChan := make(chan error, 1)
-
-	// Goroutine calls Next()
-	go func() {
-		defer close(msgChan)
-		defer close(errChan)
-
-		msg, err := msgs.Next()
-		if err != nil {
-			errChan <- err
-			return
-		}
-		msgChan <- msg
-	}()
-
-	// Wait on both message and timeout
-	select {
-	case msg := <-msgChan:
-		return msg, nil
-	case err := <-errChan:
-		return nil, err
-	case <-time.After(timeoutDuration):
-		// This happens implicitly when we exit this function,
-		// but we're being explicit so it's clear it's happening
-		msgs.Stop()
-		return nil, TimeoutError
 	}
 }
