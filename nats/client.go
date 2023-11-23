@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -283,15 +282,13 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) (*EventLo
 			Timestamp:  m.Timestamp,
 		}
 
-		// Add to the events
-		events = append(events, eventItem)
+		// Prepend to the events
+		events = append([]EventItem{eventItem}, events...)
 	}
 	if err != nil {
 		return nil, err
 	}
 	c.logger.Debugf("Events received %d", len(events))
-
-	slices.Reverse(events)
 
 	eventLog := EventLog{
 		EventItems:     events,
