@@ -60,6 +60,9 @@ func TestValidParse(t *testing.T) {
 
 		call = hop.Ons[0].Calls[1]
 		assert.Equal(t, `a_sensor-index_id_call2`, call.Slug)
+
+		// Ensure the done block is empty
+		assert.Nil(t, hop.Ons[0].Done)
 	}
 }
 
@@ -99,6 +102,49 @@ func TestValidParseResponseStep(t *testing.T) {
 
 	// Ensure the slugs align with what we want
 	assert.Equal(t, hop.Ons[0].Calls[0].Slug, "a_sensor-first_task")
+
+	// Ensure the done block is empty
+	assert.Nil(t, hop.Ons[0].Done)
+}
+
+func TestValidParseDone(t *testing.T) {
+	logger := logs.NoOpLogger()
+	ctx := context.Background()
+
+	hopsFile := "./testdata/valid.hops"
+	eventFile := "./testdata/raw_change_event.json"
+	responseFile := "./testdata/task_response.json"
+
+	eventData, err := os.ReadFile(eventFile)
+	require.NoError(t, err)
+
+	responseData, err := os.ReadFile(responseFile)
+	require.NoError(t, err)
+
+	eventBundle := map[string][]byte{
+		"event":               eventData,
+		"a_sensor-first_task": responseData,
+		"a_sensor-depends":    responseData,
+	}
+
+	hopsFiles, err := ReadHopsFilePath(hopsFile)
+	assert.NoError(t, err)
+
+	hop, err := ParseHops(ctx, hopsFiles.BodyContent, eventBundle, logger)
+	assert.NoError(t, err)
+
+	// Test we parsed the correct number of matching on blocks.
+	require.Len(t, hop.Ons, 3)
+
+	// Test the first on block had the correct number of calls
+	require.Len(t, hop.Ons[0].Calls, 0)
+
+	// Ensure the done block is generated and check the values
+	require.NotNil(t, hop.Ons[0].Done)
+
+	done := hop.Ons[0].Done
+	assert.NotNil(t, done.Result)
+	assert.NoError(t, done.Error)
 }
 
 func TestInvalidParse(t *testing.T) {
@@ -134,4 +180,8 @@ func TestSlugify(t *testing.T) {
 
 	result = slugify("change_opened", "hello_world")
 	assert.Equal(t, "change_opened-hello_world", result)
+}
+
+func TestResults(t *testing.T) {
+	t.Skip("Not implemented: Test result blocks have expected values")
 }

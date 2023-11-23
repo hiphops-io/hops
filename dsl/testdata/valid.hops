@@ -22,11 +22,19 @@ on change_merged {
     }
   }
 
+  // This done block should never match, since the call is never made
+  done {error = second_task.errored}
+
   call index_id_call {}
 
   call depends_call {
     name = "depends"
     if = first_task.done
+  }
+
+  done {
+    error = depends.errored
+    result = depends.completed
   }
 }
 

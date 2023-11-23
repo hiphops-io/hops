@@ -8,9 +8,9 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/hashicorp/hcl/v2"
+	"github.com/manterfield/fast-ctyjson/ctyjson"
 	"github.com/rs/zerolog"
 	"github.com/zclconf/go-cty/cty/gocty"
-	ctyjson "github.com/zclconf/go-cty/cty/json"
 )
 
 const hopsMetadataKey = "hops"
@@ -108,24 +108,36 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, 
 	evalctx = scopedEvalContext(evalctx, on.EventType, on.Name)
 
 	ifClause := bc.Attributes[IfAttr]
-	if ifClause != nil {
-		val, err := DecodeConditionalAttr(ifClause, evalctx)
+	val, err := DecodeConditionalAttr(ifClause, true, evalctx)
+	if err != nil {
+		return err
+	}
+
+	// If condition is not met. Omit the block and stop parsing.
+	if !val {
+		logger.Debug().Msgf("%s 'if' not met", on.Slug)
+		return nil
+	}
+
+	on.IfClause = val
+
+	logger.Info().Msgf("%s matches event", on.Slug)
+
+	// Evaluate done blocks first, as we don't want to dispatch further calls
+	// after a pipeline is marked as done
+	doneBlocks := bc.Blocks.OfType(DoneID)
+	for _, doneBlock := range doneBlocks {
+		done, err := DecodeDoneBlock(ctx, hop, on, doneBlock, evalctx, logger)
 		if err != nil {
 			return err
 		}
-
-		// If condition is not met. Omit the block and stop parsing.
-		if !val {
-			logger.Debug().Msgf("%s 'if' not met", on.Slug)
+		// If any done block is not nil, then finish parsing
+		if done != nil {
+			on.Done = done
+			hop.Ons = append(hop.Ons, *on)
 			return nil
 		}
-
-		on.IfClause = val
-	} else {
-		on.IfClause = true
 	}
-
-	logger.Info().Msgf("%s matches event", on.Slug)
 
 	callBlocks := bc.Blocks.OfType(CallID)
 	for idx, callBlock := range callBlocks {
@@ -171,25 +183,21 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 	}
 
 	ifClause := bc.Attributes[IfAttr]
-	if ifClause != nil {
-		val, err := DecodeConditionalAttr(ifClause, evalctx)
-		if err != nil {
-			logger.Debug().Msgf(
-				"%s 'if' not ready for evaluation, defaulting to false: %s",
-				call.Slug,
-				err.Error(),
-			)
-		}
-
-		if !val {
-			logger.Debug().Msgf("%s 'if' not met", call.Slug)
-			return nil
-		}
-
-		call.IfClause = val
-	} else {
-		call.IfClause = true
+	val, err := DecodeConditionalAttr(ifClause, true, evalctx)
+	if err != nil {
+		logger.Debug().Msgf(
+			"%s 'if' not ready for evaluation, defaulting to false: %s",
+			call.Slug,
+			err.Error(),
+		)
 	}
+
+	if !val {
+		logger.Debug().Msgf("%s 'if' not met", call.Slug)
+		return nil
+	}
+
+	call.IfClause = val
 
 	logger.Info().Msgf("%s matches event", call.Slug)
 
@@ -235,9 +243,9 @@ func DecodeNameAttr(attr *hcl.Attribute) (string, error) {
 	return value, nil
 }
 
-func DecodeConditionalAttr(attr *hcl.Attribute, ctx *hcl.EvalContext) (bool, error) {
+func DecodeConditionalAttr(attr *hcl.Attribute, defaultValue bool, ctx *hcl.EvalContext) (bool, error) {
 	if attr == nil {
-		return true, nil
+		return defaultValue, nil
 	}
 
 	v, diag := attr.Expr.Value(ctx)

@@ -2,13 +2,16 @@ package dsl
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 )
 
 var (
-	IfAttr   = "if"
-	NameAttr = "name"
+	ErrorAttr  = "error"
+	ResultAttr = "result"
+	IfAttr     = "if"
+	NameAttr   = "name"
 
 	HopSchema = &hcl.BodySchema{
 		Attributes: []hcl.AttributeSchema{},
@@ -31,6 +34,9 @@ var (
 				Type:       CallID,
 				LabelNames: []string{"taskType"},
 			},
+			{
+				Type: DoneID,
+			},
 		},
 		Attributes: []hcl.AttributeSchema{
 			{Name: "name", Required: false},
@@ -45,6 +51,15 @@ var (
 			{Name: "name", Required: false},
 			{Name: IfAttr, Required: false},
 			{Name: "inputs", Required: false},
+		},
+	}
+
+	DoneID     = "done"
+	doneSchema = &hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{},
+		Attributes: []hcl.AttributeSchema{
+			{Name: ErrorAttr, Required: false},
+			{Name: ResultAttr, Required: false},
 		},
 	}
 
@@ -64,26 +79,14 @@ var (
 		},
 	}
 
-	ParamID = "param"
-	// TODO: Check if this schema is actually used still.
-	// We might only be using the tags in the ParamAST
-	paramSchema = &hcl.BodySchema{
-		Attributes: []hcl.AttributeSchema{
-			{Name: "flag", Required: false},
-			{Name: "display_name", Required: false},
-			{Name: "type", Required: false},
-			{Name: "default", Required: false},
-			{Name: "help", Required: false},
-			{Name: "shortflag", Required: false},
-			{Name: "required", Required: false},
-		},
-	}
+	ParamID = "param" // Schema defined via tags on the struct
 )
 
 type HopAST struct {
 	Ons          []OnAST
 	Tasks        []TaskAST
 	SlugRegister map[string]bool
+	StartedAt    time.Time
 }
 
 func (h *HopAST) ListTasks() []TaskAST {
@@ -106,6 +109,7 @@ type OnAST struct {
 	EventType string
 	Name      string
 	Calls     []CallAST
+	Done      *DoneAST
 	ConditionalAST
 }
 
@@ -115,6 +119,11 @@ type CallAST struct {
 	Name     string
 	Inputs   []byte
 	ConditionalAST
+}
+
+type DoneAST struct {
+	Error  error
+	Result []byte
 }
 
 type ConditionalAST struct {

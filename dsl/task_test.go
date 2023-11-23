@@ -13,10 +13,11 @@ import (
 
 func TestTaskParse(t *testing.T) {
 	type testCase struct {
-		name  string
-		hops  string
-		cmds  []TaskAST
-		valid bool
+		name       string
+		hops       string
+		cmds       []TaskAST
+		validParse bool
+		validRead  bool
 	}
 
 	tests := []testCase{
@@ -27,7 +28,8 @@ func TestTaskParse(t *testing.T) {
 			cmds: []TaskAST{
 				{Name: "foo", DisplayName: "Foo"},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that display name can be overridden
@@ -41,14 +43,16 @@ func TestTaskParse(t *testing.T) {
 			cmds: []TaskAST{
 				{Name: "foo", DisplayName: "Run Foo Task"},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that a task with basic validation errors (extra labels) throws an error
 		{
-			name:  "Simple invalid task",
-			hops:  `task foo bar {}`,
-			valid: false,
+			name:       "Simple invalid task",
+			hops:       `task foo bar {}`,
+			validParse: false,
+			validRead:  false,
 		},
 
 		// Test metadata fields are parsed
@@ -68,7 +72,8 @@ func TestTaskParse(t *testing.T) {
 					Emoji:       "🤖",
 				},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that duplicate tasks throw an error
@@ -77,8 +82,9 @@ func TestTaskParse(t *testing.T) {
 			hops: `
 		task foo {}
 		task foo {}`,
-			cmds:  []TaskAST{},
-			valid: false,
+			cmds:       []TaskAST{},
+			validParse: false,
+			validRead:  true,
 		},
 
 		// Test that a task parses correctly when other resources exist in the config
@@ -93,7 +99,8 @@ func TestTaskParse(t *testing.T) {
 			cmds: []TaskAST{
 				{Name: "foo", DisplayName: "Foo"},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that a param without options is parsed correctly
@@ -120,7 +127,8 @@ func TestTaskParse(t *testing.T) {
 					},
 				},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that a string param with simple options is parsed correctly
@@ -150,7 +158,8 @@ task foo {
 					},
 				},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that non-string param types are parsed correctly
@@ -195,7 +204,8 @@ task foo {
 					},
 				},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that int params default to nil, rather than 0
@@ -224,7 +234,8 @@ task foo {
 					},
 				},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that incorrect type/default pairs throw an error
@@ -237,8 +248,9 @@ task foo {
 				default = true
 			}
 		}`,
-			cmds:  []TaskAST{},
-			valid: false,
+			cmds:       []TaskAST{},
+			validParse: false,
+			validRead:  true,
 		},
 
 		// Test that default values from expressions are set correctly
@@ -268,7 +280,8 @@ task foo {
 					},
 				},
 			},
-			valid: true,
+			validParse: true,
+			validRead:  true,
 		},
 
 		// Test that unknown types throw errors
@@ -281,8 +294,9 @@ task foo {
 				default = "whatever"
 			}
 		}`,
-			cmds:  []TaskAST{},
-			valid: false,
+			cmds:       []TaskAST{},
+			validParse: false,
+			validRead:  true,
 		},
 
 		// Test that duplicate param names throw an error
@@ -293,27 +307,34 @@ task foo {
 			param a {}
 			param a {}
 		}`,
-			cmds:  []TaskAST{},
-			valid: false,
+			cmds:       []TaskAST{},
+			validParse: false,
+			validRead:  true,
 		},
 		// Test no tasks doesn't throw an error
 		{
-			name:  "No tasks",
-			hops:  `on push {}`,
-			cmds:  []TaskAST{},
-			valid: true,
+			name:       "No tasks",
+			hops:       `on push {}`,
+			cmds:       []TaskAST{},
+			validParse: true,
+			validRead:  true,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			hopsHcl, _ := createTmpHopsFile(tc.hops, t)
-
-			hop, err := ParseHopsTasks(ctx, hopsHcl)
 
 			// Ditch early if we're expecting invalid parsing
-			if !tc.valid {
+			hopsHcl, _, err := createTmpHopsFile(tc.hops, t)
+			if !tc.validRead {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			hop, err := ParseHopsTasks(ctx, hopsHcl)
+			if !tc.validParse {
 				assert.Error(t, err)
 				return
 			}
@@ -325,7 +346,7 @@ task foo {
 	}
 }
 
-func createTmpHopsFile(content string, t *testing.T) (*hcl.BodyContent, string) {
+func createTmpHopsFile(content string, t *testing.T) (*hcl.BodyContent, string, error) {
 	dir := t.TempDir()
 	f, err := os.CreateTemp(dir, "*")
 	require.NoError(t, err)
@@ -333,7 +354,9 @@ func createTmpHopsFile(content string, t *testing.T) (*hcl.BodyContent, string) 
 	f.WriteString(content)
 
 	hops, err := ReadHopsFilePath(f.Name())
-	require.NoError(t, err)
+	if err != nil {
+		return nil, "", err
+	}
 
-	return hops.BodyContent, hops.Hash
+	return hops.BodyContent, hops.Hash, nil
 }
