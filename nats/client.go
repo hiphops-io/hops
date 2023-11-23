@@ -33,23 +33,6 @@ type (
 	// ClientOpt functions configure a nats.Client via NewClient()
 	ClientOpt func(*Client) error
 
-	// Event is arbitrary json struct of event
-	Event map[string](interface{})
-
-	// EventLog is a list of events with search start and search end timestamps
-	EventLog struct {
-		StartTimestamp time.Time   `json:"start_timestamp"`
-		EndTimestamp   time.Time   `json:"end_timestamp"`
-		EventItems     []EventItem `json:"event_items"`
-	}
-
-	// EventItem includes metadata for /events api endpoint
-	EventItem struct {
-		Event      Event     `json:"event"`
-		SequenceId string    `json:"sequence_id"`
-		Timestamp  time.Time `json:"timestamp"`
-	}
-
 	// MessageBundle is a map of messageIDs and the data that message contained
 	//
 	// MessageBundle is designed to be passed to a runner to ensure it has the aggregate state
@@ -248,13 +231,11 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 	return msgBundle, nil
 }
 
-// GetEventHistory pulls historic events from the stream starting from start time,
-// converting them to a reverse ordered list with most recent events first
+// GetEventHistory pulls historic events, most recent first, from now back to start time.
 //
-// Additional metadata is added to indicate the start and end timestamps of the
-// event list
-func (c *Client) GetEventHistory(ctx context.Context, start time.Time) (*EventLog, error) {
-	events := []EventItem{}
+// Times out if events take longer than a second to be received.
+func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]*MsgMeta, error) {
+	events := []*MsgMeta{}
 
 	consumerConf := jetstream.OrderedConsumerConfig{
 		FilterSubjects: []string{EventFilter(c.accountId)},
@@ -266,40 +247,39 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) (*EventLo
 		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
 	}
 
-	msgs, _ := cons.FetchNoWait(1000000)
-	for rawM := range msgs.Messages() {
+	info, err := cons.Info(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get consumer info: %w", err)
+	}
+	n := info.NumPending
+
+	msgCtx, err := cons.Messages()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read back messages: %w", err)
+	}
+
+	for i := uint64(0); i < n; i++ {
+		// Get the next message in the sequence
+		rawM, err := nextMsgWithTimeout(msgCtx, time.Second)
+		if err != nil {
+			return nil, err
+		}
+
 		m, err := Parse(rawM)
 		if err != nil {
 			c.logger.Errf(err, "Unable to parse message")
 			return nil, err
 		}
 
-		event := make(map[string](interface{}))
-		err = json.Unmarshal([]byte(m.msg.Data()), &event)
-		if err != nil {
-			return nil, err
-		}
-		eventItem := EventItem{
-			Event:      event,
-			SequenceId: m.SequenceId,
-			Timestamp:  m.Timestamp,
-		}
-
 		// Prepend to the events
-		events = append([]EventItem{eventItem}, events...)
+		events = append([]*MsgMeta{m}, events...)
 	}
 	if err != nil {
 		return nil, err
 	}
 	c.logger.Debugf("Events received %d", len(events))
 
-	eventLog := EventLog{
-		EventItems:     events,
-		StartTimestamp: start,
-		EndTimestamp:   time.Now(),
-	}
-
-	return &eventLog, nil
+	return events, nil
 }
 
 func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error) {
@@ -513,5 +493,31 @@ func WorkerClient(appName string) ClientOpt {
 			return err
 		}
 		return nil
+	}
+}
+
+// nextMsgWithTimeout is a helper function to call Next() on a MessagesContext with a timeout
+func nextMsgWithTimeout(msgs jetstream.MessagesContext, timeoutDuration time.Duration) (jetstream.Msg, error) {
+	msgChan := make(chan jetstream.Msg, 1)
+	errChan := make(chan error, 1)
+
+	// Goroutine calls Next()
+	go func() {
+		msg, err := msgs.Next()
+		if err != nil {
+			errChan <- err
+			return
+		}
+		msgChan <- msg
+	}()
+
+	// Wait on both message and timeout
+	select {
+	case msg := <-msgChan:
+		return msg, nil
+	case err := <-errChan:
+		return nil, err
+	case <-time.After(timeoutDuration):
+		return nil, fmt.Errorf("timeout reached")
 	}
 }

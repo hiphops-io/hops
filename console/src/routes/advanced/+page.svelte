@@ -57,7 +57,7 @@
 		<div class="md:pl-20 md:pr-20 mx-8 md:mx-auto mt-12 pb-4">
 			<h1 class="text-left text-5xl font-normal mb-2 dark:text-white">Advanced</h1>
 			<h2 class="text-2xl mb-4 text-grey dark:text-white dark:text-opacity-50">
-				Showing all events since {ago}
+				Showing recent events
 			</h2>
 
 			<!--Tabs-->

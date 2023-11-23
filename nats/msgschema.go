@@ -61,6 +61,10 @@ func Parse(msg jetstream.Msg) (*MsgMeta, error) {
 	return message, nil
 }
 
+func (m *MsgMeta) Msg() jetstream.Msg {
+	return m.msg
+}
+
 func (m *MsgMeta) ResponseSubject() string {
 	tokens := []string{
 		m.AccountId,
