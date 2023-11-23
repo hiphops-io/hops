@@ -130,11 +130,23 @@ func (c *Client) ConsumeSequences(ctx context.Context, handler SequenceHandler) 
 		}
 
 		if hopsMsg.MessageId == HopsMessageId {
-			c.logger.Debugf("Skipping hops assignment message")
+			c.logger.Debugf("Skipping 'hops assignment' message")
 
 			err := DoubleAck(ctx, msg)
 			if err != nil {
-				c.logger.Errf(err, "Unable to ack hops assignment message")
+				c.logger.Errf(err, "Unable to ack 'hops assignment' message")
+			}
+
+			return
+		}
+
+		if hopsMsg.Done {
+			// TODO: Actually finalise the pipeline here
+			c.logger.Debugf("Skipping 'pipeline done' message")
+
+			err := DoubleAck(ctx, msg)
+			if err != nil {
+				c.logger.Errf(err, "Unable to ack 'pipeline done' message")
 			}
 
 			return
@@ -167,7 +179,6 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 	filter := newMsg.SequenceFilter()
 
 	// TODO: Create a deadline for the context
-
 	consumerConf := jetstream.OrderedConsumerConfig{
 		FilterSubjects: []string{filter},
 		DeliverPolicy:  jetstream.DeliverAllPolicy,

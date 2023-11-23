@@ -17,21 +17,21 @@ func DecodeDoneBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 		return done, errors.New(d.Error())
 	}
 
-	errorVal, err := decodeDoneAttr(bc.Attributes[ErrorAttr], evalctx, true, logger)
+	errorVal, err := decodeErrorAttr(bc.Attributes[ErrorAttr], evalctx, logger)
 	if err != nil {
 		return nil, err
 	}
 	if errorVal != nil {
-		done.Errored = true
+		done.Error = errors.New(*errorVal)
 	}
 
-	resultVal, err := decodeDoneAttr(bc.Attributes[ResultAttr], evalctx, false, logger)
+	resultVal, err := decodeResultAttr(bc.Attributes[ResultAttr], evalctx, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	if resultVal != nil && errorVal == nil {
-		done.Completed = true
+	if resultVal != nil {
+		done.Result = resultVal
 	}
 
 	if resultVal != nil || errorVal != nil {
@@ -41,19 +41,34 @@ func DecodeDoneBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 	return nil, err
 }
 
-func decodeDoneAttr(attr *hcl.Attribute, evalctx *hcl.EvalContext, falseAsNull bool, logger zerolog.Logger) ([]byte, error) {
+func decodeErrorAttr(attr *hcl.Attribute, evalctx *hcl.EvalContext, logger zerolog.Logger) (*string, error) {
 	if attr == nil {
 		return nil, nil
 	}
 
 	val, d := attr.Expr.Value(evalctx)
 	if d.HasErrors() {
-		logger.Debug().Msgf("Evaluation skipped on 'done' block '%s', defaulting to null: %s", attr.Name, d.Error())
+		logger.Debug().Msgf("Evaluation skipped on 'done.%s', defaulting to null: %s", attr.Name, d.Error())
 		return nil, nil
 	}
 
 	// As a syntax convenience, we interpret false values as null in done.error
-	if falseAsNull && val.False() {
+	if val.False() {
+		return nil, nil
+	}
+
+	valStr := val.AsString()
+	return &valStr, nil
+}
+
+func decodeResultAttr(attr *hcl.Attribute, evalctx *hcl.EvalContext, logger zerolog.Logger) ([]byte, error) {
+	if attr == nil {
+		return nil, nil
+	}
+
+	val, d := attr.Expr.Value(evalctx)
+	if d.HasErrors() {
+		logger.Debug().Msgf("Evaluation skipped on 'done.%s', defaulting to null: %s", attr.Name, d.Error())
 		return nil, nil
 	}
 

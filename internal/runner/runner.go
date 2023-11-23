@@ -26,6 +26,7 @@ type (
 		GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error)
 		GetSysObject(key string) ([]byte, error)
 		Publish(context.Context, []byte, ...string) (*jetstream.PubAck, bool, error)
+		PublishResult(context.Context, time.Time, interface{}, error, ...string) (error, bool)
 		PutSysObject(string, []byte) (*natsgo.ObjectInfo, error)
 	}
 
@@ -50,7 +51,7 @@ func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger
 
 	err := runner.initHopsBackup(hops)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to store hops filesL %w", err)
+		return nil, fmt.Errorf("Unable to store hops files %w", err)
 	}
 
 	return runner, nil
@@ -80,16 +81,77 @@ func (r *Runner) SequenceCallback(
 	r.logger.Debug().Msg("Successfully parsed hops file")
 
 	// TODO: Run all sensors concurrently via goroutines
-	var sensorErrors error
+	var mergedErrors error
 	for i := range hop.Ons {
 		sensor := &hop.Ons[i]
-		err := r.dispatchCalls(ctx, sensor, sequenceId, logger)
+
+		done, err := r.checkIfDone(ctx, sensor, sequenceId, msgBundle, logger)
 		if err != nil {
-			sensorErrors = multierror.Append(sensorErrors, err)
+			mergedErrors = multierror.Append(mergedErrors, err)
+		}
+		if done {
+			continue
+		}
+
+		err = r.dispatchCalls(ctx, sensor, sequenceId, logger)
+		if err != nil {
+			mergedErrors = multierror.Append(mergedErrors, err)
 		}
 	}
 
-	return sensorErrors
+	return mergedErrors
+}
+
+func (r *Runner) checkIfDone(ctx context.Context, sensor *dsl.OnAST, sequenceId string, msgBundle nats.MessageBundle, logger zerolog.Logger) (bool, error) {
+	if sensor.Done != nil {
+		err := r.dispatchDone(ctx, sensor.Slug, sensor.Done, sequenceId, logger)
+		return true, err
+	}
+
+	// If all dispatchable calls have results already, then we're done regardless
+	done := true
+	for _, call := range sensor.Calls {
+		_, ok := msgBundle[call.Slug]
+		if !ok {
+			done = false
+			break
+		}
+	}
+
+	if done {
+		done := &dsl.DoneAST{
+			Result: []byte("{}"),
+		}
+		err := r.dispatchDone(ctx, sensor.Slug, done, sequenceId, logger)
+		return true, err
+	}
+
+	return false, nil
+}
+
+func (r *Runner) dispatchDone(ctx context.Context, onSlug string, done *dsl.DoneAST, sequenceId string, logger zerolog.Logger) error {
+	logger = logger.With().Str("on", onSlug).Logger()
+
+	err, sent := r.natsClient.PublishResult(
+		ctx,
+		time.Now(),
+		done.Result,
+		done.Error,
+		nats.ChannelNotify,
+		sequenceId,
+		onSlug,
+		nats.DoneMessageId,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if sent {
+		logger.Info().Msg("Pipeline is done")
+	}
+
+	return nil
 }
 
 func (r *Runner) dispatchCalls(ctx context.Context, sensor *dsl.OnAST, sequenceId string, logger zerolog.Logger) error {
@@ -128,11 +190,7 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 	}
 
 	_, _, err := r.natsClient.Publish(ctx, call.Inputs, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
-
-	// At the time of writing, the go client does not contain an error matching
-	// the 'maximum massages per subject exceeded' error.
-	// We match on the code here instead - @manterfield
-	if err != nil && !strings.Contains(err.Error(), "err_code=10077") {
+	if err != nil {
 		errorchan <- err
 		return
 	}

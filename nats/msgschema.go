@@ -9,6 +9,7 @@ import (
 )
 
 const HopsMessageId = "hops"
+const DoneMessageId = "done"
 
 type (
 	// HopsResultMeta is metadata included in the top level of a result message
@@ -23,6 +24,7 @@ type (
 		AppName          string
 		Channel          string
 		ConsumerSequence uint64
+		Done             bool
 		HandlerName      string
 		MessageId        string
 		SequenceId       string
@@ -108,6 +110,10 @@ func (m *MsgMeta) initTokens() error {
 	m.Channel = subjectTokens[1]
 	m.SequenceId = subjectTokens[2]
 	m.MessageId = subjectTokens[3]
+
+	if len(subjectTokens) == 5 {
+		m.Done = subjectTokens[4] == DoneMessageId
+	}
 
 	if m.Channel == ChannelNotify {
 		return nil

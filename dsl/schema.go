@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 )
@@ -85,6 +86,7 @@ type HopAST struct {
 	Ons          []OnAST
 	Tasks        []TaskAST
 	SlugRegister map[string]bool
+	StartedAt    time.Time
 }
 
 func (h *HopAST) ListTasks() []TaskAST {
@@ -120,10 +122,8 @@ type CallAST struct {
 }
 
 type DoneAST struct {
-	Completed bool
-	Errored   bool
-	Error     []byte
-	Result    []byte
+	Error  error
+	Result []byte
 }
 
 type ConditionalAST struct {

@@ -103,7 +103,7 @@ func TestValidParseResponseStep(t *testing.T) {
 	// Ensure the slugs align with what we want
 	assert.Equal(t, hop.Ons[0].Calls[0].Slug, "a_sensor-first_task")
 
-	// Ensure the done block is generated and check the values
+	// Ensure the done block is empty
 	assert.Nil(t, hop.Ons[0].Done)
 }
 
@@ -143,8 +143,8 @@ func TestValidParseDone(t *testing.T) {
 	require.NotNil(t, hop.Ons[0].Done)
 
 	done := hop.Ons[0].Done
-	assert.True(t, done.Completed)
-	assert.False(t, done.Errored)
+	assert.NotNil(t, done.Result)
+	assert.NoError(t, done.Error)
 }
 
 func TestInvalidParse(t *testing.T) {
