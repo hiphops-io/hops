@@ -191,6 +191,9 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 	msgBundle := MessageBundle{}
 
 	msgCtx, err := cons.Messages()
+	if msgCtx != nil {
+		defer msgCtx.Stop()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Unable to read back messages: %w", err)
 	}
