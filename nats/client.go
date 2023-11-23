@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -44,6 +45,8 @@ type (
 		SequenceCallback(context.Context, string, MessageBundle) error
 	}
 )
+
+var TimeoutError = errors.New("timeout reached")
 
 // NewClient returns a new hiphops specific NATS client
 //
@@ -253,7 +256,17 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]*MsgMe
 	}
 	n := info.NumPending
 
+	// Handle case where nextMsgWithTimeout times out
+	shouldStop := true
+
 	msgCtx, err := cons.Messages()
+	if msgCtx != nil {
+		defer func() {
+			if shouldStop {
+				msgCtx.Stop()
+			}
+		}()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Unable to read back messages: %w", err)
 	}
@@ -261,6 +274,10 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]*MsgMe
 	for i := uint64(0); i < n; i++ {
 		// Get the next message in the sequence
 		rawM, err := nextMsgWithTimeout(msgCtx, time.Second)
+		if errors.Is(err, TimeoutError) {
+			// stop has already been called on msgCtx
+			shouldStop = false
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -503,6 +520,9 @@ func nextMsgWithTimeout(msgs jetstream.MessagesContext, timeoutDuration time.Dur
 
 	// Goroutine calls Next()
 	go func() {
+		defer close(msgChan)
+		defer close(errChan)
+
 		msg, err := msgs.Next()
 		if err != nil {
 			errChan <- err
@@ -518,6 +538,9 @@ func nextMsgWithTimeout(msgs jetstream.MessagesContext, timeoutDuration time.Dur
 	case err := <-errChan:
 		return nil, err
 	case <-time.After(timeoutDuration):
-		return nil, fmt.Errorf("timeout reached")
+		// This happens implicitly when we exit this function,
+		// but we're being explicit so it's clear it's happening
+		msgs.Stop()
+		return nil, TimeoutError
 	}
 }
