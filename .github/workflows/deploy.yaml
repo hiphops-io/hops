@@ -25,33 +25,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout & setup
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.ref }}
+    - name: Checkout & setup
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.ref }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: 19
+    - name: Setup Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: 19
 
-      - name: Install dependencies
-        working-directory: console
-        run: |
-          # install pnpm
-          npm install -g pnpm
-          # install dependencies
-          pnpm install
+    - name: Install dependencies
+      working-directory: console
+      run: |
+        # install pnpm
+        npm install -g pnpm
+        # install dependencies
+        pnpm install
 
-      - name: Build project
-        working-directory: console
-        run: pnpm run build
+    - name: Build project
+      working-directory: console
+      run: pnpm run build
 
-      - name: Cache the build
-        uses: actions/cache/save@v3
-        with:
-          path: assets/console
-          key: ${{ inputs.ref }}-console
+    - name: Cache the build
+      uses: actions/cache/save@v3
+      with:
+        path: assets/console
+        key: ${{ inputs.ref }}-console
 
   release-binary:
     name: Build And Release Binaries
