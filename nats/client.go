@@ -15,6 +15,9 @@ import (
 const (
 	ChannelNotify  = "notify"
 	ChannelRequest = "request"
+
+	// How far back to look for events by default
+	DefaultEventLookback = -time.Hour
 )
 
 type (
@@ -297,15 +300,6 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) (*EventLo
 	}
 
 	return &eventLog, nil
-}
-
-// GetEventHistoryDefault pulls historic events from the stream starting from
-// 1 hour ago. The list is returned with most recent events first
-//
-// Additional metadata is added to indicate the start and end timestamps of the
-// event list
-func (c *Client) GetEventHistoryDefault(ctx context.Context) (*EventLog, error) {
-	return c.GetEventHistory(ctx, time.Now().Add(-time.Hour))
 }
 
 func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error) {

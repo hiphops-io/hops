@@ -10,6 +10,7 @@ import (
 
 const HopsMessageId = "hops"
 const DoneMessageId = "done"
+const SourceMessageId = "event"
 
 type (
 	// HopsResultMeta is metadata included in the top level of a result message
@@ -164,9 +165,9 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 func EventFilter(accountId string) string {
 	tokens := []string{
 		accountId,
-		"notify",
+		ChannelNotify,
 		"*",
-		"event",
+		SourceMessageId,
 	}
 
 	return strings.Join(tokens, ".")
