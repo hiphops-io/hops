@@ -82,11 +82,6 @@ jobs:
           path: assets/console
           key: ${{ inputs.ref }}-console
 
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.21
-
       - name: Build
         run: |
           # binary suffix
