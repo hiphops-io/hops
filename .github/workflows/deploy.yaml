@@ -139,6 +139,7 @@ jobs:
             zip/*.zip
   
   release-docker:
+    if: inputs.env == 'live'
     runs-on: ubuntu-latest
 
     steps:
