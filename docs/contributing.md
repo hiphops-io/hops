@@ -35,6 +35,18 @@ If working on the console specifically, you can start hops independently and run
 To run tests, from the root of the repo run:
 `go test ./... -test.v`
 
+### Code style guide
+
+- Imports are grouped by “publicness”. Split them into std lib first, then third party, then ours. You will have to add lines between the sections so that go doesn’t auto sort them.
+- All types in a file are declared at the top in a single type block. They are ordered alphabetically (public first, then private).
+- For functions and methods, the order is:
+  - Alpha ordered public constructors (things that create/return the struct and aren’t receivers, typically named `NewStructName`)
+  - Alpha ordered public receivers for that struct
+  - Alpha ordered private receivers
+  - Alpha ordered everything else.
+- All setup functions for a struct are named `initThing` (not the constructors, as they would call the init* function)
+- Use logger interfaces over concrete types
+
 ### Test style guide
 
 #### Test that code produces the correct result, not that it works a certain way

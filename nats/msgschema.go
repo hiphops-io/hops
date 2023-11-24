@@ -10,6 +10,7 @@ import (
 
 const HopsMessageId = "hops"
 const DoneMessageId = "done"
+const SourceMessageId = "event"
 
 type (
 	// HopsResultMeta is metadata included in the top level of a result message
@@ -29,6 +30,7 @@ type (
 		MessageId        string
 		SequenceId       string
 		StreamSequence   uint64
+		Timestamp        time.Time
 		msg              jetstream.Msg
 	}
 
@@ -57,6 +59,10 @@ func Parse(msg jetstream.Msg) (*MsgMeta, error) {
 	}
 
 	return message, nil
+}
+
+func (m *MsgMeta) Msg() jetstream.Msg {
+	return m.msg
 }
 
 func (m *MsgMeta) ResponseSubject() string {
@@ -89,6 +95,7 @@ func (m *MsgMeta) initMetadata() error {
 
 	m.StreamSequence = meta.Sequence.Stream
 	m.ConsumerSequence = meta.Sequence.Consumer
+	m.Timestamp = meta.Timestamp
 
 	return nil
 }
@@ -157,6 +164,17 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 	}
 
 	return resultMsg
+}
+
+func EventFilter(accountId string) string {
+	tokens := []string{
+		accountId,
+		ChannelNotify,
+		"*",
+		SourceMessageId,
+	}
+
+	return strings.Join(tokens, ".")
 }
 
 func ReplayFilterSubject(accountId string, sequenceId string) string {
