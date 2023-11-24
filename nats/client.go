@@ -3,7 +3,6 @@ package nats
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -19,6 +18,13 @@ const (
 
 	// How far back to look for events by default
 	DefaultEventLookback = -time.Hour
+
+	// Number of events returned max
+	GetEventHistoryEventLimit = 100
+
+	// limits for GetEventHistory
+	defaultBatchSize = 160
+	maxWaitTime      = time.Second
 )
 
 type (
@@ -45,8 +51,6 @@ type (
 		SequenceCallback(context.Context, string, MessageBundle) error
 	}
 )
-
-var TimeoutError = errors.New("timeout reached")
 
 // NewClient returns a new hiphops specific NATS client
 //
@@ -237,6 +241,7 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 // GetEventHistory pulls historic events, most recent first, from now back to start time.
 //
 // Times out if events take longer than a second to be received.
+// Only returns the first 100 events. (const GetEventHistoryEventLimit)
 func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]*MsgMeta, error) {
 	events := []*MsgMeta{}
 
@@ -255,28 +260,50 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]*MsgMe
 		return nil, fmt.Errorf("Unable to get consumer info: %w", err)
 	}
 
-	n := info.NumPending
-	if n == 0 {
+	numPending := int(info.NumPending)
+	if numPending == 0 {
 		return events, nil
 	}
 
-	msgs, err := cons.FetchNoWait(int(n))
-	if err != nil {
-		return nil, fmt.Errorf("Unable to fetch messages: %w", err)
-	}
-	for rawM := range msgs.Messages() {
-		m, err := Parse(rawM)
-		if err != nil {
-			c.logger.Errf(err, "Unable to parse message")
-			return nil, err
+	for {
+		// Don't call more than is in the stream (otherwise have to wait for timeout)
+		var batchSize int
+		if numPending > defaultBatchSize {
+			batchSize = defaultBatchSize
+		} else {
+			batchSize = numPending
 		}
 
-		// Prepend to the events
-		events = append([]*MsgMeta{m}, events...)
+		msgs, err := cons.Fetch(batchSize, jetstream.FetchMaxWait(maxWaitTime))
+		if err != nil {
+			return nil, fmt.Errorf("Unable to fetch messages: %w", err)
+		}
+
+		for rawM := range msgs.Messages() {
+			m, err := Parse(rawM)
+			if err != nil {
+				c.logger.Errf(err, "Unable to parse message")
+				return nil, err
+			}
+
+			// count down so we don't have to timeout on the last fetch
+			numPending--
+
+			// Prepend to the events
+			events = append([]*MsgMeta{m}, events...)
+		}
+
+		// Keep only the first 100 items
+		if len(events) > 100 {
+			events = events[:100]
+		}
+
+		// If we've got all the events, we can stop
+		if numPending == 0 {
+			break
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
+
 	c.logger.Debugf("Events received %d", len(events))
 
 	return events, nil

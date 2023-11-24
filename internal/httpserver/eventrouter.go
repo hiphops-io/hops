@@ -49,6 +49,9 @@ func EventRouter(eventsClient EventsClient, logger zerolog.Logger) chi.Router {
 	return r
 }
 
+// listEvents returns a list of events in reverse chronological order, with a
+// default lookback of 1 hour and a limit of 100 events. (const nats.DefaultEventLookback,
+// const nats.GetEventHistoryEventLimit)
 func (c *eventController) listEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
