@@ -13,7 +13,7 @@ import (
 
 type (
 	EventsClient interface {
-		GetEventHistory(ctx context.Context, start time.Time) ([]*nats.MsgMeta, error)
+		GetEventHistory(ctx context.Context, start time.Time, sourceOnly bool) ([]*nats.MsgMeta, error)
 	}
 	eventController struct {
 		logger       zerolog.Logger
@@ -55,10 +55,16 @@ func EventRouter(eventsClient EventsClient, logger zerolog.Logger) chi.Router {
 func (c *eventController) listEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
+	query := r.URL.Query()
+
+	sourceOnly := false
+	if query.Get("sourceonly") == "true" {
+		sourceOnly = true
+	}
 	// default lookback
 	start := time.Now().Add(nats.DefaultEventLookback)
 
-	msgs, err := c.eventsClient.GetEventHistory(ctx, start)
+	msgs, err := c.eventsClient.GetEventHistory(ctx, start, sourceOnly)
 	if err != nil {
 		c.logger.Error().Err(err).Msg("Error getting event history")
 		w.WriteHeader(http.StatusInternalServerError)
