@@ -14,6 +14,7 @@ import (
 	natsgo "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/patrickmn/go-cache"
+	"github.com/robfig/cron"
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
@@ -36,6 +37,7 @@ type (
 		hopsKey     string
 		logger      zerolog.Logger
 		natsClient  NatsClient
+		schedules   []*Schedule
 	}
 )
 
@@ -54,10 +56,23 @@ func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger
 		return nil, fmt.Errorf("Unable to store hops files %w", err)
 	}
 
+	err = runner.initHopsSchedules(hops)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to start schedules %w", err)
+	}
+
 	return runner, nil
 }
 
 func (r *Runner) Run(ctx context.Context) error {
+	c := cron.New()
+	defer c.Stop()
+
+	for _, schedule := range r.schedules {
+		c.Schedule(schedule.CronSchedule, schedule)
+	}
+	c.Start()
+
 	return r.natsClient.ConsumeSequences(ctx, r)
 }
 
@@ -221,6 +236,31 @@ func (r *Runner) initHopsBackup(hops *dsl.HopsFiles) error {
 	// Pre-populate local cache (local hops cache item should never expire)
 	r.logger.Debug().Msgf("Populating local cache with hops config: %s", r.hopsKey)
 	r.cache.Set(r.hopsKey, hops.BodyContent, cache.NoExpiration)
+
+	return nil
+}
+
+// initHopsSchedules parses the schedule blocks in a hops config and inits
+// the cron schedules ready for running
+//
+// This function will not run the schedules, just prepare them
+func (r *Runner) initHopsSchedules(hops *dsl.HopsFiles) error {
+	hop, err := dsl.ParseHopsSchedules(hops.BodyContent, r.logger)
+	if err != nil {
+		return err
+	}
+
+	schedules := []*Schedule{}
+	for _, scheduleConf := range hop.ListSchedules() {
+		schedule, err := NewSchedule(scheduleConf, r.natsClient, r.logger)
+		if err != nil {
+			return err
+		}
+
+		schedules = append(schedules, schedule)
+	}
+
+	r.schedules = schedules
 
 	return nil
 }

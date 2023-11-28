@@ -1,7 +1,6 @@
 package dsl
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -68,9 +67,7 @@ func DecodeScheduleBlock(block *hcl.Block, hop *HopAST, evalctx *hcl.EvalContext
 	return nil
 }
 
-func ParseHopsSchedules(ctx context.Context, hopsContent *hcl.BodyContent) (*HopAST, error) {
-	logger := zerolog.Ctx(ctx)
-
+func ParseHopsSchedules(hopsContent *hcl.BodyContent, logger zerolog.Logger) (*HopAST, error) {
 	hop := &HopAST{
 		SlugRegister: make(map[string]bool),
 	}

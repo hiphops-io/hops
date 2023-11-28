@@ -1,9 +1,9 @@
 package dsl
 
 import (
-	"context"
 	"testing"
 
+	"github.com/hiphops-io/hops/logs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,10 +88,10 @@ func TestScheduleParse(t *testing.T) {
 		},
 	}
 
+	logger := logs.NoOpLogger()
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-
 			// Ditch early if we're expecting invalid parsing
 			hopsHcl, _, err := createTmpHopsFile(tc.hops, t)
 			if !tc.validRead {
@@ -100,7 +100,7 @@ func TestScheduleParse(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			hop, err := ParseHopsSchedules(ctx, hopsHcl)
+			hop, err := ParseHopsSchedules(hopsHcl, logger)
 			if !tc.validParse {
 				assert.Error(t, err)
 				return

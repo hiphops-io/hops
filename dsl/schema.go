@@ -95,6 +95,10 @@ type HopAST struct {
 	Tasks        []TaskAST
 }
 
+func (h *HopAST) ListSchedules() []ScheduleAST {
+	return h.Schedules
+}
+
 func (h *HopAST) ListTasks() []TaskAST {
 	return h.Tasks
 }
