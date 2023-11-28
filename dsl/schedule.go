@@ -11,18 +11,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func DecodeSchedules(hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.EvalContext) error {
-	scheduleBlocks := hopsContent.Blocks.OfType(ScheduleID)
-	for _, scheduleBlock := range scheduleBlocks {
-		err := DecodeScheduleBlock(scheduleBlock, hop, evalctx)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func DecodeScheduleBlock(block *hcl.Block, hop *HopAST, evalctx *hcl.EvalContext) error {
 	schedule := ScheduleAST{}
 
@@ -63,6 +51,18 @@ func DecodeScheduleBlock(block *hcl.Block, hop *HopAST, evalctx *hcl.EvalContext
 	}
 
 	hop.Schedules = append(hop.Schedules, schedule)
+
+	return nil
+}
+
+func DecodeSchedules(hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.EvalContext) error {
+	scheduleBlocks := hopsContent.Blocks.OfType(ScheduleID)
+	for _, scheduleBlock := range scheduleBlocks {
+		err := DecodeScheduleBlock(scheduleBlock, hop, evalctx)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
