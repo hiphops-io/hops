@@ -24,6 +24,10 @@ var (
 				Type:       TaskID,
 				LabelNames: []string{"Name"},
 			},
+			{
+				Type:       ScheduleID,
+				LabelNames: []string{"Name"},
+			},
 		},
 	}
 
@@ -79,14 +83,20 @@ var (
 		},
 	}
 
-	ParamID = "param" // Schema defined via tags on the struct
+	ParamID    = "param"    // Schema defined via tags on the struct
+	ScheduleID = "schedule" // Schema defined via tags on the struct
 )
 
 type HopAST struct {
 	Ons          []OnAST
-	Tasks        []TaskAST
+	Schedules    []ScheduleAST
 	SlugRegister map[string]bool
 	StartedAt    time.Time
+	Tasks        []TaskAST
+}
+
+func (h *HopAST) ListSchedules() []ScheduleAST {
+	return h.Schedules
 }
 
 func (h *HopAST) ListTasks() []TaskAST {
@@ -209,4 +219,11 @@ type ParamAST struct {
 	Flag        string `hcl:"flag,optional" json:"flag"`
 	ShortFlag   string `hcl:"shortflag,optional" json:"shortflag"`
 	Required    bool   `hcl:"required,optional" json:"required"`
+}
+
+type ScheduleAST struct {
+	Name   string         `hcl:"name,label" json:"name"`
+	Cron   string         `hcl:"cron,attr" json:"cron"`
+	Inputs []byte         `json:"inputs"` // Inputs is decoded explicitly from remain
+	Remain hcl.Attributes `hcl:",remain"`
 }

@@ -21,6 +21,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nats-io/nats.go v1.30.2
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/robfig/cron v1.2.0
 	github.com/rs/zerolog v1.29.1
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/viper v1.16.0

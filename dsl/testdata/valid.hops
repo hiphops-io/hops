@@ -1,3 +1,10 @@
+schedule foo {
+  cron = ""
+  inputs = {
+
+  }
+}
+
 on change_merged {
   name = "a_sensor"
 
