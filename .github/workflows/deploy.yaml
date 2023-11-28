@@ -52,7 +52,7 @@ jobs:
       with:
         path: assets/console
         key: ${{ inputs.ref }}-console
-  
+
   release-binary:
     name: Build And Release Binaries
     needs: build-console
@@ -137,7 +137,7 @@ jobs:
           tag_name: ${{ inputs.ref }}
           files: |
             zip/*.zip
-  
+
   release-docker:
     if: inputs.env == 'live'
     runs-on: ubuntu-latest
