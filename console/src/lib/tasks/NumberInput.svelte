@@ -27,7 +27,7 @@
 	}
 
 	const valueFromUrl = $page.url.searchParams.get(param.name);
-	let fieldValue = valueFromUrl ? Number(valueFromUrl) : undefined || param.default;
+	let fieldValue = valueFromUrl ? Number(valueFromUrl) : param.default;
 
 	$: fieldValue, setValue();
 
