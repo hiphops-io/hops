@@ -5,9 +5,7 @@
 	import type { PageData } from './$types';
 	import Loading from '$lib/components/Loading.svelte';
 	import type { EventTable } from '$lib/events/api';
-
-	//Set default tab
-	let tab = 'Events';
+	import { goto } from '$app/navigation';
 
 	export let data: PageData;
 
@@ -15,6 +13,7 @@
 	$: tableData = data.tableData;
 	$: ago = data.ago;
 	$: loading = data.tableData === undefined;
+	$: tab = data.tab;
 
 	// Dummy Pipeline data
 	let pipelineData = [
@@ -61,65 +60,34 @@
 			</h2>
 
 			<!--Tabs-->
-			<!-- <div class="mt-10">
-				<ul class="flex space-x-2"> -->
-			<!-- <li>
+			<div class="mt-10">
+				<ul class="flex space-x-2">
+					<li>
 						<button
-							on:click={() => (tab = 'Pipelines')}
-							class={tab === 'Pipelines'
-								? 'bg-white text-black px-6 py-2 border border-black rounded-full font-semibold'
-								: 'text-white border border-white rounded-full px-6 py-2 font-medium'}
-							>Pipelines
-						</button>
-					</li> -->
-			<!-- <li>
-						<button
-							on:click={() => (tab = 'Events')}
+							on:click={() => goto('/console/advanced')}
 							class={tab === 'Events'
 								? 'bg-white text-black px-6 py-2 border border-black rounded-full font-semibold'
 								: 'text-white border border-white rounded-full px-6 py-2 font-medium'}
-							>Event logs
+							>Source Events
 						</button>
-					</li> -->
-			<!-- </ul>
-			</div> -->
+					</li>
+					<li>
+						<button
+							on:click={() => goto('/console/advanced?all=true')}
+							class={tab === 'All'
+								? 'bg-white text-black px-6 py-2 border border-black rounded-full font-semibold'
+								: 'text-white border border-white rounded-full px-6 py-2 font-medium'}
+							>All Events
+						</button>
+					</li>
+				</ul>
+			</div>
 		</div>
 
 		<!-- Container-->
 
-		{#if tab === 'Pipelines'}
-			<div class="pl-8 pr-8 md:pl-20 md:pr-20 pb-16 text-white">
-				<!--Pipelines list container-->
-				{#each pipelineData as pipeline}
-					<a href="/console/advanced/pipeline_name">
-						<div
-							class="dark:bg-[#191919] rounded-lg px-8 py-8 mb-2 border border-[#191919] hover:border hover:border-purple hover:duration-300"
-						>
-							<!--Pipeline title & run indicators-->
-							<div class="flex justify-between">
-								<h2 class="text-2xl text-lightgrey">{pipeline.name}</h2>
-
-								<div class="flex space-x-2">
-									{#each pipeline.pastStatus as status}
-										{#if status === 'success'}
-											<img src="/images/success.svg" alt="success icon" />
-										{:else if status === 'failure'}
-											<img src="/images/failure.svg" alt="failure icon" />
-										{/if}
-									{/each}
-								</div>
-							</div>
-
-							<!-- Pipeline metadata-->
-							<p class="text-midgrey mt-1 font-normal text-base">{pipeline.metadata}</p>
-						</div>
-					</a>
-				{/each}
-			</div>
-		{/if}
-
 		<!--Tasks empty state -->
-		{#if tab === 'Events' && tableData.length == 0}
+		{#if tableData.length == 0}
 			<div class="mx-8 md:mx-20 pb-20 md:space-x-4">
 				<div
 					class="bg-almostblack flex items-center justify-center text-center rounded-lg mt-4 py-60 md:!ml-0"

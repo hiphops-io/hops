@@ -8,9 +8,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+const AllEventId = "*"
 const HopsMessageId = "hops"
 const DoneMessageId = "done"
-const SourceMessageId = "event"
+const SourceEventId = "event"
 
 type (
 	// HopsResultMeta is metadata included in the top level of a result message
@@ -166,12 +167,17 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 	return resultMsg
 }
 
-func EventFilter(accountId string) string {
+func EventFilter(accountId string, sourceOnly bool) string {
+	eventId := AllEventId
+	if sourceOnly == true {
+		eventId = SourceEventId
+	}
+
 	tokens := []string{
 		accountId,
 		ChannelNotify,
 		"*",
-		SourceMessageId,
+		eventId,
 	}
 
 	return strings.Join(tokens, ".")

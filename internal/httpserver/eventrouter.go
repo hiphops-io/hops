@@ -96,7 +96,8 @@ func eventLogFromMsgMetas(msgs []*nats.MsgMeta, start time.Time) (*EventLog, err
 		event := make(Event)
 		err := json.Unmarshal([]byte(m.Msg().Data()), &event)
 		if err != nil {
-			return nil, err
+			// skip as isn't a proper event
+			continue
 		}
 		eventItem := EventItem{
 			Event:      event,
