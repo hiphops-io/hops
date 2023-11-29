@@ -42,7 +42,7 @@
 </script>
 
 <svelte:head>
-	<title>Advanced</title>
+	<title>Events</title>
 	<meta name="description" content="Trigger task flows" />
 </svelte:head>
 
@@ -54,7 +54,7 @@
 
 		<!--Page title-->
 		<div class="md:pl-20 md:pr-20 mx-8 md:mx-auto mt-12 pb-4">
-			<h1 class="text-left text-5xl font-normal mb-2 dark:text-white">Advanced</h1>
+			<h1 class="text-left text-5xl font-normal mb-2 dark:text-white">Events</h1>
 			<h2 class="text-2xl mb-4 text-grey dark:text-white dark:text-opacity-50">
 				Showing recent events
 			</h2>
@@ -64,7 +64,7 @@
 				<ul class="flex space-x-2">
 					<li>
 						<button
-							on:click={() => goto('/console/advanced')}
+							on:click={() => goto('/console/events')}
 							class={tab === 'Events'
 								? 'bg-white text-black px-6 py-2 border border-black rounded-full font-semibold'
 								: 'text-white border border-white rounded-full px-6 py-2 font-medium'}
@@ -73,11 +73,11 @@
 					</li>
 					<li>
 						<button
-							on:click={() => goto('/console/advanced?all=true')}
+							on:click={() => goto('/console/events?all=true')}
 							class={tab === 'All'
 								? 'bg-white text-black px-6 py-2 border border-black rounded-full font-semibold'
 								: 'text-white border border-white rounded-full px-6 py-2 font-medium'}
-							>All Events
+							>All
 						</button>
 					</li>
 				</ul>

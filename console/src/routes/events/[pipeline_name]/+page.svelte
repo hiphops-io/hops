@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tableData } from './dummyData';
-	import PipelineNav from '$lib/advanced/PipelineNav.svelte';
+	import PipelineNav from '$lib/components/PipelineNav.svelte';
 	import TableHeadItem from '$lib/tables/TableHeadItem.svelte';
 	import TableDataCell from '$lib/tables/TableDataCell.svelte';
 	import { slide } from 'svelte/transition';
