@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Writable } from 'svelte/store';
 	import { validators, required, type Validator, Hint } from 'svelte-use-form';
+	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 
 	import type { NumberParam } from './api';
 
@@ -24,7 +26,15 @@
 		fieldValidators.push(required);
 	}
 
-	let fieldValue = param.default;
+	// Get value from the URL if params match param.name
+	const valueFromUrl = $page.url.searchParams.get(param.name);
+
+	// Set fieldValue to valueFromUrl
+	// If its a number, set it to that number
+	// If its undefined and there's no param.default, set it to undefined
+	// If its undefined but there is a param.default, set it to param.default
+	let fieldValue = valueFromUrl ? Number(valueFromUrl) : undefined || param.default;
+
 	$: fieldValue, setValue();
 
 	const setValue = () => {
