@@ -24,6 +24,11 @@ export interface EventItem {
 	event: Event;
 	sequence_id: string;
 	timestamp: string;
+	app_name: string;
+	channel: string;
+	done: boolean;
+	handler_name: string;
+	message_id: string;
 }
 
 export interface EventTable {
@@ -32,6 +37,11 @@ export interface EventTable {
 	event: string;
 	source: string;
 	action: string;
+	appName: string;
+	channel: string;
+	done: string;
+	handlerName: string;
+	messageId: string;
 	JSON: {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		[key: string]: any;
@@ -39,12 +49,23 @@ export interface EventTable {
 }
 
 export function eventToTable(eventItem: EventItem): EventTable {
+	let done = '';
+	if (eventItem.event?.done === true) {
+		done = 'true';
+	} else if (eventItem.event?.done === false) {
+		done = 'false';
+	}
 	return {
 		timestamp: new Date(eventItem.timestamp).toLocaleString(),
 		eventId: eventItem.sequence_id,
 		event: eventItem.event?.hops?.event || '',
 		source: eventItem.event?.hops?.source || '',
 		action: eventItem.event?.hops?.action || '',
+		appName: eventItem.app_name || '',
+		channel: eventItem.channel || '',
+		done,
+		handlerName: eventItem.handler_name || '',
+		messageId: eventItem.message_id || '',
 		JSON: eventItem.event
 	};
 }

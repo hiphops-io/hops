@@ -33,9 +33,14 @@ type (
 
 	// EventItem includes metadata for /events api endpoint
 	EventItem struct {
-		Event      Event     `json:"event"`
-		SequenceId string    `json:"sequence_id"`
-		Timestamp  time.Time `json:"timestamp"`
+		Event       Event     `json:"event"`
+		SequenceId  string    `json:"sequence_id"`
+		Timestamp   time.Time `json:"timestamp"`
+		AppName     string    `json:"app_name"`
+		Channel     string    `json:"channel"`
+		Done        bool      `json:"done"`
+		HandlerName string    `json:"handler_name"`
+		MessageId   string    `json:"message_id"`
 	}
 )
 
@@ -100,9 +105,14 @@ func eventLogFromMsgMetas(msgs []*nats.MsgMeta, start time.Time) (*EventLog, err
 			return nil, fmt.Errorf("Error unmarshalling event: %v", err)
 		}
 		eventItem := EventItem{
-			Event:      event,
-			SequenceId: m.SequenceId,
-			Timestamp:  m.Timestamp,
+			Event:       event,
+			SequenceId:  m.SequenceId,
+			Timestamp:   m.Timestamp,
+			AppName:     m.AppName,
+			Channel:     m.Channel,
+			Done:        m.Done,
+			HandlerName: m.HandlerName,
+			MessageId:   m.MessageId,
 		}
 		events = append(events, eventItem)
 	}

@@ -132,10 +132,42 @@
 						class="w-1/2 bg-white border border-lightrey dark:border-purple dark:bg-[#191919] overflow-scroll h-[60vh] text-black dark:text-white rounded-lg"
 					>
 						<div class="p-8">
-							<h2 class="text-xl mb-8 text-grey dark:text-midgrey">ID: {activeRow.eventId}</h2>
+							<table class="table-auto w-full">
+								<tbody>
+									<tr>
+										<TableDataCell>ID</TableDataCell>
+										<TableDataCell>{activeRow.eventId}</TableDataCell>
+									</tr>
+									{#if activeRow.appName}
+										<tr>
+											<TableDataCell>App Name</TableDataCell>
+											<TableDataCell>{activeRow.appName}</TableDataCell>
+										</tr>
+									{/if}
+									{#if activeRow.channel}
+										<tr>
+											<TableDataCell>Channel</TableDataCell>
+											<TableDataCell>{activeRow.channel}</TableDataCell>
+										</tr>
+									{/if}
+									{#if activeRow.handlerName}
+										<tr>
+											<TableDataCell>Handler Name</TableDataCell>
+											<TableDataCell>{activeRow.handlerName}</TableDataCell>
+										</tr>
+									{/if}
+									{#if activeRow.messageId}
+										<tr>
+											<TableDataCell>Message ID</TableDataCell>
+											<TableDataCell>{activeRow.messageId}</TableDataCell>
+										</tr>
+									{/if}
+								</tbody>
+							</table>
+
 							<!--Pipelines container-->
 
-							<div class="mt-4 mb-12">
+							<div class="mt-4 mt-6 mb-12">
 								<div
 									class="mt-4 mb-12 border-midgrey dark:border-almostblack py-1 text-sm text-grey dark:text-midgrey"
 								>
