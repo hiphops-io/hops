@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -21,7 +22,7 @@ type (
 	}
 
 	// Event is arbitrary json struct of event
-	Event map[string](interface{})
+	Event interface{}
 
 	// EventLog is a list of events with search start and search end timestamps
 	EventLog struct {
@@ -93,11 +94,10 @@ func eventLogFromMsgMetas(msgs []*nats.MsgMeta, start time.Time) (*EventLog, err
 	}
 
 	for _, m := range msgs[:n] {
-		event := make(Event)
+		var event Event
 		err := json.Unmarshal([]byte(m.Msg().Data()), &event)
 		if err != nil {
-			// skip as isn't a proper event
-			continue
+			return nil, fmt.Errorf("Error unmarshalling event: %v", err)
 		}
 		eventItem := EventItem{
 			Event:      event,

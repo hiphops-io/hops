@@ -8,7 +8,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-const AllEventId = "*"
+const AllEventId = ">"
 const HopsMessageId = "hops"
 const DoneMessageId = "done"
 const SourceEventId = "event"
@@ -167,17 +167,17 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 	return resultMsg
 }
 
-func EventFilter(accountId string, sourceOnly bool) string {
-	eventId := AllEventId
-	if sourceOnly == true {
-		eventId = SourceEventId
-	}
-
+// EventLogSubject returns the subject used to get events for display to the
+// user in the UI.
+//
+// accountId: The account id to filter on
+// eventFilter: either AllEventId or SourceEventId
+func EventLogSubject(accountId string, eventFilter string) string {
 	tokens := []string{
 		accountId,
-		ChannelNotify,
 		"*",
-		eventId,
+		"*",
+		eventFilter,
 	}
 
 	return strings.Join(tokens, ".")

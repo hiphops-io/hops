@@ -42,9 +42,9 @@ export function eventToTable(eventItem: EventItem): EventTable {
 	return {
 		timestamp: new Date(eventItem.timestamp).toLocaleString(),
 		eventId: eventItem.sequence_id,
-		event: eventItem.event.hops.event || '',
-		source: eventItem.event.hops.source || '',
-		action: eventItem.event.hops.action || '',
+		event: eventItem.event?.hops?.event || '',
+		source: eventItem.event?.hops?.source || '',
+		action: eventItem.event?.hops?.action || '',
 		JSON: eventItem.event
 	};
 }

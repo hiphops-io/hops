@@ -245,9 +245,16 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 // If sourceOnly is true, only returns source events (i.e. not pipeline events)
 func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnly bool) ([]*MsgMeta, error) {
 	events := []*MsgMeta{}
+	var eventId string
+
+	if sourceOnly {
+		eventId = SourceEventId
+	} else {
+		eventId = AllEventId
+	}
 
 	consumerConf := jetstream.OrderedConsumerConfig{
-		FilterSubjects: []string{EventFilter(c.accountId, sourceOnly)},
+		FilterSubjects: []string{EventLogSubject(c.accountId, eventId)},
 		DeliverPolicy:  jetstream.DeliverByStartTimePolicy,
 		OptStartTime:   &start,
 	}
