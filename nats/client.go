@@ -242,11 +242,19 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 //
 // Times out if events take longer than a second to be received.
 // Only returns the first 100 events. (const GetEventHistoryEventLimit)
-func (c *Client) GetEventHistory(ctx context.Context, start time.Time) ([]*MsgMeta, error) {
+// If sourceOnly is true, only returns source events (i.e. not pipeline events)
+func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnly bool) ([]*MsgMeta, error) {
 	events := []*MsgMeta{}
+	var eventId string
+
+	if sourceOnly {
+		eventId = SourceEventId
+	} else {
+		eventId = AllEventId
+	}
 
 	consumerConf := jetstream.OrderedConsumerConfig{
-		FilterSubjects: []string{EventFilter(c.accountId)},
+		FilterSubjects: []string{EventLogSubject(c.accountId, eventId)},
 		DeliverPolicy:  jetstream.DeliverByStartTimePolicy,
 		OptStartTime:   &start,
 	}

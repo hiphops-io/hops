@@ -37,7 +37,7 @@
 			</DropdownItem>
 
 			<DropdownItem defaultClass="hover:bg-almostblack px-4 py-2 text-sm">
-				<a href="/console/advanced">Advanced</a>
+				<a href="/console/events">Events</a>
 			</DropdownItem>
 
 			<DropdownItem defaultClass="hover:bg-almostblack px-4 py-2 text-sm">

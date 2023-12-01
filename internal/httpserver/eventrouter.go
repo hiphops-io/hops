@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 
 type (
 	EventsClient interface {
-		GetEventHistory(ctx context.Context, start time.Time) ([]*nats.MsgMeta, error)
+		GetEventHistory(ctx context.Context, start time.Time, sourceOnly bool) ([]*nats.MsgMeta, error)
 	}
 	eventController struct {
 		logger       zerolog.Logger
@@ -21,7 +22,7 @@ type (
 	}
 
 	// Event is arbitrary json struct of event
-	Event map[string](interface{})
+	Event interface{}
 
 	// EventLog is a list of events with search start and search end timestamps
 	EventLog struct {
@@ -32,9 +33,14 @@ type (
 
 	// EventItem includes metadata for /events api endpoint
 	EventItem struct {
-		Event      Event     `json:"event"`
-		SequenceId string    `json:"sequence_id"`
-		Timestamp  time.Time `json:"timestamp"`
+		Event       Event     `json:"event"`
+		SequenceId  string    `json:"sequence_id"`
+		Timestamp   time.Time `json:"timestamp"`
+		AppName     string    `json:"app_name"`
+		Channel     string    `json:"channel"`
+		Done        bool      `json:"done"`
+		HandlerName string    `json:"handler_name"`
+		MessageId   string    `json:"message_id"`
 	}
 )
 
@@ -55,10 +61,16 @@ func EventRouter(eventsClient EventsClient, logger zerolog.Logger) chi.Router {
 func (c *eventController) listEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
+	query := r.URL.Query()
+
+	sourceOnly := false
+	if query.Get("sourceonly") == "true" {
+		sourceOnly = true
+	}
 	// default lookback
 	start := time.Now().Add(nats.DefaultEventLookback)
 
-	msgs, err := c.eventsClient.GetEventHistory(ctx, start)
+	msgs, err := c.eventsClient.GetEventHistory(ctx, start, sourceOnly)
 	if err != nil {
 		c.logger.Error().Err(err).Msg("Error getting event history")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -87,15 +99,20 @@ func eventLogFromMsgMetas(msgs []*nats.MsgMeta, start time.Time) (*EventLog, err
 	}
 
 	for _, m := range msgs[:n] {
-		event := make(Event)
+		var event Event
 		err := json.Unmarshal([]byte(m.Msg().Data()), &event)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Error unmarshalling event: %v", err)
 		}
 		eventItem := EventItem{
-			Event:      event,
-			SequenceId: m.SequenceId,
-			Timestamp:  m.Timestamp,
+			Event:       event,
+			SequenceId:  m.SequenceId,
+			Timestamp:   m.Timestamp,
+			AppName:     m.AppName,
+			Channel:     m.Channel,
+			Done:        m.Done,
+			HandlerName: m.HandlerName,
+			MessageId:   m.MessageId,
 		}
 		events = append(events, eventItem)
 	}
