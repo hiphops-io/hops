@@ -127,7 +127,7 @@ func DecodeParamBlock(block *hcl.Block, task *TaskAST, hop *HopAST, evalctx *hcl
 		param.DisplayName = titleCase(param.Name)
 	}
 
-	slug := slugify(param.Name)
+	slug := slugify(task.Name, param.Name)
 
 	if hop.SlugRegister[slug] {
 		return fmt.Errorf("Duplicate param name found: %s", slug)

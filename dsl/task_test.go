@@ -15,7 +15,7 @@ func TestTaskParse(t *testing.T) {
 	type testCase struct {
 		name       string
 		hops       string
-		cmds       []TaskAST
+		tasks      []TaskAST
 		validParse bool
 		validRead  bool
 	}
@@ -25,7 +25,7 @@ func TestTaskParse(t *testing.T) {
 		{
 			name: "Simple valid task",
 			hops: `task foo {}`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{Name: "foo", DisplayName: "Foo"},
 			},
 			validParse: true,
@@ -40,7 +40,7 @@ func TestTaskParse(t *testing.T) {
 				display_name = "Run Foo Task"
 			}
 			`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{Name: "foo", DisplayName: "Run Foo Task"},
 			},
 			validParse: true,
@@ -55,6 +55,74 @@ func TestTaskParse(t *testing.T) {
 			validRead:  false,
 		},
 
+		// Test that tasks with param name same as task name does not throw error
+		{
+			name: "Param name matches task name",
+			hops: `
+				task foo {
+					param foo {}
+				}
+			`,
+			tasks: []TaskAST{
+				{
+					Name:        "foo",
+					DisplayName: "Foo",
+					Params: []ParamAST{
+						{
+							Name:        "foo",
+							DisplayName: "Foo",
+							Type:        "string",
+							Flag:        "--foo",
+						},
+					},
+				},
+			},
+			validParse: true,
+			validRead:  true,
+		},
+
+		// Test that tasks with same named params do not throw an error
+		{
+			name: "Shared param names",
+			hops: `
+				task first {
+					param bar {}
+				}
+
+				task second {
+					param bar {}
+				}
+			`,
+			tasks: []TaskAST{
+				{
+					Name:        "first",
+					DisplayName: "First",
+					Params: []ParamAST{
+						{
+							Name:        "bar",
+							DisplayName: "Bar",
+							Type:        "string",
+							Flag:        "--bar",
+						},
+					},
+				},
+				{
+					Name:        "second",
+					DisplayName: "Second",
+					Params: []ParamAST{
+						{
+							Name:        "bar",
+							DisplayName: "Bar",
+							Type:        "string",
+							Flag:        "--bar",
+						},
+					},
+				},
+			},
+			validParse: true,
+			validRead:  true,
+		},
+
 		// Test metadata fields are parsed
 		{
 			name: "Simple valid task with metadata",
@@ -63,7 +131,7 @@ func TestTaskParse(t *testing.T) {
 				description = "Run you a foo for great good!"
 				emoji = "🤖"
 			}`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{
 					Name:        "run_foo",
 					DisplayName: "Run Foo",
@@ -82,7 +150,7 @@ func TestTaskParse(t *testing.T) {
 			hops: `
 		task foo {}
 		task foo {}`,
-			cmds:       []TaskAST{},
+			tasks:      []TaskAST{},
 			validParse: false,
 			validRead:  true,
 		},
@@ -96,7 +164,7 @@ func TestTaskParse(t *testing.T) {
 		}
 
 		task foo {}`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{Name: "foo", DisplayName: "Foo"},
 			},
 			validParse: true,
@@ -110,7 +178,7 @@ func TestTaskParse(t *testing.T) {
 		task foo {
 			param a {}
 		}`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
@@ -141,7 +209,7 @@ task foo {
 		help = "Helpful help"
 	}
 }`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
@@ -178,7 +246,7 @@ task foo {
 				type = "bool"
 			}
 		}`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
@@ -217,7 +285,7 @@ task foo {
 				type = "number"
 			}
 		}`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
@@ -248,7 +316,7 @@ task foo {
 				default = true
 			}
 		}`,
-			cmds:       []TaskAST{},
+			tasks:      []TaskAST{},
 			validParse: false,
 			validRead:  true,
 		},
@@ -263,7 +331,7 @@ task foo {
 				default = "foo" == "foo"
 			}
 		}`,
-			cmds: []TaskAST{
+			tasks: []TaskAST{
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
@@ -294,7 +362,7 @@ task foo {
 				default = "whatever"
 			}
 		}`,
-			cmds:       []TaskAST{},
+			tasks:      []TaskAST{},
 			validParse: false,
 			validRead:  true,
 		},
@@ -307,7 +375,7 @@ task foo {
 			param a {}
 			param a {}
 		}`,
-			cmds:       []TaskAST{},
+			tasks:      []TaskAST{},
 			validParse: false,
 			validRead:  true,
 		},
@@ -315,7 +383,7 @@ task foo {
 		{
 			name:       "No tasks",
 			hops:       `on push {}`,
-			cmds:       []TaskAST{},
+			tasks:      []TaskAST{},
 			validParse: true,
 			validRead:  true,
 		},
@@ -340,8 +408,8 @@ task foo {
 			}
 			require.NoError(t, err)
 
-			assert.ElementsMatch(t, tc.cmds, hop.Tasks)
-			assert.ElementsMatch(t, tc.cmds, hop.ListTasks())
+			assert.ElementsMatch(t, tc.tasks, hop.Tasks)
+			assert.ElementsMatch(t, tc.tasks, hop.ListTasks())
 		})
 	}
 }
