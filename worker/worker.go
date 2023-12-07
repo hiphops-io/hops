@@ -10,6 +10,7 @@ import (
 
 type (
 	App interface {
+		AppName() string
 		Handlers() map[string]Handler
 	}
 
@@ -37,8 +38,9 @@ func NewWorker(natsClient *nats.Client, app App, logger Logger) *Worker {
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+	consumerName := w.app.AppName()
 	// Get the ack deadline
-	ackDeadline := w.natsClient.Consumer.CachedInfo().Config.AckWait
+	ackDeadline := w.natsClient.Consumers[consumerName].CachedInfo().Config.AckWait
 
 	callback := func(msg jetstream.Msg) {
 		startedAt := time.Now()
@@ -89,7 +91,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	w.logger.Infof("Listening for requests")
 
 	// Blocks until cancelled or errors
-	return w.natsClient.Consume(ctx, callback)
+	return w.natsClient.Consume(ctx, consumerName, callback)
 }
 
 // runHandler runs a WorkHandler function whilst automatically extending the ack deadline until completion

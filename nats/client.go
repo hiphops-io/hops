@@ -16,6 +16,7 @@ const (
 	ChannelNotify  = "notify"
 	ChannelRequest = "request"
 
+	DefaultConsumerName = "runner"
 	// How far back to look for events by default
 	DefaultEventLookback = -time.Hour
 
@@ -29,9 +30,9 @@ const (
 
 type (
 	Client struct {
-		NatsConn    *nats.Conn
+		Consumers   map[string]jetstream.Consumer
 		JetStream   jetstream.JetStream
-		Consumer    jetstream.Consumer
+		NatsConn    *nats.Conn
 		SysObjStore nats.ObjectStore
 		accountId   string
 		logger      Logger
@@ -60,6 +61,7 @@ func NewClient(natsUrl string, accountId string, logger Logger, clientOpts ...Cl
 	ctx := context.Background()
 
 	natsClient := &Client{
+		Consumers: map[string]jetstream.Consumer{},
 		accountId: accountId,
 		logger:    logger,
 	}
@@ -69,12 +71,6 @@ func NewClient(natsUrl string, accountId string, logger Logger, clientOpts ...Cl
 	}
 
 	err = natsClient.initJetStream()
-	if err != nil {
-		defer natsClient.Close()
-		return nil, err
-	}
-
-	err = natsClient.initConsumer(ctx, accountId)
 	if err != nil {
 		defer natsClient.Close()
 		return nil, err
@@ -110,16 +106,21 @@ func (c *Client) Close() {
 	c.NatsConn.Drain()
 }
 
-// Consume consumes messages from the HopsNats.Consumer
+// Consume consumes messages from the HopsNats.Consumers[fromConsumer]
 //
 // This will block the calling goroutine until the context is cancelled
 // and can be ran as a long-lived service
-func (c *Client) Consume(ctx context.Context, callback jetstream.MessageHandler) error {
-	consumer, err := c.Consumer.Consume(callback)
+func (c *Client) Consume(ctx context.Context, fromConsumer string, callback jetstream.MessageHandler) error {
+	consumer, found := c.Consumers[fromConsumer]
+	if !found {
+		return fmt.Errorf("Consumer '%s' not found on client", fromConsumer)
+	}
+
+	consumerCtx, err := consumer.Consume(callback)
 	if err != nil {
 		return err
 	}
-	defer consumer.Stop()
+	defer consumerCtx.Stop()
 
 	// Run until context cancelled
 	<-ctx.Done()
@@ -129,7 +130,7 @@ func (c *Client) Consume(ctx context.Context, callback jetstream.MessageHandler)
 
 // ConsumeSequences is a wrapper around consume that presents the aggregate state of a sequence to the callback
 // instead of individual messages.
-func (c *Client) ConsumeSequences(ctx context.Context, handler SequenceHandler) error {
+func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, handler SequenceHandler) error {
 	wrappedCB := func(msg jetstream.Msg) {
 		hopsMsg, err := Parse(msg)
 		if err != nil {
@@ -179,7 +180,7 @@ func (c *Client) ConsumeSequences(ctx context.Context, handler SequenceHandler) 
 		DoubleAck(ctx, msg)
 	}
 
-	return c.Consume(ctx, wrappedCB)
+	return c.Consume(ctx, fromConsumer, wrappedCB)
 }
 
 // FetchMessageBundle pulls all historic messages for a sequenceId from the stream, converting them to a message bundle
@@ -374,17 +375,6 @@ func (c *Client) PutSysObject(name string, data []byte) (*nats.ObjectInfo, error
 	return c.SysObjStore.PutBytes(name, data)
 }
 
-func (c *Client) initConsumer(ctx context.Context, accountId string) error {
-	consumerName := fmt.Sprintf("%s-%s", accountId, ChannelNotify)
-	consumer, err := c.JetStream.Consumer(ctx, accountId, consumerName)
-	if err != nil {
-		return err
-	}
-
-	c.Consumer = consumer
-	return nil
-}
-
 func (c *Client) initJetStream() error {
 	js, err := jetstream.New(c.NatsConn)
 	if err != nil {
@@ -430,92 +420,73 @@ func (c *Client) initObjectStore(ctx context.Context, accountId string) error {
 	return nil
 }
 
-func (c *Client) initReplayConsumer(ctx context.Context, accountId string, sequenceId string) error {
-	// Get the source message from the stream
-	stream, err := c.JetStream.Stream(ctx, accountId)
-	if err != nil {
-		return err
-	}
-
-	// Get the source message to be replayed from the stream
-	sourceMsgSubject := SourceEventSubject(accountId, sequenceId)
-	rawMsg, err := stream.GetLastMsgForSubject(ctx, sourceMsgSubject)
-	if err != nil {
-		return fmt.Errorf("Failed to fetch source event: %w", err)
-	}
-	if rawMsg == nil {
-		return fmt.Errorf("No source event found for subject '%s'", sourceMsgSubject)
-	}
-
-	// Create a new, random replay sequence ID
-	replaySequenceId := fmt.Sprintf("replay-%s", uuid.NewString()[:20])
-
-	// Create ephemeral consumer filtered by replayed sequence ID
-	consumerCfg := jetstream.ConsumerConfig{
-		Name:          replaySequenceId,
-		Description:   fmt.Sprintf("Replay request for sequence: '%s'", sequenceId),
-		FilterSubject: ReplayFilterSubject(accountId, replaySequenceId),
-		DeliverPolicy: jetstream.DeliverAllPolicy,
-	}
-	consumer, err := c.JetStream.CreateConsumer(ctx, accountId, consumerCfg)
-	if err != nil {
-		return err
-	}
-
-	// Publish the source message with replayed sequence ID so it's picked up by
-	// ephemeral consumer
-	c.Publish(ctx, rawMsg.Data, ChannelNotify, replaySequenceId, "event")
-
-	// Set the consumer on the client
-	c.Consumer = consumer
-	return nil
-}
-
-func (c *Client) initWorkerConsumer(ctx context.Context, accountId string, appName string) error {
-	name := fmt.Sprintf("%s-%s-%s", accountId, ChannelRequest, appName)
-	// Create or update the consumer, since these are created dynamically
-	consumerCfg := jetstream.ConsumerConfig{
-		Name:          name,
-		Durable:       name,
-		FilterSubject: WorkerRequestSubject(accountId, appName, "*"),
-		AckWait:       1 * time.Minute,
-	}
-	consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, accountId, consumerCfg)
-	if err != nil {
-		return err
-	}
-
-	c.Consumer = consumer
-	return nil
-}
-
 // ClientOpts - passed through to NewClient() to configure the client setup
 
 // DefaultClientOpts configures the hiphops nats.Client as a RunnerClient
 func DefaultClientOpts() []ClientOpt {
 	return []ClientOpt{
-		RunnerClient(),
+		RunnerClient(DefaultConsumerName),
 	}
 }
 
 // ReplayClient initialises the client with a consumer for replaying a sequence
-func ReplayClient(sequenceId string) ClientOpt {
+func ReplayClient(name string, sequenceId string) ClientOpt {
 	return func(c *Client) error {
-		err := c.initReplayConsumer(context.Background(), c.accountId, sequenceId)
+		ctx := context.Background() // TODO: Move all context creation in ClientOpts to argument rather than in function
+
+		// Get the source message from the stream
+		stream, err := c.JetStream.Stream(ctx, c.accountId)
 		if err != nil {
 			return err
 		}
+
+		// Get the source message to be replayed from the stream
+		sourceMsgSubject := SourceEventSubject(c.accountId, sequenceId)
+		rawMsg, err := stream.GetLastMsgForSubject(ctx, sourceMsgSubject)
+		if err != nil {
+			return fmt.Errorf("Failed to fetch source event: %w", err)
+		}
+		if rawMsg == nil {
+			return fmt.Errorf("No source event found for subject '%s'", sourceMsgSubject)
+		}
+
+		// Create a new, random replay sequence ID
+		replaySequenceId := fmt.Sprintf("replay-%s", uuid.NewString()[:20])
+
+		// Create ephemeral consumer filtered by replayed sequence ID
+		consumerCfg := jetstream.ConsumerConfig{
+			Name:          replaySequenceId,
+			Description:   fmt.Sprintf("Replay request for sequence: '%s'", sequenceId),
+			FilterSubject: ReplayFilterSubject(c.accountId, replaySequenceId),
+			DeliverPolicy: jetstream.DeliverAllPolicy,
+		}
+		consumer, err := c.JetStream.CreateConsumer(ctx, c.accountId, consumerCfg)
+		if err != nil {
+			return err
+		}
+
+		// Publish the source message with replayed sequence ID so it's picked up by
+		// ephemeral consumer
+		c.Publish(ctx, rawMsg.Data, ChannelNotify, replaySequenceId, "event")
+
+		// Set the consumer on the client
+		c.Consumers[name] = consumer
 		return nil
 	}
 }
 
 // RunnerClient initialises the client with a consumer for running pipelines
-func RunnerClient() ClientOpt {
+func RunnerClient(name string) ClientOpt {
 	return func(c *Client) error {
-		err := c.initConsumer(context.Background(), c.accountId)
+		ctx := context.Background()
+
+		consumerName := fmt.Sprintf("%s-%s", c.accountId, ChannelNotify)
+		consumer, err := c.JetStream.Consumer(ctx, c.accountId, consumerName)
 		if err != nil {
 			return err
 		}
+
+		c.Consumers[name] = consumer
 		return nil
 	}
 }
@@ -523,10 +494,22 @@ func RunnerClient() ClientOpt {
 // WorkerClient initialises the client with a consumer to receive call requests for a worker
 func WorkerClient(appName string) ClientOpt {
 	return func(c *Client) error {
-		err := c.initWorkerConsumer(context.Background(), c.accountId, appName)
+		ctx := context.Background()
+
+		name := fmt.Sprintf("%s-%s-%s", c.accountId, ChannelRequest, appName)
+		// Create or update the consumer, since these are created dynamically
+		consumerCfg := jetstream.ConsumerConfig{
+			Name:          name,
+			Durable:       name,
+			FilterSubject: WorkerRequestSubject(c.accountId, appName, "*"),
+			AckWait:       1 * time.Minute,
+		}
+		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.accountId, consumerCfg)
 		if err != nil {
 			return err
 		}
+
+		c.Consumers[appName] = consumer
 		return nil
 	}
 }

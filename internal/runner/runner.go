@@ -23,7 +23,7 @@ import (
 
 type (
 	NatsClient interface {
-		ConsumeSequences(context.Context, nats.SequenceHandler) error
+		ConsumeSequences(context.Context, string, nats.SequenceHandler) error
 		GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error)
 		GetSysObject(key string) ([]byte, error)
 		Publish(context.Context, []byte, ...string) (*jetstream.PubAck, bool, error)
@@ -64,7 +64,7 @@ func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger
 	return runner, nil
 }
 
-func (r *Runner) Run(ctx context.Context) error {
+func (r *Runner) Run(ctx context.Context, fromConsumer string) error {
 	c := cron.New()
 	defer c.Stop()
 
@@ -73,7 +73,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 	c.Start()
 
-	return r.natsClient.ConsumeSequences(ctx, r)
+	return r.natsClient.ConsumeSequences(ctx, fromConsumer, r)
 }
 
 func (r *Runner) SequenceCallback(

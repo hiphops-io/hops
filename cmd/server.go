@@ -69,6 +69,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 				ctx,
 				hops,
 				natsClient,
+				nats.DefaultConsumerName,
 				logger,
 			); err != nil {
 				logger.Error().Err(err).Msg("Server start failed")
@@ -82,8 +83,7 @@ func serverCmd(ctx context.Context) *cobra.Command {
 	return serverCmd
 }
 
-// TODO: Add context cancellation with cleanup on SIGINT/SIGTERM https://medium.com/@matryer/make-ctrl-c-cancel-the-context-context-bd006a8ad6ff
-func server(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Client, logger zerolog.Logger) error {
+func server(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Client, fromConsumer string, logger zerolog.Logger) error {
 	logger.Info().Msg("Listening for events")
 
 	runner, err := runner.NewRunner(natsClient, hops, logger)
@@ -91,5 +91,5 @@ func server(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Client, l
 		return err
 	}
 
-	return runner.Run(ctx)
+	return runner.Run(ctx, fromConsumer)
 }
