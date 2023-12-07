@@ -57,19 +57,18 @@ func startCmd(ctx context.Context) *cobra.Command {
 				return err
 			}
 
-			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog)
+			natsClient, err := nats.NewClient(
+				keyFile.NatsUrl(),
+				keyFile.AccountId,
+				&zlog,
+				nats.RunnerClient(nats.DefaultConsumerName),
+				nats.WorkerClient("k8s"),
+			)
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
 			}
 			defer natsClient.Close()
-
-			natsWorkerClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog, nats.WorkerClient("k8s"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to start NATS worker client")
-				return err
-			}
-			defer natsWorkerClient.Close()
 
 			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
 			if err != nil {
@@ -96,6 +95,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 					ctx,
 					hops,
 					natsClient,
+					nats.DefaultConsumerName,
 					logger,
 				)
 				if err != nil {
@@ -106,7 +106,7 @@ func startCmd(ctx context.Context) *cobra.Command {
 			go func() {
 				err := worker(
 					ctx,
-					natsWorkerClient,
+					natsClient,
 					viper.GetString("kubeconfig"),
 					keyFile.AccountId,
 					viper.GetBool("port-forward"),

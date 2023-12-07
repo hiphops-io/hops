@@ -62,7 +62,8 @@ func replayCmd(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("Failed to read hops file: %w", err)
 			}
 
-			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog, nats.ReplayClient(viper.GetString("event")))
+			fromConsumer := "replay"
+			natsClient, err := nats.NewClient(keyFile.NatsUrl(), keyFile.AccountId, &zlog, nats.ReplayClient(fromConsumer, viper.GetString("event")))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to start NATS client")
 				return err
@@ -75,6 +76,7 @@ func replayCmd(ctx context.Context) *cobra.Command {
 				ctx,
 				hops,
 				natsClient,
+				fromConsumer,
 				logger,
 			); err != nil {
 				logger.Error().Err(err).Msg("Replay failed")

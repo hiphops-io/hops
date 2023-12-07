@@ -98,6 +98,10 @@ func NewK8sHandler(
 	return k, nil
 }
 
+func (k *K8sHandler) AppName() string {
+	return "k8s"
+}
+
 func (k *K8sHandler) Handlers() map[string]worker.Handler {
 	handlers := map[string]worker.Handler{}
 	handlers["run"] = k.RunPod

@@ -24,7 +24,7 @@ func TestNewClient(t *testing.T) {
 	}
 
 	assert.NotNil(t, hopsNats.JetStream, "HopsNats should initialise JetStream")
-	assert.NotNil(t, hopsNats.Consumer, "HopsNats should initialise the Consumer")
+	assert.NotNil(t, hopsNats.Consumers[DefaultConsumerName], "HopsNats should initialise the Consumer")
 }
 
 func TestClientConsume(t *testing.T) {
@@ -43,7 +43,7 @@ func TestClientConsume(t *testing.T) {
 	receivedChan := make(chan testMsg)
 
 	go func() {
-		hopsNats.Consume(ctx, func(m jetstream.Msg) {
+		hopsNats.Consume(ctx, DefaultConsumerName, func(m jetstream.Msg) {
 			m.DoubleAck(ctx) // Ack before logging to avoid race condition in tests
 			receivedChan <- testMsg{
 				subject: m.Subject(),
@@ -94,7 +94,7 @@ func TestClientConsumeSequences(t *testing.T) {
 	sqncHandler := &testSequenceHandler{receivedChan: receivedChan}
 
 	go func() {
-		hopsNats.ConsumeSequences(ctx, sqncHandler)
+		hopsNats.ConsumeSequences(ctx, DefaultConsumerName, sqncHandler)
 	}()
 
 	_, _, err := hopsNats.Publish(ctx, []byte("One"), ChannelNotify, "SEQ_ID", "event")
