@@ -16,13 +16,20 @@ limitations under the License.
 package main
 
 import (
-	"os"
+	"log"
 
 	"github.com/hiphops-io/hops/cmd"
 )
 
 func main() {
-	if err := cmd.Execute(); err != nil {
-		os.Exit(1)
+	if err := cmd.Run(); err != nil {
+		// TODO: Ideally we'd find a tidy way to use our internal logger for this
+		// so we have consistent log formats
+		log.Fatal(err)
 	}
+
+	// TODO: Cleanup
+	// if err := cmd.Execute(); err != nil {
+	// 	os.Exit(1)
+	// }
 }

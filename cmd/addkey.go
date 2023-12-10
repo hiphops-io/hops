@@ -18,51 +18,58 @@ package cmd
 import (
 	"os"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/hiphops-io/hops/logs"
+	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v2/altsrc"
 )
 
 const (
 	addkeyShortDesc = "Add your hiphops keyfile"
 	addkeyLongDesc  = `Add your hiphops keyfile to the default location (or --keyfile path if set).
 
-	The hiphops key can be found on your hiphops.io account page.
-	If you are not the account owner, they must provide it to you.
-	
-	Warning: If you have a keyfile already present in the default location, it will be overwritten.
+The hiphops key can be found on your hiphops.io account page.
+If you are not the account owner, they must provide it to you.
 
-	Note: Adding your keyfile can be done manually by saving the key contents to file
-	either in the default location ($ROOTDIR/hiphops.key) or a location of your choosing and
-	passing in the --keyfile=MYPATH flag. The outcome will be identical.
-	`
+Warning: If you have a keyfile already present in the default location, it will be overwritten.
+
+Note: Adding your keyfile can be done manually by saving the key contents to file
+either in the default location ($ROOTDIR/hiphops.key) or a location of your choosing and
+passing in the --keyfile=MYPATH flag. The outcome will be identical.
+`
 )
 
-// addkeyCmd is a helper function to load a hiphops key into the correct location
-func addkeyCmd() *cobra.Command {
-	addkeyCmd := &cobra.Command{
-		Use:   "addkey",
-		Short: addkeyShortDesc,
-		Long:  addkeyLongDesc,
-		RunE:  addkey,
+func initAddKeyCommand(commonFlags []cli.Flag) *cli.Command {
+	addkeyFlags := []cli.Flag{
+		&cli.StringFlag{
+			Name:     "keydata",
+			Usage:    "The hiphops key as taken from the account page",
+			Required: true,
+		},
 	}
+	addkeyFlags = append(addkeyFlags, commonFlags...)
+	before := altsrc.InitInputSourceWithContext(
+		addkeyFlags,
+		altsrc.NewYamlSourceFromFlagFunc(configFlagName),
+	)
 
-	addkeyCmd.Flags().String("keydata", "", "The hiphops key as taken from the account page")
-	addkeyCmd.MarkFlagRequired("keydata")
-	viper.BindPFlag("keydata", addkeyCmd.Flags().Lookup("keydata"))
+	return &cli.Command{
+		Name:        "addkey",
+		Usage:       addkeyShortDesc,
+		Description: addkeyLongDesc,
+		Before:      before,
+		Flags:       addkeyFlags,
+		Action: func(c *cli.Context) error {
+			logger := logs.InitLogger(c.Bool("debug"))
 
-	return addkeyCmd
-}
+			err := overwriteFile(c.String("keyfile"), []byte(c.String("keydata")))
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to write keyfile")
+				return err
+			}
 
-func addkey(cmd *cobra.Command, args []string) error {
-	logger := cmdLogger()
-
-	err := overwriteFile(viper.GetString("keyfile"), []byte(viper.GetString("keydata")))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to write keyfile")
-		return err
+			return nil
+		},
 	}
-
-	return nil
 }
 
 func overwriteFile(filepath string, content []byte) error {
