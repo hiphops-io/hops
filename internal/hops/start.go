@@ -11,6 +11,7 @@ import (
 	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/httpserver"
 	"github.com/hiphops-io/hops/internal/k8sapp"
+	"github.com/hiphops-io/hops/internal/kvapp"
 	"github.com/hiphops-io/hops/internal/runner"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
@@ -40,6 +41,7 @@ type (
 		ReplayEvent string
 		Console
 		K8sApp
+		KVApp
 		Runner
 	}
 
@@ -47,6 +49,10 @@ type (
 		KubeConfig  string
 		Serve       bool
 		PortForward bool
+	}
+
+	KVApp struct {
+		Serve bool
 	}
 
 	Runner struct {
@@ -129,13 +135,25 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		}()
 	}
 
+	if h.KVApp.Serve {
+		go func() {
+			err := startKVWorker(
+				ctx,
+				natsClient,
+				h.Logger,
+			)
+			if err != nil {
+				errs <- err
+			}
+		}()
+	}
+
 	if h.K8sApp.Serve {
 		go func() {
 			err := startK8sWorker(
 				ctx,
 				natsClient,
 				h.K8sApp.KubeConfig,
-				keyFile.AccountId,
 				h.K8sApp.PortForward,
 				h.Logger,
 			)
@@ -168,7 +186,7 @@ func startRunner(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Clie
 	return runner.Run(ctx, fromConsumer)
 }
 
-func startK8sWorker(ctx context.Context, natsClient *nats.Client, kubeConfPath string, accountId string, requiresPortForward bool, logger zerolog.Logger) error {
+func startK8sWorker(ctx context.Context, natsClient *nats.Client, kubeConfPath string, requiresPortForward bool, logger zerolog.Logger) error {
 	logger = logger.With().Str("from", "k8sapp").Logger()
 
 	k8s, err := k8sapp.NewK8sHandler(ctx, natsClient, kubeConfPath, requiresPortForward, logger)
@@ -184,6 +202,21 @@ func startK8sWorker(ctx context.Context, natsClient *nats.Client, kubeConfPath s
 
 	zlogger := logs.NewNatsZeroLogger(logger)
 	worker := worker.NewWorker(natsClient, k8s, &zlogger)
+
+	// Blocks until complete or errored
+	return worker.Run(ctx)
+}
+
+func startKVWorker(ctx context.Context, natsClient *nats.Client, logger zerolog.Logger) error {
+	logger = logger.With().Str("from", "kvapp").Logger()
+
+	kv, err := kvapp.NewKVHandler(natsClient, logger)
+	if err != nil {
+		return err
+	}
+
+	zlogger := logs.NewNatsZeroLogger(logger)
+	worker := worker.NewWorker(natsClient, kv, &zlogger)
 
 	// Blocks until complete or errored
 	return worker.Run(ctx)
