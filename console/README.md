@@ -29,13 +29,7 @@ You'll need to start the backend so the UI can fetch data, first create a hops c
 mkdir -p ~/.hops && cp dsl/testdata/valid.hops ~/.hops/main.hops
 ```
 
-Then start hops console
-
-```bash
-go run main.go start console -d --address=0.0.0.0:8916
-```
-
-or the following to get the full capabilities.
+Then start hops
 
 ```bash
 go run main.go start -d --address=0.0.0.0:8916
