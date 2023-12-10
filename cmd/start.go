@@ -1,133 +1,132 @@
-/*
-Copyright © 2023 Tom Manterfield <tom@hiphops.io>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-	http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package cmd
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v2/altsrc"
 
-	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/internal/hops"
 	"github.com/hiphops-io/hops/logs"
-	"github.com/hiphops-io/hops/nats"
 )
 
 const (
-	startShortDesc = "Start hops"
-	startLongDesc  = `Start the hops orchestration server, worker, & console in one instance.
+	serveCategory = "Serve"
 
-Orchestration server, console, and worker can be started independently with subcommands:
+	startDescription = `Start Hiphops
 
-hops start console
+Basic usage: 
+	hops start
 
-hops start server
+Start individual components e.g. the runner:
+	hops start --serve-runner
 
-hops start worker
-	`
+Or any combination:
+	hops start --serve-console --serve-runner
+`
 )
 
-// startCmd starts the hops orchestration server, listening for and processing new events
-func startCmd(ctx context.Context) *cobra.Command {
-	startCmd := &cobra.Command{
-		Use:   "start",
-		Short: workerShortDesc,
-		Long:  serverLongDesc,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := cmdLogger()
-			zlog := logs.NewNatsZeroLogger(logger)
+func initStartCommand(commonFlags []cli.Flag) *cli.Command {
+	startFlags := initStartFlags(commonFlags)
+	before := altsrc.InitInputSourceWithContext(
+		startFlags,
+		altsrc.NewYamlSourceFromFlagFunc(configFlagName),
+	)
 
-			keyFile, err := nats.NewKeyFile(viper.GetString("keyfile"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to load keyfile")
-				return err
+	return &cli.Command{
+		Name:        "start",
+		Usage:       "Start Hiphops",
+		Description: startDescription,
+		Before:      before,
+		Flags:       startFlags,
+		Action: func(c *cli.Context) error {
+			ctx := context.Background()
+			logger := logs.InitLogger(c.Bool("debug"))
+
+			hopsServer := &hops.HopsServer{
+				HopsPath:    c.String("hops"),
+				KeyFilePath: c.String("keyfile"),
+				Logger:      logger,
+				ReplayEvent: c.String("replay-event"),
+				Console: hops.Console{
+					Address: c.String("address"),
+					Serve:   c.Bool("serve-console"),
+				},
+				K8sApp: hops.K8sApp{
+					KubeConfig:  c.String("kubeconfig"),
+					PortForward: c.Bool("portforward"),
+					Serve:       c.Bool("serve-k8s"),
+				},
+				Runner: hops.Runner{
+					Serve: c.Bool("serve-runner"),
+				},
 			}
 
-			natsClient, err := nats.NewClient(
-				keyFile.NatsUrl(),
-				keyFile.AccountId,
-				&zlog,
-				nats.RunnerClient(nats.DefaultConsumerName),
-				nats.WorkerClient("k8s"),
-			)
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to start NATS client")
-				return err
-			}
-			defer natsClient.Close()
-
-			hops, err := dsl.ReadHopsFilePath(viper.GetString("hops"))
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to read hops files")
-				return fmt.Errorf("Failed to read hops file: %w", err)
-			}
-
-			errs := make(chan error, 1)
-
-			go func() {
-				err := console(
-					viper.GetString("address"),
-					hops.BodyContent,
-					natsClient,
-					logger,
-				)
-				if err != nil {
-					errs <- err
-				}
-			}()
-
-			go func() {
-				err := server(
-					ctx,
-					hops,
-					natsClient,
-					nats.DefaultConsumerName,
-					logger,
-				)
-				if err != nil {
-					errs <- nil
-				}
-			}()
-
-			go func() {
-				err := worker(
-					ctx,
-					natsClient,
-					viper.GetString("kubeconfig"),
-					keyFile.AccountId,
-					viper.GetBool("port-forward"),
-					logger,
-				)
-				if err != nil {
-					errs <- err
-				}
-			}()
-
-			if err := <-errs; err != nil {
-				logger.Error().Err(err).Msg("Start failed")
-				return err
-			}
-
-			return nil
+			return hopsServer.Start(ctx)
 		},
 	}
+}
 
-	startCmd.PersistentFlags().StringP("address", "a", "127.0.0.1:8916", "address to listen on")
-	viper.BindPFlag("address", startCmd.PersistentFlags().Lookup("address"))
+func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
+	startFlags := []cli.Flag{
+		altsrc.NewStringFlag(
+			&cli.StringFlag{
+				Name:    "address",
+				Aliases: []string{"a", "console.address"},
+				Usage:   "Address to serve console/API on",
+				Value:   "127.0.0.1:8916",
+			},
+		),
+		altsrc.NewStringFlag(
+			&cli.StringFlag{
+				Name:  "replay-event",
+				Usage: "Replay a specific source event against current hops configs. Takes a source event ID",
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:     "serve-console",
+				Aliases:  []string{"console.serve"},
+				Usage:    "Whether to start the console",
+				Category: serveCategory,
+				Value:    true,
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:     "serve-runner",
+				Aliases:  []string{"runner.serve"},
+				Usage:    "Whether to start the workflow runner",
+				Category: serveCategory,
+				Value:    true,
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:     "serve-k8s",
+				Aliases:  []string{"k8s.serve"},
+				Usage:    "Whether to start the k8s app",
+				Category: serveCategory,
+			},
+		),
+		altsrc.NewStringFlag(
+			&cli.StringFlag{
+				Name:     "kubeconfig",
+				Aliases:  []string{"k", "k8s.kubeconfig"},
+				Usage:    "Path to the kubeconfig file for automating k8s (default will use kubernetes standard search locations)",
+				Category: "Kubernetes App",
+				Value:    "",
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:     "portforward",
+				Aliases:  []string{"k8s.portforward"},
+				Usage:    "Whether to auto port-forward, necessary when running outside of a k8s cluster and orchestrating pods",
+				Category: "Kubernetes App",
+			},
+		),
+	}
 
-	return startCmd
+	return append(startFlags, commonFlags...)
 }

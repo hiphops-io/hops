@@ -16,9 +16,7 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
-
-	"github.com/spf13/cobra"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -26,19 +24,13 @@ const (
 	configLongDesc  = "Helper commands to configure hiphops"
 )
 
-// configCmd allows users to easily configure hops
-func configCmd() *cobra.Command {
-	configCmd := &cobra.Command{
-		Use:           "config",
-		Short:         configShortDesc,
-		Long:          configLongDesc,
-		SilenceErrors: true,
-		RunE:          requireSubcommand,
+func initConfigCommand(commonFlags []cli.Flag) *cli.Command {
+	return &cli.Command{
+		Name:        "config",
+		Usage:       configShortDesc,
+		Description: configLongDesc,
+		Subcommands: []*cli.Command{
+			initAddKeyCommand(commonFlags),
+		},
 	}
-
-	return configCmd
-}
-
-func requireSubcommand(cmd *cobra.Command, args []string) error {
-	return fmt.Errorf("%s requires a subcommand", cmd.Name())
 }

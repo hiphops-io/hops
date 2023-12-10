@@ -425,7 +425,7 @@ func (c *Client) initObjectStore(ctx context.Context, accountId string) error {
 // DefaultClientOpts configures the hiphops nats.Client as a RunnerClient
 func DefaultClientOpts() []ClientOpt {
 	return []ClientOpt{
-		RunnerClient(DefaultConsumerName),
+		WithRunner(DefaultConsumerName),
 	}
 }
 
@@ -475,8 +475,8 @@ func ReplayClient(name string, sequenceId string) ClientOpt {
 	}
 }
 
-// RunnerClient initialises the client with a consumer for running pipelines
-func RunnerClient(name string) ClientOpt {
+// WithRunner initialises the client with a consumer for running pipelines
+func WithRunner(name string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
@@ -491,8 +491,8 @@ func RunnerClient(name string) ClientOpt {
 	}
 }
 
-// WorkerClient initialises the client with a consumer to receive call requests for a worker
-func WorkerClient(appName string) ClientOpt {
+// WithWorker initialises the client with a consumer to receive call requests for a worker
+func WithWorker(appName string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
