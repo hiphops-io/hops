@@ -11,7 +11,6 @@ import (
 	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/httpserver"
 	"github.com/hiphops-io/hops/internal/k8sapp"
-	"github.com/hiphops-io/hops/internal/kvapp"
 	"github.com/hiphops-io/hops/internal/runner"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
@@ -41,7 +40,6 @@ type (
 		ReplayEvent string
 		Console
 		K8sApp
-		KVApp
 		Runner
 	}
 
@@ -49,10 +47,6 @@ type (
 		KubeConfig  string
 		Serve       bool
 		PortForward bool
-	}
-
-	KVApp struct {
-		Serve bool
 	}
 
 	Runner struct {
@@ -83,7 +77,7 @@ func (h *HopsServer) Start(ctx context.Context) error {
 	clientOpts := []nats.ClientOpt{}
 	if h.ReplayEvent != "" {
 		runnerConsumer := "replay"
-		clientOpts = append(clientOpts, nats.ReplayClient(runnerConsumer, h.ReplayEvent))
+		clientOpts = append(clientOpts, nats.WithReplay(runnerConsumer, h.ReplayEvent))
 		h.Logger.Info().Msgf("Replaying source event: %s", h.ReplayEvent)
 	} else if h.Runner.Serve {
 		clientOpts = append(clientOpts, nats.WithRunner(nats.DefaultConsumerName))
@@ -131,19 +125,6 @@ func (h *HopsServer) Start(ctx context.Context) error {
 			)
 			if err != nil {
 				errs <- nil
-			}
-		}()
-	}
-
-	if h.KVApp.Serve {
-		go func() {
-			err := startKVWorker(
-				ctx,
-				natsClient,
-				h.Logger,
-			)
-			if err != nil {
-				errs <- err
 			}
 		}()
 	}
@@ -202,21 +183,6 @@ func startK8sWorker(ctx context.Context, natsClient *nats.Client, kubeConfPath s
 
 	zlogger := logs.NewNatsZeroLogger(logger)
 	worker := worker.NewWorker(natsClient, k8s, &zlogger)
-
-	// Blocks until complete or errored
-	return worker.Run(ctx)
-}
-
-func startKVWorker(ctx context.Context, natsClient *nats.Client, logger zerolog.Logger) error {
-	logger = logger.With().Str("from", "kvapp").Logger()
-
-	kv, err := kvapp.NewKVHandler(natsClient, logger)
-	if err != nil {
-		return err
-	}
-
-	zlogger := logs.NewNatsZeroLogger(logger)
-	worker := worker.NewWorker(natsClient, kv, &zlogger)
 
 	// Blocks until complete or errored
 	return worker.Run(ctx)

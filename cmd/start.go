@@ -52,9 +52,6 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 					Address: c.String("address"),
 					Serve:   c.Bool("serve-console"),
 				},
-				KVApp: hops.KVApp{
-					Serve: c.Bool("serve-kv"),
-				},
 				K8sApp: hops.K8sApp{
 					KubeConfig:  c.String("kubeconfig"),
 					PortForward: c.Bool("portforward"),
@@ -109,14 +106,6 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Name:     "serve-k8s",
 				Aliases:  []string{"k8s.serve"},
 				Usage:    "Whether to start the k8s app",
-				Category: serveCategory,
-			},
-		),
-		altsrc.NewBoolFlag(
-			&cli.BoolFlag{
-				Name:     "serve-kv",
-				Aliases:  []string{"kv.serve"},
-				Usage:    "Whether to start the KV app",
 				Category: serveCategory,
 			},
 		),
