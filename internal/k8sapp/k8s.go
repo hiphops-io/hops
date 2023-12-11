@@ -78,7 +78,7 @@ func NewK8sHandler(
 ) (*K8sHandler, error) {
 	k := &K8sHandler{
 		natsClient:          natsClient,
-		logger:              logger.With().Str("from", "k8s-handler").Logger(),
+		logger:              logger,
 		requiresPortForward: requiresPortForward,
 	}
 

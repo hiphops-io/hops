@@ -77,7 +77,7 @@ func (h *HopsServer) Start(ctx context.Context) error {
 	clientOpts := []nats.ClientOpt{}
 	if h.ReplayEvent != "" {
 		runnerConsumer := "replay"
-		clientOpts = append(clientOpts, nats.ReplayClient(runnerConsumer, h.ReplayEvent))
+		clientOpts = append(clientOpts, nats.WithReplay(runnerConsumer, h.ReplayEvent))
 		h.Logger.Info().Msgf("Replaying source event: %s", h.ReplayEvent)
 	} else if h.Runner.Serve {
 		clientOpts = append(clientOpts, nats.WithRunner(nats.DefaultConsumerName))
@@ -135,7 +135,6 @@ func (h *HopsServer) Start(ctx context.Context) error {
 				ctx,
 				natsClient,
 				h.K8sApp.KubeConfig,
-				keyFile.AccountId,
 				h.K8sApp.PortForward,
 				h.Logger,
 			)
@@ -168,7 +167,7 @@ func startRunner(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Clie
 	return runner.Run(ctx, fromConsumer)
 }
 
-func startK8sWorker(ctx context.Context, natsClient *nats.Client, kubeConfPath string, accountId string, requiresPortForward bool, logger zerolog.Logger) error {
+func startK8sWorker(ctx context.Context, natsClient *nats.Client, kubeConfPath string, requiresPortForward bool, logger zerolog.Logger) error {
 	logger = logger.With().Str("from", "k8sapp").Logger()
 
 	k8s, err := k8sapp.NewK8sHandler(ctx, natsClient, kubeConfPath, requiresPortForward, logger)

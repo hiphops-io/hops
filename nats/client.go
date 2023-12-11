@@ -429,8 +429,8 @@ func DefaultClientOpts() []ClientOpt {
 	}
 }
 
-// ReplayClient initialises the client with a consumer for replaying a sequence
-func ReplayClient(name string, sequenceId string) ClientOpt {
+// WithReplay initialises the client with a consumer for replaying a sequence
+func WithReplay(name string, sequenceId string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background() // TODO: Move all context creation in ClientOpts to argument rather than in function
 
