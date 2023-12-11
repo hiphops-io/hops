@@ -36,6 +36,7 @@ type (
 		SysObjStore nats.ObjectStore
 		accountId   string
 		logger      Logger
+		streamName  string
 	}
 
 	// ClientOpt functions configure a nats.Client via NewClient()
@@ -61,9 +62,10 @@ func NewClient(natsUrl string, accountId string, logger Logger, clientOpts ...Cl
 	ctx := context.Background()
 
 	natsClient := &Client{
-		Consumers: map[string]jetstream.Consumer{},
-		accountId: accountId,
-		logger:    logger,
+		Consumers:  map[string]jetstream.Consumer{},
+		accountId:  accountId,
+		streamName: accountId, // Override this using WithStreamName ClientOpt if required.
+		logger:     logger,
 	}
 	err := natsClient.initNatsConnection(natsUrl)
 	if err != nil {
@@ -194,7 +196,7 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 		FilterSubjects: []string{filter},
 		DeliverPolicy:  jetstream.DeliverAllPolicy,
 	}
-	cons, err := c.JetStream.OrderedConsumer(ctx, c.accountId, consumerConf)
+	cons, err := c.JetStream.OrderedConsumer(ctx, c.streamName, consumerConf)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
 	}
@@ -259,7 +261,7 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 		DeliverPolicy:  jetstream.DeliverByStartTimePolicy,
 		OptStartTime:   &start,
 	}
-	cons, err := c.JetStream.OrderedConsumer(ctx, c.accountId, consumerConf)
+	cons, err := c.JetStream.OrderedConsumer(ctx, c.streamName, consumerConf)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
 	}
@@ -319,7 +321,7 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 }
 
 func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error) {
-	stream, err := c.JetStream.Stream(ctx, c.accountId)
+	stream, err := c.JetStream.Stream(ctx, c.streamName)
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +437,7 @@ func WithReplay(name string, sequenceId string) ClientOpt {
 		ctx := context.Background() // TODO: Move all context creation in ClientOpts to argument rather than in function
 
 		// Get the source message from the stream
-		stream, err := c.JetStream.Stream(ctx, c.accountId)
+		stream, err := c.JetStream.Stream(ctx, c.streamName)
 		if err != nil {
 			return err
 		}
@@ -460,7 +462,7 @@ func WithReplay(name string, sequenceId string) ClientOpt {
 			FilterSubject: ReplayFilterSubject(c.accountId, replaySequenceId),
 			DeliverPolicy: jetstream.DeliverAllPolicy,
 		}
-		consumer, err := c.JetStream.CreateConsumer(ctx, c.accountId, consumerCfg)
+		consumer, err := c.JetStream.CreateConsumer(ctx, c.streamName, consumerCfg)
 		if err != nil {
 			return err
 		}
@@ -481,12 +483,23 @@ func WithRunner(name string) ClientOpt {
 		ctx := context.Background()
 
 		consumerName := fmt.Sprintf("%s-%s", c.accountId, ChannelNotify)
-		consumer, err := c.JetStream.Consumer(ctx, c.accountId, consumerName)
+		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
 		if err != nil {
 			return err
 		}
 
 		c.Consumers[name] = consumer
+		return nil
+	}
+}
+
+// WithStreamName overrides the stream name to be used (which default to accountId otherwise)
+//
+// Should be given before any ClientOpts that use the stream,
+// as otherwise they will be initialised with the default stream name
+func WithStreamName(name string) ClientOpt {
+	return func(c *Client) error {
+		c.streamName = name
 		return nil
 	}
 }
@@ -504,7 +517,7 @@ func WithWorker(appName string) ClientOpt {
 			FilterSubject: WorkerRequestSubject(c.accountId, appName, "*"),
 			AckWait:       1 * time.Minute,
 		}
-		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.accountId, consumerCfg)
+		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, consumerCfg)
 		if err != nil {
 			return err
 		}
