@@ -1,3 +1,11 @@
+<script lang="ts">
+	let showCode = false;
+
+	function toggleShowCode() {
+		showCode = !showCode;
+	}
+</script>
+
 <!--Code window & detail/output container-->
 <div class="w-full h-auto space-y-2 px-4">
 	<!--Automation actions-->
@@ -7,9 +15,9 @@
 		</div>
 
 		<div class="flex space-x-6 items-center">
-			<button class="text-nines font-semibold flex text-sm space-x-2">
+			<button on:click={toggleShowCode} class="text-nines font-semibold flex text-sm space-x-2">
 				<img src="images/desktop_app/code-icon.svg" alt="Code icon" />
-				<p>Hide code</p>
+				<p>{showCode ? 'Hide code' : 'Show code'}</p>
 			</button>
 			<button
 				class="bg-purple font-semibold flex px-2 py-1 text-sm rounded-sm space-x-2 items-center"
@@ -20,12 +28,16 @@
 		</div>
 	</div>
 
-	<div class="flex space-x-2 !m-0">
+	<div class="flex !m-0">
 		<!--Code window-->
-		<div class="bg-almostblack w-[50%] h-[660px] rounded-lg" />
+		<div class="bg-almostblack h-[660px] rounded-lg flex {showCode ? 'w-[50%] mr-2' : 'hidden'}">
+			<p class="text-error m-auto">Hops code</p>
+		</div>
 
 		<!--Detail/output window-->
-		<div class="bg-almostblack w-[50%] h-[660px] rounded-lg" />
+		<div class="bg-almostblack h-[660px] rounded-lg flex {showCode ? ' w-[50%]' : 'w-full'}">
+			<p class="text-error m-auto">Detail/output panel</p>
+		</div>
 
 		<!--END code window & detail/output container-->
 	</div>
