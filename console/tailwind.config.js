@@ -17,19 +17,21 @@ const config = {
 				grey: '#666',
 				lightgrey: '#EEE',
 				midgrey: '#DDD',
-				black: '#000',
+				black: '#191919',
 				almostblack: '#282828',
 				white: '#fff',
-				error: '#FF4D4D'
+				error: '#FF4D4D',
 				// flowbite-svelte
+
+				//Desktop colors
+				nines: '#999'
 			},
 			backgroundImage: {
-				grain : "url('/images/light-grain.png')",
+				grain: "url('/images/light-grain.png')"
 			},
-			 boxShadow: {
-        'purpleglow': '0px 0px 24px 4px rgba(205, 114, 252)',
-		
-      }
+			boxShadow: {
+				purpleglow: '0px 0px 24px 4px rgba(205, 114, 252)'
+			}
 		}
 	}
 };
