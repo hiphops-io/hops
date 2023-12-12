@@ -15,6 +15,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 		files             map[string]string // filename -> content
 		expectedContent   string
 		expectedFilePaths []string
+		expectedFileTypes []string
 		expectError       bool
 	}{
 		{
@@ -22,6 +23,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			files:             map[string]string{},
 			expectedContent:   "",
 			expectedFilePaths: []string{},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
@@ -31,6 +33,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "",
 			expectedFilePaths: []string{},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
@@ -40,37 +43,41 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\n",
 			expectedFilePaths: []string{"hops1/a.hops"},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
 			name: "Multiple files",
 			files: map[string]string{
-				"hops1/a.hops": "content of a",
-				"hops1/b.hops": "content of b",
+				"hopsa/a.hops": "content of a",
+				"hopsb/b.hops": "content of b",
 			},
 			expectedContent:   "content of a\ncontent of b\n",
-			expectedFilePaths: []string{"hops1/a.hops", "hops1/b.hops"},
+			expectedFilePaths: []string{"hopsa/a.hops", "hopsb/b.hops"},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
 			name: "Multiple files and ignore root dir",
 			files: map[string]string{
-				"hops1/a.hops": "content of a",
-				"hops1/b.hops": "content of b",
+				"hopsa/a.hops": "content of a",
+				"hopsb/b.hops": "content of b",
 				"c.hops":       "content of a",
 			},
 			expectedContent:   "content of a\ncontent of b\n",
-			expectedFilePaths: []string{"hops1/a.hops", "hops1/b.hops"},
+			expectedFilePaths: []string{"hopsa/a.hops", "hopsb/b.hops"},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
-			name: "Files sorted by filename",
+			name: "Files sorted by filename/directory",
 			files: map[string]string{
-				"hops1/b.hops": "content of b",
-				"hops1/a.hops": "content of a",
+				"hopsb/b.hops": "content of b",
+				"hopsa/a.hops": "content of a",
 			},
 			expectedContent:   "content of a\ncontent of b\n",
-			expectedFilePaths: []string{"hops1/a.hops", "hops1/b.hops"},
+			expectedFilePaths: []string{"hopsa/a.hops", "hopsb/b.hops"},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
@@ -82,6 +89,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\ncontent of c\n",
 			expectedFilePaths: []string{"hopsa/a.hops", "hopsc/c.hops"},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
@@ -93,6 +101,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of b\n",
 			expectedFilePaths: []string{"subdir/b.hops"},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
@@ -104,6 +113,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of c\ncontent of b\ncontent of d\n",
 			expectedFilePaths: []string{"sub1/c.hops", "sub2/b.hops", "sub3/d.hops"},
+			expectedFileTypes: []string{},
 			expectError:       false,
 		},
 		{
@@ -116,7 +126,19 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\ncontent of d\n",
 			expectedFilePaths: []string{"subd/d.hops"},
+			expectedFileTypes: []string{},
 			expectError:       false,
+		},
+		{
+			name: "Only one hops file per subdir",
+			files: map[string]string{
+				"sub1/a.hops": "content of a",
+				"sub1/b.hops": "content of b",
+			},
+			expectedContent:   "",
+			expectedFilePaths: []string{},
+			expectedFileTypes: []string{},
+			expectError:       true,
 		},
 	}
 
@@ -151,6 +173,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				require.Error(t, err)
+				return
 			}
 
 			assert.Equal(

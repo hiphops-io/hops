@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -12,6 +13,12 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
+)
+
+const (
+	HopsExt   = ".hops"
+	HopsFile  = "hops"
+	OtherFile = "other"
 )
 
 type (
@@ -87,15 +94,20 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 // getHopsDirFilePaths returns a slice of all the file paths of .hops files
 // in a directory and its subdirectories excluding dirs with '..' prefix
 func getHopsDirFilePaths(root string) ([]string, error) {
+	seenPath := make(map[string]bool)
+
 	var filePaths []string
+
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
+
 		// Skip the root directory itself
 		if path == root {
 			return nil
 		}
+
 		// Exclude directories whose name starts with '..'
 		// This is because kubernetes configMaps create a set of symlinked
 		// directories for the mapped files and we don't want to pick those
@@ -115,19 +127,36 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		// Check if the file is in a child directory of the root
-		if strings.Count(relativePath, string(filepath.Separator)) == 1 {
-			if !d.IsDir() && filepath.Ext(path) == ".hops" {
-				filePaths = append(filePaths, path)
-			}
+
+		// Ensure file is in a first child directory of the root
+		if strings.Count(relativePath, string(filepath.Separator)) != 1 {
+			return nil
 		}
+
+		// Ensure file is a .hops file
+		if !d.IsDir() && filepath.Ext(path) == HopsExt {
+			// Ensure there is only one hops file per directory
+			dirOnly := filepath.Dir(relativePath)
+			if seenPath[dirOnly] {
+				return fmt.Errorf("Only one hops file per directory allowed: %s", relativePath)
+			}
+
+			// Add hops file to list
+			filePaths = append(filePaths, path)
+
+			seenPath[dirOnly] = true
+		}
+
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	// Sort the file paths to ensure consistent order
 	sort.Strings(filePaths)
 
-	return filePaths, err
+	return filePaths, nil
 }
 
 func readHops(hopsPath string) ([]FileContent, error) {
@@ -174,10 +203,16 @@ func readHopsDir(dirPath string) ([]FileContent, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		fileType := OtherFile
+		if filepath.Ext(relativePath) == HopsExt {
+			fileType = HopsFile
+		}
+
 		files = append(files, FileContent{
 			File:    relativePath,
 			Content: content,
-			Type:    "hops",
+			Type:    fileType,
 		})
 	}
 
