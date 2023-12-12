@@ -36,7 +36,7 @@ type (
 )
 
 // ReadHopsFilePath loads and pre-parses the content of .hops files from all
-// .hops files in the sub directories.
+// .hops files in the first child sub directories.
 // It returns a merged hcl.Body and a sha hash of the contents
 func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 	files, err := readHops(filePath)
@@ -65,14 +65,20 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 
 	// parse the hops files
 	for _, file := range hopsFileContent {
+		// Add all file contents to the hash
+		sha1Hash.Write(file.Content)
+
+		// Do not parse non-hops files
+		if file.Type != HopsFile {
+			continue
+		}
+
 		hopsFile, diags := parser.ParseHCL(file.Content, file.File)
 
 		if diags != nil && diags.HasErrors() {
 			return nil, "", errors.New(diags.Error())
 		}
 		hopsBodies = append(hopsBodies, hopsFile.Body)
-
-		sha1Hash.Write(file.Content)
 	}
 
 	body := hcl.MergeBodies(hopsBodies)
@@ -146,11 +152,11 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 				return fmt.Errorf("Only one hops file per directory allowed: %s", relativePath)
 			}
 
-			// Add hops file to list
-			filePaths = append(filePaths, path)
-
 			seenPath[dirOnly] = true
 		}
+
+		// Add file to list (both .hops and other files)
+		filePaths = append(filePaths, path)
 
 		return nil
 	})
