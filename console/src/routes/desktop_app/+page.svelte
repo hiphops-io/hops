@@ -9,10 +9,14 @@
 
 	let dummyAutomationsData = [
 		{
-			name: 'Automation 1'
+			name: 'Automation 1',
+			type: 'task',
+			hops: 'Hops goes here'
 		},
 		{
-			name: 'Automation 2'
+			name: 'Automation 2',
+			type: 'schedule',
+			hops: 'Hops goes here'
 		}
 	];
 
@@ -26,12 +30,12 @@
 			emoji: '🥨'
 		},
 		{
-			name: 'Request a pretzel',
-			emoji: '🥨'
+			name: 'Launch the rocket',
+			emoji: '🚀'
 		},
 		{
-			name: 'Request a pretzel',
-			emoji: '🥨'
+			name: 'Share the love',
+			emoji: '💓'
 		}
 	];
 
