@@ -84,6 +84,52 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 	return content, filesShaHex, nil
 }
 
+// getHopsDirFilePaths returns a slice of all the file paths of .hops files
+// in a directory and its subdirectories excluding dirs with '..' prefix
+func getHopsDirFilePaths(root string) ([]string, error) {
+	var filePaths []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// Skip the root directory itself
+		if path == root {
+			return nil
+		}
+		// Exclude directories whose name starts with '..'
+		// This is because kubernetes configMaps create a set of symlinked
+		// directories for the mapped files and we don't want to pick those
+		// up. Those directories are named '..<various names>'
+		// Example:
+		// /my-config-map-dir
+		// |-- my-key -> ..data/my-key
+		// |-- ..data -> ..2023_10_19_12_34_56.789012345
+		// |-- ..2023_10_19_12_34_56.789012345
+		// |   |-- my-key
+		if d.IsDir() && strings.HasPrefix(d.Name(), "..") {
+			return filepath.SkipDir
+		}
+
+		// Get relative path from the root
+		relativePath, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		// Check if the file is in a child directory of the root
+		if strings.Count(relativePath, string(filepath.Separator)) == 1 {
+			if !d.IsDir() && filepath.Ext(path) == ".hops" {
+				filePaths = append(filePaths, path)
+			}
+		}
+		return nil
+	})
+
+	// Sort the file paths to ensure consistent order
+	sort.Strings(filePaths)
+
+	return filePaths, err
+}
+
 func readHops(hopsPath string) ([]FileContent, error) {
 	info, err := os.Stat(hopsPath)
 	if err != nil {
@@ -111,36 +157,10 @@ func readHops(hopsPath string) ([]FileContent, error) {
 // readHopsDir retrieves the content of all .hops files in all the subdirectories
 // and returns them as a slice of fileContents
 func readHopsDir(dirPath string) ([]FileContent, error) {
-	filePaths := []string{}
-
-	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		// Exclude directories whose name starts with '..'
-		// This is because kubernetes configMaps create a set of symlinked
-		// directories for the mapped files and we don't want to pick those
-		// up. Those directories are named '..<various names>'
-		// Example:
-		// /my-config-map-dir
-		// |-- my-key -> ..data/my-key
-		// |-- ..data -> ..2023_10_19_12_34_56.789012345
-		// |-- ..2023_10_19_12_34_56.789012345
-		// |   |-- my-key
-		if d.IsDir() && strings.HasPrefix(d.Name(), "..") {
-			return filepath.SkipDir
-		}
-		if !d.IsDir() && filepath.Ext(path) == ".hops" {
-			filePaths = append(filePaths, path)
-		}
-		return nil
-	})
+	filePaths, err := getHopsDirFilePaths(dirPath)
 	if err != nil {
 		return nil, err
 	}
-
-	// Sort the file paths to ensure consistent order
-	sort.Strings(filePaths)
 
 	files := []FileContent{}
 

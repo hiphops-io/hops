@@ -16,7 +16,7 @@ func TestValidParse(t *testing.T) {
 
 	// test that split hops files have identical result as single hops file
 	hopsFiles := []string{
-		"./testdata/valid.hops",
+		"./testdata/valid",
 		"./testdata/multi-hops",
 	}
 
@@ -73,7 +73,7 @@ func TestValidParseResponseStep(t *testing.T) {
 	logger := logs.NoOpLogger()
 	ctx := context.Background()
 
-	hopsFile := "./testdata/valid.hops"
+	hopsFile := "./testdata/valid"
 	eventFile := "./testdata/raw_change_event.json"
 	responseFile := "./testdata/task_response.json"
 
@@ -111,7 +111,7 @@ func TestValidParseDone(t *testing.T) {
 	logger := logs.NoOpLogger()
 	ctx := context.Background()
 
-	hopsFile := "./testdata/valid.hops"
+	hopsFile := "./testdata/valid"
 	eventFile := "./testdata/raw_change_event.json"
 	responseFile := "./testdata/task_response.json"
 
@@ -148,7 +148,7 @@ func TestValidParseDone(t *testing.T) {
 }
 
 func TestInvalidParse(t *testing.T) {
-	hopsFile := "./testdata/invalid.hops"
+	hopsFile := "./testdata/invalid"
 	eventFile := "./testdata/raw_change_event.json"
 	ctx := context.Background()
 	logger := logs.NoOpLogger()
