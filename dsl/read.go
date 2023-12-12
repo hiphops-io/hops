@@ -104,11 +104,6 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 			return err
 		}
 
-		// Skip the root directory itself
-		if path == root {
-			return nil
-		}
-
 		// Get relative path from the root
 		relativePath, err := filepath.Rel(root, path)
 		if err != nil {
