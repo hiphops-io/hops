@@ -151,6 +151,11 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 		resultJson = result
 	}
 
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+
 	resultMsg := ResultMsg{
 		Body:      resultStr,
 		Completed: err == nil,
@@ -159,7 +164,7 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 		Hops: HopsResultMeta{
 			StartedAt:  startedAt,
 			FinishedAt: time.Now(),
-			Error:      err.Error(),
+			Error:      errMsg,
 		},
 		JSON: resultJson,
 	}
