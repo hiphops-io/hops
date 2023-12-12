@@ -28,6 +28,8 @@ const (
 	maxWaitTime      = time.Second
 )
 
+var nameReplacer = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
+
 type (
 	Client struct {
 		Consumers   map[string]jetstream.Consumer
@@ -62,9 +64,10 @@ func NewClient(natsUrl string, accountId string, logger Logger, clientOpts ...Cl
 	ctx := context.Background()
 
 	natsClient := &Client{
-		Consumers:  map[string]jetstream.Consumer{},
-		accountId:  accountId,
-		streamName: accountId, // Override this using WithStreamName ClientOpt if required.
+		Consumers: map[string]jetstream.Consumer{},
+		accountId: accountId,
+		// Override this using WithStreamName ClientOpt if required.
+		streamName: nameReplacer.Replace(accountId),
 		logger:     logger,
 	}
 	err := natsClient.initNatsConnection(natsUrl)
@@ -483,6 +486,8 @@ func WithRunner(name string) ClientOpt {
 		ctx := context.Background()
 
 		consumerName := fmt.Sprintf("%s-%s", c.accountId, ChannelNotify)
+		consumerName = nameReplacer.Replace(consumerName)
+
 		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
 		if err != nil {
 			return err
@@ -510,6 +515,8 @@ func WithWorker(appName string) ClientOpt {
 		ctx := context.Background()
 
 		name := fmt.Sprintf("%s-%s-%s", c.accountId, ChannelRequest, appName)
+		name = nameReplacer.Replace(name)
+
 		// Create or update the consumer, since these are created dynamically
 		consumerCfg := jetstream.ConsumerConfig{
 			Name:          name,
