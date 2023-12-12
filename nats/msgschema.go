@@ -16,7 +16,7 @@ const SourceEventId = "event"
 type (
 	// HopsResultMeta is metadata included in the top level of a result message
 	HopsResultMeta struct {
-		Error      error     `json:"error,omitempty"`
+		Error      string    `json:"error,omitempty"`
 		FinishedAt time.Time `json:"finished_at"`
 		StartedAt  time.Time `json:"started_at"`
 	}
@@ -159,7 +159,7 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 		Hops: HopsResultMeta{
 			StartedAt:  startedAt,
 			FinishedAt: time.Now(),
-			Error:      err,
+			Error:      err.Error(),
 		},
 		JSON: resultJson,
 	}
