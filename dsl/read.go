@@ -35,8 +35,8 @@ type (
 	}
 )
 
-// ReadHopsFilePath loads and pre-parses the content of .hops files either from a
-// single file or from all .hops files in a directory.
+// ReadHopsFilePath loads and pre-parses the content of .hops files from all
+// .hops files in the sub directories.
 // It returns a merged hcl.Body and a sha hash of the contents
 func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 	files, err := readHops(filePath)
@@ -92,11 +92,12 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 }
 
 // getHopsDirFilePaths returns a slice of all the file paths of .hops files
-// in a directory and its subdirectories excluding dirs with '..' prefix
+// in the subdirectories of the root directory, excluding dirs with '..' prefix.
+// Also enforces that there is only one hops file per directory.
 func getHopsDirFilePaths(root string) ([]string, error) {
-	seenPath := make(map[string]bool)
+	seenPath := make(map[string]bool) // map of directories with a hops file
 
-	var filePaths []string
+	var filePaths []string // list of hops file paths to be returned at the end
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -108,24 +109,33 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 			return nil
 		}
 
-		// Exclude directories whose name starts with '..'
-		// This is because kubernetes configMaps create a set of symlinked
-		// directories for the mapped files and we don't want to pick those
-		// up. Those directories are named '..<various names>'
-		// Example:
-		// /my-config-map-dir
-		// |-- my-key -> ..data/my-key
-		// |-- ..data -> ..2023_10_19_12_34_56.789012345
-		// |-- ..2023_10_19_12_34_56.789012345
-		// |   |-- my-key
-		if d.IsDir() && strings.HasPrefix(d.Name(), "..") {
-			return filepath.SkipDir
-		}
-
 		// Get relative path from the root
 		relativePath, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
+		}
+
+		if d.IsDir() {
+			// Exclude directories whose name starts with '..'
+			// This is because kubernetes configMaps create a set of symlinked
+			// directories for the mapped files and we don't want to pick those
+			// up. Those directories are named '..<various names>'
+			// Example:
+			// /my-config-map-dir
+			// |-- my-key -> ..data/my-key
+			// |-- ..data -> ..2023_10_19_12_34_56.789012345
+			// |-- ..2023_10_19_12_34_56.789012345
+			// |   |-- my-key
+			if strings.HasPrefix(d.Name(), "..") {
+				return filepath.SkipDir
+			}
+
+			// No need to visit subdirectories of the subdirectories
+			if strings.Count(relativePath, string(filepath.Separator)) > 1 {
+				return filepath.SkipDir
+			}
+
+			return nil
 		}
 
 		// Ensure file is in a first child directory of the root
@@ -134,7 +144,7 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 		}
 
 		// Ensure file is a .hops file
-		if !d.IsDir() && filepath.Ext(path) == HopsExt {
+		if filepath.Ext(path) == HopsExt {
 			// Ensure there is only one hops file per directory
 			dirOnly := filepath.Dir(relativePath)
 			if seenPath[dirOnly] {
@@ -149,6 +159,7 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 
 		return nil
 	})
+	// File walking is over, check for errors
 	if err != nil {
 		return nil, err
 	}
@@ -159,33 +170,9 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 	return filePaths, nil
 }
 
-func readHops(hopsPath string) ([]FileContent, error) {
-	info, err := os.Stat(hopsPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// read in the hops files and prepare for parsing
-	if info.IsDir() {
-		return readHopsDir(hopsPath)
-	}
-
-	content, err := os.ReadFile(hopsPath)
-	if err != nil {
-		return nil, err
-	}
-
-	files := []FileContent{{
-		File:    hopsPath,
-		Content: content,
-	}}
-
-	return files, nil
-}
-
-// readHopsDir retrieves the content of all .hops files in all the subdirectories
+// readHops retrieves the content of all .hops files in all the subdirectories
 // and returns them as a slice of fileContents
-func readHopsDir(dirPath string) ([]FileContent, error) {
+func readHops(dirPath string) ([]FileContent, error) {
 	filePaths, err := getHopsDirFilePaths(dirPath)
 	if err != nil {
 		return nil, err

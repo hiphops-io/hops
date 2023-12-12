@@ -43,7 +43,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\n",
 			expectedFilePaths: []string{"hops1/a.hops"},
-			expectedFileTypes: []string{},
+			expectedFileTypes: []string{HopsFile},
 			expectError:       false,
 		},
 		{
@@ -54,7 +54,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\ncontent of b\n",
 			expectedFilePaths: []string{"hopsa/a.hops", "hopsb/b.hops"},
-			expectedFileTypes: []string{},
+			expectedFileTypes: []string{HopsFile, HopsFile},
 			expectError:       false,
 		},
 		{
@@ -66,7 +66,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\ncontent of b\n",
 			expectedFilePaths: []string{"hopsa/a.hops", "hopsb/b.hops"},
-			expectedFileTypes: []string{},
+			expectedFileTypes: []string{HopsFile, HopsFile},
 			expectError:       false,
 		},
 		{
@@ -77,7 +77,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\ncontent of b\n",
 			expectedFilePaths: []string{"hopsa/a.hops", "hopsb/b.hops"},
-			expectedFileTypes: []string{},
+			expectedFileTypes: []string{HopsFile, HopsFile},
 			expectError:       false,
 		},
 		{
@@ -89,7 +89,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\ncontent of c\n",
 			expectedFilePaths: []string{"hopsa/a.hops", "hopsc/c.hops"},
-			expectedFileTypes: []string{},
+			expectedFileTypes: []string{HopsFile, HopsFile},
 			expectError:       false,
 		},
 		{
@@ -101,7 +101,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of b\n",
 			expectedFilePaths: []string{"subdir/b.hops"},
-			expectedFileTypes: []string{},
+			expectedFileTypes: []string{HopsFile},
 			expectError:       false,
 		},
 		{
@@ -113,7 +113,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of c\ncontent of b\ncontent of d\n",
 			expectedFilePaths: []string{"sub1/c.hops", "sub2/b.hops", "sub3/d.hops"},
-			expectedFileTypes: []string{},
+			expectedFileTypes: []string{HopsFile, HopsFile, HopsFile},
 			expectError:       false,
 		},
 		{
@@ -126,7 +126,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			},
 			expectedContent:   "content of a\ncontent of d\n",
 			expectedFilePaths: []string{"subd/d.hops"},
-			expectedFileTypes: []string{},
+			expectedFileTypes: []string{HopsFile},
 			expectError:       false,
 		},
 		{
@@ -153,20 +153,11 @@ func TestConcatenateHopsFiles(t *testing.T) {
 
 			// Create files in temp dir
 			for filename, content := range tt.files {
-				tmpFilename := filepath.Join(tmpDir, filename)
-
-				// Create subdirs
-				if err := os.MkdirAll(filepath.Dir(tmpFilename), 0755); err != nil {
-					t.Fatalf("Failed to create subdirectory for file %s: %s", tmpFilename, err)
-				}
-				err := os.WriteFile(tmpFilename, []byte(content), 0666)
-				if err != nil {
-					t.Fatalf("Failed to write to temp file %s: %s", tmpFilename, err)
-				}
+				createFile(t, tmpDir, filename, content)
 			}
 
 			// Run the function
-			resultFileContent, err := readHopsDir(tmpDir)
+			resultFileContent, err := readHops(tmpDir)
 
 			// Check for an unexpected error
 			if !tt.expectError {
@@ -186,9 +177,25 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			if len(tt.expectedFilePaths) == len(resultFileContent) {
 				for i, fileContent := range resultFileContent {
 					assert.Equal(t, tt.expectedFilePaths[i], fileContent.File)
+					assert.Equal(t, tt.expectedFileTypes[i], fileContent.Type)
 				}
 			}
 		})
+	}
+}
+
+// createFile creates a file in the given temp directory with the given content
+// including any required subdirectories
+func createFile(t *testing.T, tmpDir string, filename string, content string) {
+	tmpFilename := filepath.Join(tmpDir, filename)
+
+	// Create subdirs
+	if err := os.MkdirAll(filepath.Dir(tmpFilename), 0755); err != nil {
+		t.Fatalf("Failed to create subdirectory for file %s: %s", tmpFilename, err)
+	}
+	err := os.WriteFile(tmpFilename, []byte(content), 0666)
+	if err != nil {
+		t.Fatalf("Failed to write to temp file %s: %s", tmpFilename, err)
 	}
 }
 

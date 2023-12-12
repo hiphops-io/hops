@@ -3,6 +3,7 @@ package dsl
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -414,14 +415,26 @@ task foo {
 	}
 }
 
+// createTmpHopsFile creates a temporary hops file in a subdirectory
+// with the given content and returns the parsed HCL body content
 func createTmpHopsFile(content string, t *testing.T) (*hcl.BodyContent, string, error) {
-	dir := t.TempDir()
-	f, err := os.CreateTemp(dir, "*")
-	require.NoError(t, err)
+	// temporary directory
+	tmpDir, err := os.MkdirTemp("", "testdir")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %s", err)
+	}
+	defer os.RemoveAll(tmpDir)
 
-	f.WriteString(content)
+	tmpFilename := filepath.Join(tmpDir, "hopsdir/hops.hops")
+	if err := os.MkdirAll(filepath.Dir(tmpFilename), 0755); err != nil {
+		t.Fatalf("Failed to create subdirectory for file %s: %s", tmpFilename, err)
+	}
+	err = os.WriteFile(tmpFilename, []byte(content), 0666)
+	if err != nil {
+		t.Fatalf("Failed to write to temp file %s: %s", tmpFilename, err)
+	}
 
-	hops, err := ReadHopsFilePath(f.Name())
+	hops, err := ReadHopsFilePath(tmpDir)
 	if err != nil {
 		return nil, "", err
 	}
