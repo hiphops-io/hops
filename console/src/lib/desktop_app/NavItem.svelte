@@ -1,5 +1,5 @@
 <script lang="ts">
-	export let icon: any;
+	export let icon: any = '';
 	export let name: string;
 	export let active: boolean = false;
 
