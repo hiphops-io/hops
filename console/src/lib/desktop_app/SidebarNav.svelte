@@ -15,7 +15,7 @@
 	}
 
 	// Automations dummy data
-	export let dummyData: any;
+	export let dummyAutomationsData: any;
 
 	$: console.log(activeItem);
 </script>
@@ -47,7 +47,7 @@
 	<div>
 		<p class="font-semibold text-sm mt-8 px-4 pb-2">Automations</p>
 		<ul>
-			{#each dummyData as automations}
+			{#each dummyAutomationsData as automations}
 				<li>
 					<button on:click={() => setActiveItem(automations.name)}>
 						<NavItem name={automations.name} active={activeItem === automations.name} />

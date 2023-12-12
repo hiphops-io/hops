@@ -7,12 +7,31 @@
 	import SidebarNav from '$lib/desktop_app/SidebarNav.svelte';
 	import { activeItemStore } from '$lib/store';
 
-	let dummyData = [
+	let dummyAutomationsData = [
 		{
 			name: 'Automation 1'
 		},
 		{
 			name: 'Automation 2'
+		}
+	];
+
+	let dummyTemplateData = [
+		{
+			name: 'Add a new user',
+			emoji: '🤗'
+		},
+		{
+			name: 'Request a pretzel',
+			emoji: '🥨'
+		},
+		{
+			name: 'Request a pretzel',
+			emoji: '🥨'
+		},
+		{
+			name: 'Request a pretzel',
+			emoji: '🥨'
 		}
 	];
 
@@ -27,10 +46,10 @@
 <!--Page container-->
 <div class="flex">
 	<!--Sidebar-->
-	<SidebarNav {dummyData} />
+	<SidebarNav {dummyAutomationsData} />
 
 	{#if activeItem === 'New automation'}
-		<NewAutomation />
+		<NewAutomation {dummyTemplateData} />
 	{:else if activeItem === 'Connect apps'}
 		<ConnectApps />
 	{:else if activeItem === 'Events'}
