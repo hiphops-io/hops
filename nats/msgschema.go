@@ -37,12 +37,15 @@ type (
 
 	// ResultMsg is the schema for handler call result messages
 	ResultMsg struct {
-		Body      string         `json:"body"`
-		Completed bool           `json:"completed"`
-		Done      bool           `json:"done"`
-		Errored   bool           `json:"errored"`
-		Hops      HopsResultMeta `json:"hops"`
-		JSON      interface{}    `json:"json,omitempty"`
+		Body       string            `json:"body"`
+		Completed  bool              `json:"completed"`
+		Done       bool              `json:"done"`
+		Errored    bool              `json:"errored"`
+		Headers    map[string]string `json:"headers,omitempty"`
+		Hops       HopsResultMeta    `json:"hops"`
+		JSON       interface{}       `json:"json,omitempty"`
+		StatusCode int               `json:"status_code,omitempty"`
+		URL        string            `json:"url,omitempty"`
 	}
 )
 

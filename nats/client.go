@@ -366,7 +366,11 @@ func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string)
 
 // PublishResult is a convenience wrapper that json encodes a ResultMsg and publishes it
 func (c *Client) PublishResult(ctx context.Context, startedAt time.Time, result interface{}, err error, subjTokens ...string) (error, bool) {
-	resultMsg := NewResultMsg(startedAt, result, err)
+	resultMsg, ok := result.(ResultMsg)
+	if !ok {
+		resultMsg = NewResultMsg(startedAt, result, err)
+	}
+
 	resultBytes, err := json.Marshal(resultMsg)
 	if err != nil {
 		return err, false
