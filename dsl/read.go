@@ -24,6 +24,7 @@ type (
 	FileContent struct {
 		File    string `json:"file"`
 		Content []byte `json:"content"`
+		Type    string `json:"type"`
 	}
 )
 
@@ -107,8 +108,8 @@ func readHops(hopsPath string) ([]FileContent, error) {
 	return files, nil
 }
 
-// readHopsDir retrieves the content of all .hops files in a directory,
-// including sub directories, and returns then as a slice of fileContents
+// readHopsDir retrieves the content of all .hops files in all the subdirectories
+// and returns them as a slice of fileContents
 func readHopsDir(dirPath string) ([]FileContent, error) {
 	filePaths := []string{}
 
@@ -149,9 +150,14 @@ func readHopsDir(dirPath string) ([]FileContent, error) {
 		if err != nil {
 			return nil, err
 		}
+		relativePath, err := filepath.Rel(dirPath, filePath)
+		if err != nil {
+			return nil, err
+		}
 		files = append(files, FileContent{
-			File:    filePath,
+			File:    relativePath,
 			Content: content,
+			Type:    "hops",
 		})
 	}
 
