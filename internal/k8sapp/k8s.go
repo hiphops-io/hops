@@ -385,7 +385,7 @@ func (k *K8sHandler) watchPods(ctx context.Context) {
 
 			err, sent := k.natsClient.PublishResult(ctx, startedAt, result, err, responseSubject)
 			if err != nil {
-				k.logger.Error().Err(err).Msgf("Error sending response for pod %s", pod.Name)
+				k.logger.Error().Err(err).Msgf("Error sending response for pod %s, subject %s", pod.Name, responseSubject)
 			} else {
 				// Only attempt deletion if sending the response succeeded to avoid data loss.
 				deleteErr = k.deletePod(ctx, pod)
