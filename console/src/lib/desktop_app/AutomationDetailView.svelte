@@ -1,5 +1,5 @@
 <!--Code window & detail/output container-->
-<div class="w-[80%] h-screen space-y-2 px-4">
+<div class="w-full h-auto space-y-2 px-4">
 	<!--Automation actions-->
 	<div class="w-full flex justify-between items-center py-2">
 		<div>

@@ -1,5 +1,9 @@
 <script lang="ts">
 	import AutomationDetailView from '$lib/desktop_app/AutomationDetailView.svelte';
+	import ConnectApps from '$lib/desktop_app/ConnectApps.svelte';
+	import EventsDetailView from '$lib/desktop_app/EventsDetailView.svelte';
+	import SettingsDetailView from '$lib/desktop_app/SettingsDetailView.svelte';
+	import NewAutomation from '$lib/desktop_app/NewAutomation.svelte';
 	import SidebarNav from '$lib/desktop_app/SidebarNav.svelte';
 	import { activeItemStore } from '$lib/store';
 
@@ -26,13 +30,13 @@
 	<SidebarNav {dummyData} />
 
 	{#if activeItem === 'New automation'}
-		<div>New automation</div>
+		<NewAutomation />
 	{:else if activeItem === 'Connect apps'}
-		<div>Connect apps</div>
+		<ConnectApps />
 	{:else if activeItem === 'Events'}
-		<div>Events</div>
+		<EventsDetailView />
 	{:else if activeItem === 'Settings'}
-		<div>Setting</div>
+		<SettingsDetailView />
 	{:else}
 		<AutomationDetailView />
 	{/if}
