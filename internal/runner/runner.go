@@ -21,6 +21,10 @@ import (
 	"github.com/hiphops-io/hops/nats"
 )
 
+const (
+	hopsKeyPrefix = "hopsconf-"
+)
+
 type (
 	NatsClient interface {
 		ConsumeSequences(context.Context, string, nats.SequenceHandler) error
@@ -43,7 +47,7 @@ type (
 
 func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger) (*Runner, error) {
 	runner := &Runner{
-		hopsKey:     fmt.Sprintf("hopsconf-%s", hops.Hash),
+		hopsKey:     hopsKeyFromHash(hops.Hash),
 		hopsContent: hops.BodyContent,
 		logger:      logger,
 		natsClient:  natsClient,
@@ -88,7 +92,7 @@ func (r *Runner) SequenceCallback(
 		return fmt.Errorf("Unable to fetch assigned hops file for sequence: %w", err)
 	}
 
-	hop, err := dsl.ParseHops(ctx, hops, msgBundle, logger)
+	hop, err := dsl.ParseHops(ctx, hops.BodyContent, msgBundle, logger)
 	if err != nil {
 		return fmt.Errorf("Error parsing hops config: %w", err)
 	}
@@ -235,7 +239,7 @@ func (r *Runner) initHopsBackup(hops *dsl.HopsFiles) error {
 
 	// Pre-populate local cache (local hops cache item should never expire)
 	r.logger.Debug().Msgf("Populating local cache with hops config: %s", r.hopsKey)
-	r.cache.Set(r.hopsKey, hops.BodyContent, cache.NoExpiration)
+	r.cache.Set(r.hopsKey, hops, cache.NoExpiration)
 
 	return nil
 }
@@ -267,7 +271,7 @@ func (r *Runner) initHopsSchedules(hops *dsl.HopsFiles) error {
 
 // sequenceHops attempts to assign the local hops config to a sequence,
 // returning either the newly assigned hops body or the existing one if present.
-func (r *Runner) sequenceHops(ctx context.Context, sequenceId string, msgBundle nats.MessageBundle) (*hcl.BodyContent, error) {
+func (r *Runner) sequenceHops(ctx context.Context, sequenceId string, msgBundle nats.MessageBundle) (*dsl.HopsFiles, error) {
 	key, err := r.sequenceHopsKey(ctx, sequenceId, msgBundle)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to decide hops config for pipeline: %w", err)
@@ -316,9 +320,9 @@ func (r *Runner) sequenceHopsKey(ctx context.Context, sequenceId string, msgBund
 
 // sequenceHopsCached gets the hops config assigned to a sequence by key,
 // first looking up in the cache, then falling back to object store
-func (r *Runner) sequenceHopsCached(key string) *hcl.BodyContent {
+func (r *Runner) sequenceHopsCached(key string) *dsl.HopsFiles {
 	if cachedContent, found := r.cache.Get(key); found {
-		return cachedContent.(*hcl.BodyContent)
+		return cachedContent.(*dsl.HopsFiles)
 	}
 
 	return nil
@@ -326,19 +330,26 @@ func (r *Runner) sequenceHopsCached(key string) *hcl.BodyContent {
 
 // sequenceHopsFromStore gets the hops config assigned to a sequence by key,
 // fetching from the object store
-func (r *Runner) sequenceHopsStored(key string) (*hcl.BodyContent, error) {
+func (r *Runner) sequenceHopsStored(key string) (*dsl.HopsFiles, error) {
 	hopsFileB, err := r.natsClient.GetSysObject(key)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve hops config '%s': %w", key, err)
 	}
 
-	hopsFiles := []dsl.FileContent{}
-	err = json.Unmarshal(hopsFileB, &hopsFiles)
+	hopsFilesContent := []dsl.FileContent{}
+	err = json.Unmarshal(hopsFileB, &hopsFilesContent)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to decode retrieved hops config '%s': %w", key, err)
 	}
 
-	hopsContent, hash, err := dsl.ReadHopsFileContents(hopsFiles)
+	// Update types for legacy format
+	for i := range hopsFilesContent {
+		if hopsFilesContent[i].Type == "" {
+			hopsFilesContent[i].Type = dsl.HopsFile
+		}
+	}
+
+	hopsContent, hash, err := dsl.ReadHopsFileContents(hopsFilesContent)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to read retrieved hops config '%s': '%w'", key, err)
 	}
@@ -350,9 +361,14 @@ func (r *Runner) sequenceHopsStored(key string) (*hcl.BodyContent, error) {
 
 	// Store in cache
 	r.logger.Debug().Msg("Caching stored hops locally")
-	r.cache.Set(key, hopsContent, cache.DefaultExpiration)
+	hopsFiles := &dsl.HopsFiles{
+		Hash:        hopsKeyToHash(key),
+		BodyContent: hopsContent,
+		Files:       hopsFilesContent,
+	}
+	r.cache.Set(key, hopsFiles, cache.DefaultExpiration)
 
-	return hopsContent, nil
+	return hopsFiles, nil
 }
 
 func hopsKeyFromBytes(keyB []byte) (string, error) {
@@ -362,4 +378,12 @@ func hopsKeyFromBytes(keyB []byte) (string, error) {
 		err = fmt.Errorf("Unable to decode hops key %w", err)
 	}
 	return key, err
+}
+
+func hopsKeyFromHash(hash string) string {
+	return fmt.Sprintf("%s%s", hopsKeyPrefix, hash)
+}
+
+func hopsKeyToHash(key string) string {
+	return strings.TrimPrefix(key, hopsKeyPrefix)
 }
