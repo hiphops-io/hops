@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"os"
 
+	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 
@@ -28,10 +30,26 @@ Or any combination:
 
 func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 	startFlags := initStartFlags(commonFlags)
-	before := altsrc.InitInputSourceWithContext(
-		startFlags,
-		altsrc.NewYamlSourceFromFlagFunc(configFlagName),
-	)
+	before := func(ctx *cli.Context) error {
+		// Handle '~' exapansion for config file
+		configFilePath, err := homedir.Expand(ctx.String(configFlagName))
+		if err != nil {
+			return err
+		}
+
+		// Don't fail if config file doesn't exist
+		if _, err := os.Stat(configFilePath); err == nil {
+			inputSource, err := altsrc.NewYamlSourceFromFile(configFilePath)
+			if err != nil {
+				return err
+			}
+			return altsrc.ApplyInputSourceValues(ctx, inputSource, startFlags)
+		} else if os.IsNotExist(err) {
+			return nil
+		} else {
+			return err
+		}
+	}
 
 	return &cli.Command{
 		Name:        "start",
@@ -43,21 +61,35 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 			ctx := context.Background()
 			logger := logs.InitLogger(c.Bool("debug"))
 
+			// Handle '~' exapansion for config files
+			hopsPath, err := homedir.Expand(c.String("hops"))
+			if err != nil {
+				return err
+			}
+			kubeconfigPath, err := homedir.Expand(c.String("kubeconfig"))
+			if err != nil {
+				return err
+			}
+			keyfilePath, err := homedir.Expand(c.String("keyfile"))
+			if err != nil {
+				return err
+			}
+
 			hopsServer := &hops.HopsServer{
 				Console: hops.Console{
 					Address: c.String("address"),
 					Serve:   c.Bool("serve-console"),
 				},
-				HopsPath: c.String("hops"),
+				HopsPath: hopsPath,
 				HTTPApp: hops.HTTPApp{
 					Serve: c.Bool("serve-httpapp"),
 				},
 				K8sApp: hops.K8sApp{
-					KubeConfig:  c.String("kubeconfig"),
+					KubeConfig:  kubeconfigPath,
 					PortForward: c.Bool("portforward"),
 					Serve:       c.Bool("serve-k8sapp"),
 				},
-				KeyFilePath: c.String("keyfile"),
+				KeyFilePath: keyfilePath,
 				Logger:      logger,
 				ReplayEvent: c.String("replay-event"),
 				Runner: hops.Runner{
