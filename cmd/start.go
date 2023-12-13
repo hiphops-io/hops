@@ -37,7 +37,7 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 			return err
 		}
 
-		// Don't fail if config file doesn't exist
+		// Succeed if no config file
 		if _, err := os.Stat(configFilePath); err == nil {
 			inputSource, err := altsrc.NewYamlSourceFromFile(configFilePath)
 			if err != nil {
