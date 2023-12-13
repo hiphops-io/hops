@@ -44,19 +44,22 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 			logger := logs.InitLogger(c.Bool("debug"))
 
 			hopsServer := &hops.HopsServer{
-				HopsPath:    c.String("hops"),
-				KeyFilePath: c.String("keyfile"),
-				Logger:      logger,
-				ReplayEvent: c.String("replay-event"),
 				Console: hops.Console{
 					Address: c.String("address"),
 					Serve:   c.Bool("serve-console"),
 				},
+				HopsPath: c.String("hops"),
+				HTTPApp: hops.HTTPApp{
+					Serve: c.Bool("serve-httpapp"),
+				},
 				K8sApp: hops.K8sApp{
 					KubeConfig:  c.String("kubeconfig"),
 					PortForward: c.Bool("portforward"),
-					Serve:       c.Bool("serve-k8s"),
+					Serve:       c.Bool("serve-k8sapp"),
 				},
+				KeyFilePath: c.String("keyfile"),
+				Logger:      logger,
+				ReplayEvent: c.String("replay-event"),
 				Runner: hops.Runner{
 					Serve: c.Bool("serve-runner"),
 				},
@@ -103,7 +106,16 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 		),
 		altsrc.NewBoolFlag(
 			&cli.BoolFlag{
-				Name:     "serve-k8s",
+				Name:     "serve-httpapp",
+				Aliases:  []string{"http.serve"},
+				Usage:    "Whether to start the http app",
+				Category: serveCategory,
+				Value:    true,
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:     "serve-k8sapp",
 				Aliases:  []string{"k8s.serve"},
 				Usage:    "Whether to start the k8s app",
 				Category: serveCategory,
