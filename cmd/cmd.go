@@ -70,7 +70,7 @@ func initCommonFlags() ([]cli.Flag, error) {
 			&cli.StringFlag{
 				Name:     "hops",
 				Aliases:  []string{"H"},
-				Usage:    "Path to dir containing *.hops configs (or path to single *.hops file)",
+				Usage:    "Path to dir containing subdirectories of *.hops configs (and additional files)",
 				Value:    defaultRootDir,
 				Category: commonFlagCategory,
 			},
