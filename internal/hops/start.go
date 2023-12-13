@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/internal/httpapp"
 	"github.com/hiphops-io/hops/internal/httpserver"
 	"github.com/hiphops-io/hops/internal/k8sapp"
 	"github.com/hiphops-io/hops/internal/runner"
@@ -39,8 +40,13 @@ type (
 		Logger      zerolog.Logger
 		ReplayEvent string
 		Console
+		HTTPApp
 		K8sApp
 		Runner
+	}
+
+	HTTPApp struct {
+		Serve bool
 	}
 
 	K8sApp struct {
@@ -82,6 +88,11 @@ func (h *HopsServer) Start(ctx context.Context) error {
 	} else if h.Runner.Serve {
 		clientOpts = append(clientOpts, nats.WithRunner(nats.DefaultConsumerName))
 	}
+
+	if h.HTTPApp.Serve {
+		clientOpts = append(clientOpts, nats.WithWorker("http"))
+	}
+
 	if h.K8sApp.Serve {
 		clientOpts = append(clientOpts, nats.WithWorker("k8s"))
 	}
@@ -129,9 +140,22 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		}()
 	}
 
+	if h.HTTPApp.Serve {
+		go func() {
+			err := startHTTPApp(
+				ctx,
+				natsClient,
+				h.Logger,
+			)
+			if err != nil {
+				errs <- err
+			}
+		}()
+	}
+
 	if h.K8sApp.Serve {
 		go func() {
-			err := startK8sWorker(
+			err := startK8sApp(
 				ctx,
 				natsClient,
 				h.K8sApp.KubeConfig,
@@ -167,7 +191,22 @@ func startRunner(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Clie
 	return runner.Run(ctx, fromConsumer)
 }
 
-func startK8sWorker(ctx context.Context, natsClient *nats.Client, kubeConfPath string, requiresPortForward bool, logger zerolog.Logger) error {
+func startHTTPApp(ctx context.Context, natsClient *nats.Client, logger zerolog.Logger) error {
+	logger = logger.With().Str("from", "httpapp").Logger()
+
+	httpApp, err := httpapp.NewHTTPHandler(ctx, natsClient, logger)
+	if err != nil {
+		return err
+	}
+
+	zlogger := logs.NewNatsZeroLogger(logger)
+	worker := worker.NewWorker(natsClient, httpApp, &zlogger)
+
+	// Blocks until complete or errored
+	return worker.Run(ctx)
+}
+
+func startK8sApp(ctx context.Context, natsClient *nats.Client, kubeConfPath string, requiresPortForward bool, logger zerolog.Logger) error {
 	logger = logger.With().Str("from", "k8sapp").Logger()
 
 	k8s, err := k8sapp.NewK8sHandler(ctx, natsClient, kubeConfPath, requiresPortForward, logger)

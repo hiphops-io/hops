@@ -39,6 +39,7 @@ func NewWorker(natsClient *nats.Client, app App, logger Logger) *Worker {
 
 func (w *Worker) Run(ctx context.Context) error {
 	consumerName := w.app.AppName()
+
 	// Get the ack deadline
 	ackDeadline := w.natsClient.Consumers[consumerName].CachedInfo().Config.AckWait
 
@@ -79,6 +80,7 @@ func (w *Worker) Run(ctx context.Context) error {
 			return
 		}
 
+		// Ack the original message even in case of error (since we received it and processed regardless)
 		err = nats.DoubleAck(ctx, msg)
 		if err != nil {
 			w.logger.Errf(err, "Unable to acknowledge request message: %s", subject)
