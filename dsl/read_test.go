@@ -85,7 +85,7 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			expectError:       false,
 		},
 		{
-			name: "Subdirectories searched but not root",
+			name: "First subdirectories searched but not root and not second level",
 			files: map[string]string{
 				"subdir/b.hops":          "content of b",
 				"subdir/evenmore/b.hops": "content of b",

@@ -37,7 +37,8 @@ type (
 
 // ReadHopsFilePath loads and pre-parses the content of .hops files from all
 // .hops files in the first child sub directories.
-// It returns a merged hcl.Body and a sha hash of the contents
+// It returns a merged hcl.Body and a sha hash of the contents as well as
+// a slice of FileContent structs containing the file name, content and type.
 func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 	files, err := readHops(filePath)
 	if err != nil {
@@ -97,13 +98,13 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 	return content, filesShaHex, nil
 }
 
-// getHopsDirFilePaths returns a slice of all the file paths of .hops files
-// in the subdirectories of the root directory, excluding dirs with '..' prefix.
-// Also enforces that there is only one hops file per directory.
+// getHopsDirFilePaths returns a slice of all the file paths of files
+// in the first child subdirectories of the root directory, excluding dirs with
+// '..' prefix. Also enforces that there is only one .hops file per sub directory.
 func getHopsDirFilePaths(root string) ([]string, error) {
 	seenPath := make(map[string]bool) // map of directories with a hops file
 
-	var filePaths []string // list of hops file paths to be returned at the end
+	var filePaths []string // list of file paths to be returned at the end (hops and other)
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -131,7 +132,7 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 				return filepath.SkipDir
 			}
 
-			// No need to visit subdirectories of the subdirectories
+			// Skip any second children of the root (i.e. root/sub, yes, root/sub/sub, no)
 			if strings.Count(relativePath, string(filepath.Separator)) > 1 {
 				return filepath.SkipDir
 			}
@@ -139,14 +140,14 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 			return nil
 		}
 
-		// Ensure file is in a first child directory of the root
+		// Files in root (i.e root/a.hops), and anything other than first
+		// child directory of the root (i.e. root/sub/sub/a.hops) are skipped
 		if strings.Count(relativePath, string(filepath.Separator)) != 1 {
 			return nil
 		}
 
-		// Ensure file is a .hops file
+		// Ensure only 1 .hops file per directory
 		if filepath.Ext(path) == HopsExt {
-			// Ensure there is only one hops file per directory
 			dirOnly := filepath.Dir(relativePath)
 			if seenPath[dirOnly] {
 				return fmt.Errorf("Only one hops file per directory allowed: %s", relativePath)
