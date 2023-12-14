@@ -11,7 +11,7 @@
 		{
 			name: 'Automation 1 (Task)',
 			type: 'task',
-			hops: 'Hops blob 2',
+			hops: 'Hops blob 1',
 			files: [
 				{
 					name: 'file1',

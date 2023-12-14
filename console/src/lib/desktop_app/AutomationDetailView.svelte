@@ -4,6 +4,7 @@
 
 	import { activeAutomationStore } from '$lib/store';
 	import { onMount } from 'svelte';
+	import TaskFormView from './TaskFormView.svelte';
 
 	interface Automation {
 		name: string;
@@ -52,15 +53,15 @@
 		</div>
 	</div>
 
-	<div class="flex !m-0">
+	<div class="flex !m-0 h-full">
 		<!--Code window-->
-		<div class="bg-almostblack h-[660px] rounded-lg flex {showCode ? 'w-[50%] mr-2' : 'hidden'}">
+		<div class="bg-almostblack h-full rounded-lg flex {showCode ? 'w-[50%] mr-2' : 'hidden'}">
 			<p class="text-error m-auto">{activeAutomation.hops}</p>
 		</div>
 
 		<!--Detail/output window-->
 		<div
-			class="bg-almostblack h-[660px] rounded-lg flex justify-center {showCode
+			class="bg-almostblack h-full rounded-lg flex justify-center {showCode
 				? ' w-[50%]'
 				: 'w-full'}"
 		>
@@ -71,7 +72,7 @@
 				</div>
 
 				{#if activeAutomation.type === 'task'}
-					<p>Task</p>
+					<TaskFormView />
 				{:else if activeAutomation.type === 'schedule'}
 					<ScheduleDetailCard />
 				{:else}
@@ -82,7 +83,4 @@
 
 		<!--END code window & detail/output container-->
 	</div>
-
-	<!--Instruction container-->
-	<div class="bg-almostblack w-full h-[160px] rounded-lg" />
 </div>
