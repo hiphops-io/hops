@@ -159,9 +159,10 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 	return filePaths, nil
 }
 
-// readHops retrieves the content of all .hops and other files in all the
-// first child subdirectories of dirPath (excluding dirs with '..' prefix)
-// and returns them as a slice of fileContents
+// readHops retrieves the content of all .hops and other files
+//
+// reads from first child subdirectories of dirPath (excluding dirs with '..'
+// prefix) and returns them as a slice of fileContents
 func readHops(dirPath string) ([]FileContent, error) {
 	filePaths, err := getHopsDirFilePaths(dirPath)
 	if err != nil {
