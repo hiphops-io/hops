@@ -1,7 +1,7 @@
 package dsl
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 
 	"github.com/goccy/go-json"
@@ -25,9 +25,9 @@ func CreateSourceEvent(rawEvent map[string]any, source string, event string, act
 		return nil, "", err
 	}
 
-	hasher := sha1.New()
+	hasher := sha256.New()
 	hasher.Write(sourceBytes)
-	sha1Hash := hex.EncodeToString(hasher.Sum(nil))
+	sha256Hash := hex.EncodeToString(hasher.Sum(nil))
 
-	return sourceBytes, sha1Hash, nil
+	return sourceBytes, sha256Hash, nil
 }

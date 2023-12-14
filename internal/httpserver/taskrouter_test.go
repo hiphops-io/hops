@@ -112,7 +112,7 @@ package httpserver
 // 			assert.Equal(t, tc.expectStatusCode, response.StatusCode, "Status code should match")
 // 			assert.Equal(t, tc.expectResponse, runResponse, "Response body should match")
 // 			if tc.expectStatusCode == http.StatusOK {
-// 				assert.Regexp(t, "[0-9a-f]{40}", eventId, "Event ID must be a valid SHA1 hash")
+// 				assert.Regexp(t, "[0-9a-f]{40}", eventId, "Event ID must be a valid SHA256 hash")
 // 			}
 // 		})
 // 	}

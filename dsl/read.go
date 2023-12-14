@@ -1,7 +1,7 @@
 package dsl
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"io/fs"
@@ -61,12 +61,12 @@ func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, string, error) {
 	hopsBodies := []hcl.Body{}
 	parser := hclparse.NewParser()
-	sha1Hash := sha1.New()
+	sha256Hash := sha256.New()
 
 	// parse the hops files
 	for _, file := range hopsFileContent {
 		// Add all file contents to the hash
-		sha1Hash.Write(file.Content)
+		sha256Hash.Write(file.Content)
 
 		// Do not parse non-hops files
 		if file.Type != HopsFile {
@@ -91,7 +91,7 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 		return nil, "", errors.New("At least one resource must be defined in your hops config(s)")
 	}
 
-	filesSha := sha1Hash.Sum(nil)
+	filesSha := sha256Hash.Sum(nil)
 	filesShaHex := hex.EncodeToString(filesSha)
 
 	return content, filesShaHex, nil
