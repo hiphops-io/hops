@@ -1,4 +1,8 @@
 <script lang="ts">
+	import ScheduleDetailCard from './ScheduleDetailCard.svelte';
+	import EventDetailCard from './EventDetailCard.svelte';
+
+	let type = 'task';
 	let showCode = false;
 
 	function toggleShowCode() {
@@ -11,7 +15,7 @@
 	<!--Automation actions-->
 	<div class="w-full flex justify-between items-center py-2">
 		<div>
-			<p class="text-nines font-semibold text-sm">activeFilename</p>
+			<p class="text-nines font-semibold text-sm">Name</p>
 		</div>
 
 		<div class="flex space-x-6 items-center">
@@ -35,8 +39,36 @@
 		</div>
 
 		<!--Detail/output window-->
-		<div class="bg-almostblack h-[660px] rounded-lg flex {showCode ? ' w-[50%]' : 'w-full'}">
-			<p class="text-error m-auto">Detail/output panel</p>
+		<div
+			class="bg-almostblack h-[660px] rounded-lg flex justify-center {showCode
+				? ' w-[50%]'
+				: 'w-full'}"
+		>
+			{#if type === 'task'}
+				<div class="py-8 mx-6 {showCode ? 'w-full' : 'w-[50%]'}">
+					<div class="mb-4">
+						<h1 class="text-white text-4xl font-normal">Automation name</h1>
+						<h2 class="text-nines">Description</h2>
+					</div>
+					<p>Task</p>
+				</div>
+			{:else if type === 'schedule'}
+				<div class="py-8 mx-6 {showCode ? 'w-full' : 'w-[50%]'}">
+					<div class="mb-4">
+						<h1 class="text-white text-4xl font-normal">Automation name</h1>
+						<h2 class="text-nines">Description</h2>
+					</div>
+					<ScheduleDetailCard />
+				</div>
+			{:else}
+				<div class="py-8 mx-6 {showCode ? 'w-full' : 'w-[50%]'}">
+					<div class="mb-4">
+						<h1 class="text-white text-4xl font-normal">Automation name</h1>
+						<h2 class="text-nines">Description</h2>
+					</div>
+					<EventDetailCard />
+				</div>
+			{/if}
 		</div>
 
 		<!--END code window & detail/output container-->

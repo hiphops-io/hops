@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { activeItemStore } from '$lib/store';
+	import { activeAutomationStore, activeItemStore } from '$lib/store';
 	import NavItem from './NavItem.svelte';
 	// Icons
 	import Plus from '$lib/icons/Plus.svelte';
@@ -9,15 +9,15 @@
 
 	let activeItem = 'New automation';
 
-	function setActiveItem(navItem: string) {
-		activeItem = navItem;
+	function setActiveItem(navItem: string, automation?: any) {
+		console.log(navItem, automation);
+		activeItem = navItem || automation.name;
 		activeItemStore.set(activeItem);
+		activeAutomationStore.set(automation);
 	}
 
 	// Automations dummy data
 	export let dummyAutomationsData: any;
-
-	$: console.log(activeItem);
 </script>
 
 <div class="w-[20%] h-screen text-nines">
@@ -47,10 +47,10 @@
 	<div>
 		<p class="font-semibold text-sm mt-8 px-4 pb-2">Automations</p>
 		<ul>
-			{#each dummyAutomationsData as automations}
+			{#each dummyAutomationsData as automation}
 				<li>
-					<button on:click={() => setActiveItem(automations.name)}>
-						<NavItem name={automations.name} active={activeItem === automations.name} />
+					<button on:click={() => setActiveItem(automation.name, automation)}>
+						<NavItem name={automation.name} active={activeItem === automation.name} />
 					</button>
 				</li>
 			{/each}

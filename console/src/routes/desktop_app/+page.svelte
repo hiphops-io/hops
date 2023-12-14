@@ -5,7 +5,7 @@
 	import SettingsDetailView from '$lib/desktop_app/SettingsDetailView.svelte';
 	import NewAutomation from '$lib/desktop_app/NewAutomation.svelte';
 	import SidebarNav from '$lib/desktop_app/SidebarNav.svelte';
-	import { activeItemStore } from '$lib/store';
+	import { activeItemStore, activeAutomationStore } from '$lib/store';
 
 	let dummyAutomationsData = [
 		{
@@ -16,6 +16,11 @@
 		{
 			name: 'Automation 2',
 			type: 'schedule',
+			hops: 'Hops goes here'
+		},
+		{
+			name: 'Automation 3',
+			type: 'event',
 			hops: 'Hops goes here'
 		}
 	];

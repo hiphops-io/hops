@@ -24,7 +24,8 @@ const config = {
 				// flowbite-svelte
 
 				//Desktop colors
-				nines: '#999'
+				nines: '#999',
+				twodee: '#2D2D2D'
 			},
 			backgroundImage: {
 				grain: "url('/images/light-grain.png')"
