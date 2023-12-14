@@ -119,14 +119,14 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			expectError:       false,
 		},
 		{
-			name: "Only one hops file per subdir",
+			name: "Multiple hops files per subdir",
 			files: map[string]string{
 				"sub1/a.hops": "content of a",
 				"sub1/b.hops": "content of b",
 			},
-			expectedFilePaths: []string{},
-			expectedFileTypes: []string{},
-			expectError:       true,
+			expectedFilePaths: []string{"sub1/a.hops", "sub1/b.hops"},
+			expectedFileTypes: []string{HopsFile, HopsFile},
+			expectError:       false,
 		},
 	}
 

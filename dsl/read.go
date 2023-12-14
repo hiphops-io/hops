@@ -4,7 +4,6 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -102,8 +101,6 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 // in the first child subdirectories of the root directory, excluding dirs with
 // '..' prefix. Also enforces that there is only one .hops file per sub directory.
 func getHopsDirFilePaths(root string) ([]string, error) {
-	seenPath := make(map[string]bool) // map of directories with a hops file
-
 	var filePaths []string // list of file paths to be returned at the end (hops and other)
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -144,16 +141,6 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 		// child directory of the root (i.e. root/sub/sub/a.hops) are skipped
 		if strings.Count(relativePath, string(filepath.Separator)) != 1 {
 			return nil
-		}
-
-		// Ensure only 1 .hops file per directory
-		if filepath.Ext(path) == HopsExt {
-			dirOnly := filepath.Dir(relativePath)
-			if seenPath[dirOnly] {
-				return fmt.Errorf("Only one hops file per directory allowed: %s", relativePath)
-			}
-
-			seenPath[dirOnly] = true
 		}
 
 		// Add file to list (both .hops and other files)
