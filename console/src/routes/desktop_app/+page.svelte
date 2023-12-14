@@ -9,19 +9,22 @@
 
 	let dummyAutomationsData = [
 		{
-			name: 'Automation 1',
+			name: 'Automation 1 (Task)',
 			type: 'task',
-			hops: 'Hops goes here'
+			hops: 'Hops blob 1',
+			files: ['filename1', 'filename2']
 		},
 		{
-			name: 'Automation 2',
+			name: 'Automation 2 (Schedule)',
 			type: 'schedule',
-			hops: 'Hops goes here'
+			hops: 'Hops blob 2',
+			files: ['filename3']
 		},
 		{
-			name: 'Automation 3',
+			name: 'Automation 3 (Event)',
 			type: 'event',
-			hops: 'Hops goes here'
+			hops: 'Hops blob 3',
+			files: ['']
 		}
 	];
 
