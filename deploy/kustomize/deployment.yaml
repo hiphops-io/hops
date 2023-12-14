@@ -54,7 +54,7 @@ spec:
 
         volumeMounts:
         - name: hiphops-conf
-          mountPath: /root/hops/
+          mountPath: /root/hops
         - name: hiphops-key
           mountPath: /root/hiphops-key
 
@@ -64,7 +64,7 @@ spec:
           name: hiphops-conf
           items:
             - key: main.hops
-              path: main.hops
+              path: main/main.hops
       - name: hiphops-key
         secret:
           secretName: hiphops-key

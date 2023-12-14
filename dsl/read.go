@@ -1,7 +1,7 @@
 package dsl
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"io/fs"
@@ -14,6 +14,12 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 )
 
+const (
+	HopsExt   = ".hops"
+	HopsFile  = "hops"
+	OtherFile = "other"
+)
+
 type (
 	HopsFiles struct {
 		Hash        string
@@ -24,12 +30,15 @@ type (
 	FileContent struct {
 		File    string `json:"file"`
 		Content []byte `json:"content"`
+		Type    string `json:"type"`
 	}
 )
 
-// ReadHopsFilePath loads and pre-parses the content of .hops files either from a
-// single file or from all .hops files in a directory.
-// It returns a merged hcl.Body and a sha hash of the contents
+// ReadHopsFilePath loads and pre-parses the content of .hops files from all
+// .hops files in the first child sub directories.
+//
+// It returns a merged hcl.Body and a sha hash of the contents as well as
+// a slice of FileContent structs containing the file name, content and type.
 func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 	files, err := readHops(filePath)
 	if err != nil {
@@ -53,18 +62,24 @@ func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, string, error) {
 	hopsBodies := []hcl.Body{}
 	parser := hclparse.NewParser()
-	sha1Hash := sha1.New()
+	sha256Hash := sha256.New()
 
 	// parse the hops files
 	for _, file := range hopsFileContent {
+		// Add all file contents to the hash
+		sha256Hash.Write(file.Content)
+
+		// Do not parse non-hops files
+		if file.Type != HopsFile {
+			continue
+		}
+
 		hopsFile, diags := parser.ParseHCL(file.Content, file.File)
 
 		if diags != nil && diags.HasErrors() {
 			return nil, "", errors.New(diags.Error())
 		}
 		hopsBodies = append(hopsBodies, hopsFile.Body)
-
-		sha1Hash.Write(file.Content)
 	}
 
 	body := hcl.MergeBodies(hopsBodies)
@@ -77,69 +92,84 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 		return nil, "", errors.New("At least one resource must be defined in your hops config(s)")
 	}
 
-	filesSha := sha1Hash.Sum(nil)
+	filesSha := sha256Hash.Sum(nil)
 	filesShaHex := hex.EncodeToString(filesSha)
 
 	return content, filesShaHex, nil
 }
 
-func readHops(hopsPath string) ([]FileContent, error) {
-	info, err := os.Stat(hopsPath)
-	if err != nil {
-		return nil, err
-	}
+// getHopsDirFilePaths returns a slice of all the file paths of files
+// in the first child subdirectories of the root directory.
+//
+// Excludes dirs with '..' prefix as these cause problems with kubernetes.
+func getHopsDirFilePaths(root string) ([]string, error) {
+	var filePaths []string // list of file paths to be returned at the end (hops and other)
 
-	// read in the hops files and prepare for parsing
-	if info.IsDir() {
-		return readHopsDir(hopsPath)
-	}
-
-	content, err := os.ReadFile(hopsPath)
-	if err != nil {
-		return nil, err
-	}
-
-	files := []FileContent{{
-		File:    hopsPath,
-		Content: content,
-	}}
-
-	return files, nil
-}
-
-// readHopsDir retrieves the content of all .hops files in a directory,
-// including sub directories, and returns then as a slice of fileContents
-func readHopsDir(dirPath string) ([]FileContent, error) {
-	filePaths := []string{}
-
-	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		// Exclude directories whose name starts with '..'
-		// This is because kubernetes configMaps create a set of symlinked
-		// directories for the mapped files and we don't want to pick those
-		// up. Those directories are named '..<various names>'
-		// Example:
-		// /my-config-map-dir
-		// |-- my-key -> ..data/my-key
-		// |-- ..data -> ..2023_10_19_12_34_56.789012345
-		// |-- ..2023_10_19_12_34_56.789012345
-		// |   |-- my-key
-		if d.IsDir() && strings.HasPrefix(d.Name(), "..") {
-			return filepath.SkipDir
+
+		// Get relative path from the root
+		relativePath, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
 		}
-		if !d.IsDir() && filepath.Ext(path) == ".hops" {
-			filePaths = append(filePaths, path)
+
+		if d.IsDir() {
+			// Exclude directories whose name starts with '..'
+			// This is because kubernetes configMaps create a set of symlinked
+			// directories for the mapped files and we don't want to pick those
+			// up. Those directories are named '..<various names>'
+			// Example:
+			// /my-config-map-dir
+			// |-- my-key -> ..data/my-key
+			// |-- ..data -> ..2023_10_19_12_34_56.789012345
+			// |-- ..2023_10_19_12_34_56.789012345
+			// |   |-- my-key
+			if strings.HasPrefix(d.Name(), "..") {
+				return filepath.SkipDir
+			}
+
+			// Skip any second children of the root (i.e. root/sub, yes, root/sub/sub, no)
+			if strings.Count(relativePath, string(filepath.Separator)) > 1 {
+				return filepath.SkipDir
+			}
+
+			return nil
 		}
+
+		// Files in root (i.e root/a.hops), and anything other than first
+		// child directory of the root (i.e. root/sub/sub/a.hops) are skipped
+		if strings.Count(relativePath, string(filepath.Separator)) != 1 {
+			return nil
+		}
+
+		// Add file to list (both .hops and other files)
+		filePaths = append(filePaths, path)
+
 		return nil
 	})
+	// File walking is over, check for errors
 	if err != nil {
 		return nil, err
 	}
 
 	// Sort the file paths to ensure consistent order
 	sort.Strings(filePaths)
+
+	return filePaths, nil
+}
+
+// readHops retrieves the content of all .hops and other files
+//
+// reads from first child subdirectories of dirPath (excluding dirs with '..'
+// prefix) and returns them as a slice of fileContents
+func readHops(dirPath string) ([]FileContent, error) {
+	filePaths, err := getHopsDirFilePaths(dirPath)
+	if err != nil {
+		return nil, err
+	}
 
 	files := []FileContent{}
 
@@ -149,9 +179,20 @@ func readHopsDir(dirPath string) ([]FileContent, error) {
 		if err != nil {
 			return nil, err
 		}
+		relativePath, err := filepath.Rel(dirPath, filePath)
+		if err != nil {
+			return nil, err
+		}
+
+		fileType := OtherFile
+		if filepath.Ext(relativePath) == HopsExt {
+			fileType = HopsFile
+		}
+
 		files = append(files, FileContent{
-			File:    filePath,
+			File:    relativePath,
 			Content: content,
+			Type:    fileType,
 		})
 	}
 
