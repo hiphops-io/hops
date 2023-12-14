@@ -20,7 +20,6 @@ import (
 
 	"github.com/hiphops-io/hops/logs"
 	"github.com/urfave/cli/v2"
-	"github.com/urfave/cli/v2/altsrc"
 )
 
 const (
@@ -47,10 +46,7 @@ func initAddKeyCommand(commonFlags []cli.Flag) *cli.Command {
 		},
 	}
 	addkeyFlags = append(addkeyFlags, commonFlags...)
-	before := altsrc.InitInputSourceWithContext(
-		addkeyFlags,
-		altsrc.NewYamlSourceFromFlagFunc(configFlagName),
-	)
+	before := optionalYamlSrc(addkeyFlags)
 
 	return &cli.Command{
 		Name:        "addkey",

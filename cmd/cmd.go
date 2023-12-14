@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"path"
 
@@ -30,6 +29,24 @@ func Run() error {
 	return app.Run(os.Args)
 }
 
+// expandHomePath is a shared util function to expand flags that are paths with ~ in them
+func expandHomePath(flagName string) func(c *cli.Context, val string) error {
+	return func(c *cli.Context, val string) error {
+		flagValue := c.String(flagName)
+		if flagValue == "" {
+			return nil
+		}
+
+		expandedPath, err := homedir.Expand(flagValue)
+		if err != nil {
+			return err
+		}
+
+		c.Set(flagName, expandedPath)
+		return nil
+	}
+}
+
 func initCliApp() (*cli.App, error) {
 	commonFlags, err := initCommonFlags()
 	if err != nil {
@@ -50,11 +67,10 @@ func initCliApp() (*cli.App, error) {
 }
 
 func initCommonFlags() ([]cli.Flag, error) {
-	homeDir, err := homedir.Dir()
+	defaultRootDir, err := homedir.Expand("~/.hops")
 	if err != nil {
-		return nil, fmt.Errorf("Unable to determine home directory: '%w'", err)
+		return nil, err
 	}
-	defaultRootDir := path.Join(homeDir, ".hops")
 	defaultConfigPath := path.Join(defaultRootDir, "config.yaml")
 	defaultKeyFilePath := path.Join(defaultRootDir, "hiphops.key")
 
@@ -65,6 +81,7 @@ func initCommonFlags() ([]cli.Flag, error) {
 			Usage:    "Config file path for configuring the hops server/instance",
 			Value:    defaultConfigPath,
 			Category: commonFlagCategory,
+			Action:   expandHomePath(configFlagName),
 		},
 		altsrc.NewStringFlag(
 			&cli.StringFlag{
@@ -73,6 +90,7 @@ func initCommonFlags() ([]cli.Flag, error) {
 				Usage:    "Path to dir containing *.hops configs (or path to single *.hops file)",
 				Value:    defaultRootDir,
 				Category: commonFlagCategory,
+				Action:   expandHomePath("hops"),
 			},
 		),
 		altsrc.NewStringFlag(
@@ -81,6 +99,7 @@ func initCommonFlags() ([]cli.Flag, error) {
 				Usage:    "Path to the hiphops key",
 				Value:    defaultKeyFilePath,
 				Category: commonFlagCategory,
+				Action:   expandHomePath("keyfile"),
 			},
 		),
 		altsrc.NewBoolFlag(
@@ -94,4 +113,28 @@ func initCommonFlags() ([]cli.Flag, error) {
 	}
 
 	return commonFlags, nil
+}
+
+// optionalYamlSrc is a shared util function to _optionally_ load config from yaml file
+// silently continuing if the file is not found
+func optionalYamlSrc(flags []cli.Flag) func(*cli.Context) error {
+	return func(c *cli.Context) error {
+		configFilePath, err := homedir.Expand(c.String(configFlagName))
+		if err != nil {
+			return err
+		}
+
+		// Succeed if no config file
+		if _, err := os.Stat(configFilePath); err == nil {
+			inputSource, err := altsrc.NewYamlSourceFromFile(configFilePath)
+			if err != nil {
+				return err
+			}
+			return altsrc.ApplyInputSourceValues(c, inputSource, flags)
+		} else if os.IsNotExist(err) {
+			return nil
+		} else {
+			return err
+		}
+	}
 }

@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"os"
 
-	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 
@@ -30,26 +28,7 @@ Or any combination:
 
 func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 	startFlags := initStartFlags(commonFlags)
-	before := func(ctx *cli.Context) error {
-		// Handle '~' exapansion for config file
-		configFilePath, err := homedir.Expand(ctx.String(configFlagName))
-		if err != nil {
-			return err
-		}
-
-		// Succeed if no config file
-		if _, err := os.Stat(configFilePath); err == nil {
-			inputSource, err := altsrc.NewYamlSourceFromFile(configFilePath)
-			if err != nil {
-				return err
-			}
-			return altsrc.ApplyInputSourceValues(ctx, inputSource, startFlags)
-		} else if os.IsNotExist(err) {
-			return nil
-		} else {
-			return err
-		}
-	}
+	before := optionalYamlSrc(startFlags)
 
 	return &cli.Command{
 		Name:        "start",
@@ -61,35 +40,21 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 			ctx := context.Background()
 			logger := logs.InitLogger(c.Bool("debug"))
 
-			// Handle '~' exapansion for config files
-			hopsPath, err := homedir.Expand(c.String("hops"))
-			if err != nil {
-				return err
-			}
-			kubeconfigPath, err := homedir.Expand(c.String("kubeconfig"))
-			if err != nil {
-				return err
-			}
-			keyfilePath, err := homedir.Expand(c.String("keyfile"))
-			if err != nil {
-				return err
-			}
-
 			hopsServer := &hops.HopsServer{
 				Console: hops.Console{
 					Address: c.String("address"),
 					Serve:   c.Bool("serve-console"),
 				},
-				HopsPath: hopsPath,
+				HopsPath: c.String("hops"),
 				HTTPApp: hops.HTTPApp{
 					Serve: c.Bool("serve-httpapp"),
 				},
 				K8sApp: hops.K8sApp{
-					KubeConfig:  kubeconfigPath,
+					KubeConfig:  c.String("kubeconfig"),
 					PortForward: c.Bool("portforward"),
 					Serve:       c.Bool("serve-k8sapp"),
 				},
-				KeyFilePath: keyfilePath,
+				KeyFilePath: c.String("keyfile"),
 				Logger:      logger,
 				ReplayEvent: c.String("replay-event"),
 				Runner: hops.Runner{
@@ -160,6 +125,7 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Usage:    "Path to the kubeconfig file for automating k8s (default will use kubernetes standard search locations)",
 				Category: "Kubernetes App",
 				Value:    "",
+				Action:   expandHomePath("kubeconfig"),
 			},
 		),
 		altsrc.NewBoolFlag(
