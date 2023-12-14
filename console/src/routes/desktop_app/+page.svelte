@@ -11,20 +11,39 @@
 		{
 			name: 'Automation 1 (Task)',
 			type: 'task',
-			hops: 'Hops blob 1',
-			files: ['filename1', 'filename2']
+			hops: 'Hops blob 2',
+			files: [
+				{
+					name: 'file1',
+					content: console.log('Hello world')
+				},
+				{
+					name: 'file2',
+					content: console.log('Hello world')
+				}
+			]
 		},
 		{
 			name: 'Automation 2 (Schedule)',
 			type: 'schedule',
 			hops: 'Hops blob 2',
-			files: ['filename3']
+			files: [
+				{
+					name: 'file3',
+					content: console.log('This is a schedule')
+				}
+			]
 		},
 		{
 			name: 'Automation 3 (Event)',
 			type: 'event',
 			hops: 'Hops blob 3',
-			files: ['']
+			files: [
+				{
+					name: 'file4',
+					content: console.log('This is an event')
+				}
+			]
 		}
 	];
 

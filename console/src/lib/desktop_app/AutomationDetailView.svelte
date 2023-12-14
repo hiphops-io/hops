@@ -9,10 +9,11 @@
 		name: string;
 		type: string;
 		hops: string;
+		files: [];
 		// Add other properties here
 	}
 
-	let activeAutomation: Automation = { name: '', type: '', hops: '' };
+	let activeAutomation: Automation = { name: '', type: '', hops: '', files: [] };
 
 	onMount(() => {
 		const unsubscribe = activeAutomationStore.subscribe((value: any) => {

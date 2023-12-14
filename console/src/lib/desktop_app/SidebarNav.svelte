@@ -57,7 +57,7 @@
 					{#if automation === activeAutomation}
 						<ul class="border-l border-grey ml-5 pl-2 space-y-2 mb-4">
 							{#each automation.files as file}
-								<li class="text-midgrey font-medium">{file}</li>
+								<li class="text-midgrey font-medium">{file.name}</li>
 							{/each}
 						</ul>
 					{/if}
