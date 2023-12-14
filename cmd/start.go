@@ -28,10 +28,7 @@ Or any combination:
 
 func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 	startFlags := initStartFlags(commonFlags)
-	before := altsrc.InitInputSourceWithContext(
-		startFlags,
-		altsrc.NewYamlSourceFromFlagFunc(configFlagName),
-	)
+	before := optionalYamlSrc(startFlags)
 
 	return &cli.Command{
 		Name:        "start",
@@ -128,6 +125,7 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Usage:    "Path to the kubeconfig file for automating k8s (default will use kubernetes standard search locations)",
 				Category: "Kubernetes App",
 				Value:    "",
+				Action:   expandHomePath("kubeconfig"),
 			},
 		),
 		altsrc.NewBoolFlag(
