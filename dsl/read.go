@@ -36,6 +36,7 @@ type (
 
 // ReadHopsFilePath loads and pre-parses the content of .hops files from all
 // .hops files in the first child sub directories.
+//
 // It returns a merged hcl.Body and a sha hash of the contents as well as
 // a slice of FileContent structs containing the file name, content and type.
 func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
@@ -98,8 +99,9 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 }
 
 // getHopsDirFilePaths returns a slice of all the file paths of files
-// in the first child subdirectories of the root directory, excluding dirs with
-// '..' prefix. Also enforces that there is only one .hops file per sub directory.
+// in the first child subdirectories of the root directory.
+//
+// Excludes dirs with '..' prefix as these cause problems with kubernetes.
 func getHopsDirFilePaths(root string) ([]string, error) {
 	var filePaths []string // list of file paths to be returned at the end (hops and other)
 
