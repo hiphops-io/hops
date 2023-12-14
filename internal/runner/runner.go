@@ -47,7 +47,7 @@ type (
 
 func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger) (*Runner, error) {
 	runner := &Runner{
-		hopsKey:     hopsKeyFromHash(hops.Hash),
+		hopsKey:     hops.Hash,
 		hopsContent: hops.BodyContent,
 		logger:      logger,
 		natsClient:  natsClient,
@@ -362,7 +362,7 @@ func (r *Runner) sequenceHopsStored(key string) (*dsl.HopsFiles, error) {
 	// Store in cache
 	r.logger.Debug().Msg("Caching stored hops locally")
 	hopsFiles := &dsl.HopsFiles{
-		Hash:        hopsKeyToHash(key),
+		Hash:        key,
 		BodyContent: hopsContent,
 		Files:       hopsFilesContent,
 	}
@@ -378,12 +378,4 @@ func hopsKeyFromBytes(keyB []byte) (string, error) {
 		err = fmt.Errorf("Unable to decode hops key %w", err)
 	}
 	return key, err
-}
-
-func hopsKeyFromHash(hash string) string {
-	return fmt.Sprintf("%s%s", hopsKeyPrefix, hash)
-}
-
-func hopsKeyToHash(key string) string {
-	return strings.TrimPrefix(key, hopsKeyPrefix)
 }
