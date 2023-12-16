@@ -91,7 +91,6 @@ jobs:
             goarch: universal
 
     runs-on: ${{ matrix.runs-on }}
-    runs-on: ${{ matrix.runs-on }}
 
     steps:
       - name: Checkout
