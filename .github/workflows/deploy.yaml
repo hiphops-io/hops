@@ -41,6 +41,12 @@ jobs:
           version: 8
           run_install: false
 
+      - name: Install dependencies
+        working-directory: console
+        run: |
+          # install dependencies
+          pnpm install
+
       - name: Build project
         working-directory: console
         run: pnpm run build
