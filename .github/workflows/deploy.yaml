@@ -62,17 +62,35 @@ jobs:
     needs: build-console
     strategy:
       matrix:
-        # build and publish in parallel: linux/amd64, linux/arm64, windows/amd64, windows/arm64
         goos: [linux, windows, darwin]
-        goarch: [amd64, arm64]
+        goarch: [amd64, arm64, universal]
+        exclude:
+          - goos: linux
+            goarch: universal
+          - goos: windows
+            goarch: universal
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
         include:
           - runs-on: ubuntu-latest
             goos: linux
+            goarch: amd64
+          - runs-on: ubuntu-latest
+            goos: linux
+            goarch: arm64
           - runs-on: ubuntu-latest
             goos: windows
+            goarch: amd64
+          - runs-on: ubuntu-latest
+            goos: windows
+            goarch: arm64
           - runs-on: macos-latest
             goos: darwin
+            goarch: universal
 
+    runs-on: ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
 
     steps:
