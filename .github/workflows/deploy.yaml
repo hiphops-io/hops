@@ -68,11 +68,20 @@ jobs:
         include:
           - runs-on: ubuntu-latest
             goos: linux
+            goarch: amd64
+          - runs-on: ubuntu-latest
+            goos: linux
+            goarch: arm64
           - runs-on: ubuntu-latest
             goos: windows
+            goarch: amd64
+          - runs-on: ubuntu-latest
+            goos: windows
+            goarch: arm64
           - runs-on: macos-latest
             goos: darwin
             goarch: arm64
+
     runs-on: ${{ matrix.runs-on }}
 
     steps:
