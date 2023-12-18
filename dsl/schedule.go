@@ -72,9 +72,7 @@ func ParseHopsSchedules(hops *HopsFiles, logger zerolog.Logger) (*HopAST, error)
 		SlugRegister: make(map[string]bool),
 	}
 
-	evalctx := &hcl.EvalContext{
-		Functions: DefaultFunctions(hops),
-	}
+	evalctx := &hcl.EvalContext{}
 
 	err := DecodeSchedules(hop, hops.BodyContent, evalctx)
 	if err != nil {

@@ -76,14 +76,14 @@ var defaultFunctions = map[string]function.Function{
 //
 // This is necessary to avoid race conditions when using the same function
 // map in multiple goroutines.
-func DefaultFunctions(hops *HopsFiles) map[string]function.Function {
+func DefaultFunctions(hops *HopsFiles, hopsDirectory string) map[string]function.Function {
 	functionsCopy := make(map[string]function.Function, len(defaultFunctions))
 	for k, v := range defaultFunctions {
 		functionsCopy[k] = v
 	}
 
 	// OK to overwrite because this will happen every time
-	functionsCopy["file"] = FileFunc(hops)
+	functionsCopy["file"] = FileFunc(hops, hopsDirectory)
 
 	return functionsCopy
 }

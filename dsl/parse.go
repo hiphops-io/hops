@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/gosimple/slug"
@@ -26,11 +27,10 @@ func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]by
 	}
 
 	evalctx := &hcl.EvalContext{
-		Functions: DefaultFunctions(hops),
 		Variables: ctxVariables,
 	}
 
-	err = DecodeHopsBody(ctx, hop, hops.BodyContent, evalctx, logger)
+	err = DecodeHopsBody(ctx, hop, hops, evalctx, logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops file")
 
@@ -45,10 +45,10 @@ func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]by
 	return hop, nil
 }
 
-func DecodeHopsBody(ctx context.Context, hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
-	onBlocks := hopsContent.Blocks.OfType(OnID)
+func DecodeHopsBody(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+	onBlocks := hops.BodyContent.Blocks.OfType(OnID)
 	for idx, onBlock := range onBlocks {
-		err := DecodeOnBlock(ctx, hop, onBlock, idx, evalctx, logger)
+		err := DecodeOnBlock(ctx, hop, hops, onBlock, idx, evalctx, logger)
 		if err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ func DecodeHopsBody(ctx context.Context, hop *HopAST, hopsContent *hcl.BodyConte
 	return nil
 }
 
-func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	on := &OnAST{}
 
 	bc, d := block.Body.Content(OnSchema)
@@ -105,7 +105,7 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, 
 		return nil
 	}
 
-	evalctx = scopedEvalContext(evalctx, on.EventType, on.Name)
+	evalctx = scopedEvalContext(evalctx, hops, block, on.EventType, on.Name)
 
 	ifClause := bc.Attributes[IfAttr]
 	val, err := DecodeConditionalAttr(ifClause, true, evalctx)
@@ -273,7 +273,7 @@ func slugify(parts ...string) string {
 // This function effectively fakes relative/local variables by checking where
 // we are in the hops code (defined by scopePath) and bringing any nested variables matching
 // that path to the top level.
-func scopedEvalContext(evalCtx *hcl.EvalContext, scopePath ...string) *hcl.EvalContext {
+func scopedEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Block, scopePath ...string) *hcl.EvalContext {
 	scopedVars := evalCtx.Variables
 
 	for _, scopeToken := range scopePath {
@@ -282,8 +282,13 @@ func scopedEvalContext(evalCtx *hcl.EvalContext, scopePath ...string) *hcl.EvalC
 		}
 	}
 
+	// For file() calls, get the directory prefix of the current hops file
+	hopsFilename := block.DefRange.Filename
+	hopsDir := path.Dir(hopsFilename)
+
 	scopedEvalCtx := evalCtx.NewChild()
 	scopedEvalCtx.Variables = scopedVars
+	scopedEvalCtx.Functions = DefaultFunctions(hops, hopsDir)
 
 	return scopedEvalCtx
 }
