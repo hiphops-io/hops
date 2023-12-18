@@ -8,7 +8,7 @@ import (
 )
 
 // TODO: Add encode/decode b64
-var defaultFunctions = map[string]function.Function{
+var StatelessFunctions = map[string]function.Function{
 	"abs":             stdlib.AbsoluteFunc,
 	"alltrue":         AllTrueFunc,
 	"anytrue":         AnyTrueFunc,
@@ -71,19 +71,11 @@ var defaultFunctions = map[string]function.Function{
 	"zipmap":          stdlib.ZipmapFunc,
 }
 
-// DefaultFunctions returns a map of all the default functions including
-// stateful functions
-//
-// This is necessary to avoid race conditions when using the same function
-// map in multiple goroutines.
-func DefaultFunctions(hops *HopsFiles, hopsDirectory string) map[string]function.Function {
-	functionsCopy := make(map[string]function.Function, len(defaultFunctions))
-	for k, v := range defaultFunctions {
-		functionsCopy[k] = v
+// StatefulFunctions returns a map of all the stateful functions
+func StatefulFunctions(hops *HopsFiles, hopsDirectory string) map[string]function.Function {
+	statefulFunctions := map[string]function.Function{
+		"file": FileFunc(hops, hopsDirectory),
 	}
 
-	// OK to overwrite because this will happen every time
-	functionsCopy["file"] = FileFunc(hops, hopsDirectory)
-
-	return functionsCopy
+	return statefulFunctions
 }

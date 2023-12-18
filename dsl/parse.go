@@ -27,6 +27,7 @@ func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]by
 	}
 
 	evalctx := &hcl.EvalContext{
+		Functions: StatelessFunctions,
 		Variables: ctxVariables,
 	}
 
@@ -288,7 +289,7 @@ func scopedEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Blo
 
 	scopedEvalCtx := evalCtx.NewChild()
 	scopedEvalCtx.Variables = scopedVars
-	scopedEvalCtx.Functions = DefaultFunctions(hops, hopsDir)
+	scopedEvalCtx.Functions = StatefulFunctions(hops, hopsDir)
 
 	return scopedEvalCtx
 }

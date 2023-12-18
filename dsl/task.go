@@ -22,7 +22,9 @@ func ParseHopsTasks(ctx context.Context, hops *HopsFiles) (*HopAST, error) {
 		SlugRegister: make(map[string]bool),
 	}
 
-	evalctx := &hcl.EvalContext{}
+	evalctx := &hcl.EvalContext{
+		Functions: StatelessFunctions,
+	}
 
 	err := DecodeTasks(ctx, hop, hops.BodyContent, evalctx)
 	if err != nil {
