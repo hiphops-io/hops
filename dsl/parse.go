@@ -108,7 +108,7 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, 
 		return nil
 	}
 
-	evalctx = scopedEvalContext(evalctx, block, on.EventType, on.Name)
+	evalctx = scopedEvalContext(evalctx, on.EventType, on.Name)
 
 	ifClause := bc.Attributes[IfAttr]
 	val, err := DecodeConditionalAttr(ifClause, true, evalctx)
@@ -283,7 +283,7 @@ func blockEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Bloc
 
 	scopedEvalCtx := evalCtx.NewChild()
 	scopedEvalCtx.Functions = StatefulFunctions(hops, hopsDir)
-	scopedEvalCtx.Variables = evalCtx.Variables // Must be set or else they are lost (unlike Functions which are merged)
+	scopedEvalCtx.Variables = evalCtx.Variables // Not inherited from parent (unlike Functions, which are merged)
 
 	return scopedEvalCtx
 }
@@ -293,7 +293,7 @@ func blockEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Bloc
 // This function effectively fakes relative/local variables by checking where
 // we are in the hops code (defined by scopePath) and bringing any nested variables matching
 // that path to the top level.
-func scopedEvalContext(evalCtx *hcl.EvalContext, block *hcl.Block, scopePath ...string) *hcl.EvalContext {
+func scopedEvalContext(evalCtx *hcl.EvalContext, scopePath ...string) *hcl.EvalContext {
 	scopedVars := evalCtx.Variables
 
 	for _, scopeToken := range scopePath {
