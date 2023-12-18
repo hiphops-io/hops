@@ -71,9 +71,19 @@ var defaultFunctions = map[string]function.Function{
 	"zipmap":          stdlib.ZipmapFunc,
 }
 
+// DefaultFunctions returns a map of all the default functions including
+// stateful functions
+//
+// This is necessary to avoid race conditions when using the same function
+// map in multiple goroutines.
 func DefaultFunctions(hops *HopsFiles) map[string]function.Function {
-	// OK to overwrite because this will happen every time
-	defaultFunctions["file"] = FileFunc(hops)
+	functionsCopy := make(map[string]function.Function, len(defaultFunctions))
+	for k, v := range defaultFunctions {
+		functionsCopy[k] = v
+	}
 
-	return defaultFunctions
+	// OK to overwrite because this will happen every time
+	functionsCopy["file"] = FileFunc(hops)
+
+	return functionsCopy
 }
