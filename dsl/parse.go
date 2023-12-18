@@ -49,7 +49,8 @@ func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]by
 func DecodeHopsBody(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	onBlocks := hops.BodyContent.Blocks.OfType(OnID)
 	for idx, onBlock := range onBlocks {
-		err := DecodeOnBlock(ctx, hop, hops, onBlock, idx, evalctx, logger)
+		blockEvalctx := scopedStatefulFunctionEvalContext(evalctx, hops, onBlock)
+		err := DecodeOnBlock(ctx, hop, hops, onBlock, idx, blockEvalctx, logger)
 		if err != nil {
 			return err
 		}
@@ -283,13 +284,25 @@ func scopedEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Blo
 		}
 	}
 
+	scopedEvalCtx := evalCtx.NewChild()
+	scopedEvalCtx.Variables = scopedVars
+
+	return scopedEvalCtx
+}
+
+// scopedEvalContext creates eval contexts that are relative to the current scope
+//
+// This function effectively fakes relative/local variables by checking where
+// we are in the hops code (defined by scopePath) and bringing any nested variables matching
+// that path to the top level.
+func scopedStatefulFunctionEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Block) *hcl.EvalContext {
 	// For file() calls, get the directory prefix of the current hops file
 	hopsFilename := block.DefRange.Filename
 	hopsDir := path.Dir(hopsFilename)
 
 	scopedEvalCtx := evalCtx.NewChild()
-	scopedEvalCtx.Variables = scopedVars
 	scopedEvalCtx.Functions = StatefulFunctions(hops, hopsDir)
+	scopedEvalCtx.Variables = evalCtx.Variables
 
 	return scopedEvalCtx
 }
