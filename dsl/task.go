@@ -26,7 +26,7 @@ func ParseHopsTasks(ctx context.Context, hops *HopsFiles) (*HopAST, error) {
 		Functions: StatelessFunctions,
 	}
 
-	err := DecodeTasks(ctx, hop, hops.BodyContent, evalctx)
+	err := DecodeTasks(ctx, hop, hops, evalctx)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops tasks")
 		return hop, err
@@ -35,10 +35,12 @@ func ParseHopsTasks(ctx context.Context, hops *HopsFiles) (*HopAST, error) {
 	return hop, nil
 }
 
-func DecodeTasks(ctx context.Context, hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.EvalContext) error {
-	blocks := hopsContent.Blocks.OfType(TaskID)
+func DecodeTasks(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext) error {
+	blocks := hops.BodyContent.Blocks.OfType(TaskID)
 	for _, block := range blocks {
-		err := DecodeTaskBlock(ctx, hop, block, evalctx)
+		blockEvalctx := blockEvalContext(evalctx, hops, block)
+
+		err := DecodeTaskBlock(ctx, hop, block, blockEvalctx)
 		if err != nil {
 			return err
 		}

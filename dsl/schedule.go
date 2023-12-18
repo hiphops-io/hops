@@ -55,10 +55,12 @@ func DecodeScheduleBlock(block *hcl.Block, hop *HopAST, evalctx *hcl.EvalContext
 	return nil
 }
 
-func DecodeSchedules(hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.EvalContext) error {
-	scheduleBlocks := hopsContent.Blocks.OfType(ScheduleID)
+func DecodeSchedules(hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext) error {
+	scheduleBlocks := hops.BodyContent.Blocks.OfType(ScheduleID)
 	for _, scheduleBlock := range scheduleBlocks {
-		err := DecodeScheduleBlock(scheduleBlock, hop, evalctx)
+		blockEvalctx := blockEvalContext(evalctx, hops, scheduleBlock)
+
+		err := DecodeScheduleBlock(scheduleBlock, hop, blockEvalctx)
 		if err != nil {
 			return err
 		}
@@ -76,7 +78,7 @@ func ParseHopsSchedules(hops *HopsFiles, logger zerolog.Logger) (*HopAST, error)
 		Functions: StatelessFunctions,
 	}
 
-	err := DecodeSchedules(hop, hops.BodyContent, evalctx)
+	err := DecodeSchedules(hop, hops, evalctx)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops schedules")
 		return hop, err
