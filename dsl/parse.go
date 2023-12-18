@@ -15,7 +15,7 @@ import (
 
 const hopsMetadataKey = "hops"
 
-func ParseHops(ctx context.Context, hopsContent *hcl.BodyContent, eventBundle map[string][]byte, logger zerolog.Logger) (*HopAST, error) {
+func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]byte, logger zerolog.Logger) (*HopAST, error) {
 	hop := &HopAST{
 		SlugRegister: make(map[string]bool),
 	}
@@ -26,11 +26,11 @@ func ParseHops(ctx context.Context, hopsContent *hcl.BodyContent, eventBundle ma
 	}
 
 	evalctx := &hcl.EvalContext{
-		Functions: DefaultFunctions,
+		Functions: DefaultFunctions(hops),
 		Variables: ctxVariables,
 	}
 
-	err = DecodeHopsBody(ctx, hop, hopsContent, evalctx, logger)
+	err = DecodeHopsBody(ctx, hop, hops.BodyContent, evalctx, logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops file")
 

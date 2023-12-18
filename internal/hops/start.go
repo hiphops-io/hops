@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/rs/zerolog"
 
 	"github.com/hiphops-io/hops/dsl"
@@ -115,7 +114,7 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		go func() {
 			err := startConsole(
 				h.Console.Address,
-				hops.BodyContent,
+				hops,
 				natsClient,
 				h.Logger,
 			)
@@ -176,8 +175,8 @@ func (h *HopsServer) Start(ctx context.Context) error {
 	return nil
 }
 
-func startConsole(address string, hopsContent *hcl.BodyContent, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
-	return httpserver.Serve(address, hopsContent, natsClient, logger)
+func startConsole(address string, hops *dsl.HopsFiles, natsClient httpserver.NatsClient, logger zerolog.Logger) error {
+	return httpserver.Serve(address, hops, natsClient, logger)
 }
 
 func startRunner(ctx context.Context, hops *dsl.HopsFiles, natsClient *nats.Client, fromConsumer string, logger zerolog.Logger) error {

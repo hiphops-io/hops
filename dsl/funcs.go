@@ -8,7 +8,7 @@ import (
 )
 
 // TODO: Add encode/decode b64
-var DefaultFunctions = map[string]function.Function{
+var defaultFunctions = map[string]function.Function{
 	"abs":             stdlib.AbsoluteFunc,
 	"alltrue":         AllTrueFunc,
 	"anytrue":         AnyTrueFunc,
@@ -69,4 +69,11 @@ var DefaultFunctions = map[string]function.Function{
 	"values":          stdlib.ValuesFunc,
 	"xglob":           ExclusiveGlobFunc,
 	"zipmap":          stdlib.ZipmapFunc,
+}
+
+func DefaultFunctions(hops *HopsFiles) map[string]function.Function {
+	// OK to overwrite because this will happen every time
+	defaultFunctions["file"] = FileFunc(hops)
+
+	return defaultFunctions
 }

@@ -67,16 +67,16 @@ func DecodeSchedules(hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.Eva
 	return nil
 }
 
-func ParseHopsSchedules(hopsContent *hcl.BodyContent, logger zerolog.Logger) (*HopAST, error) {
+func ParseHopsSchedules(hops *HopsFiles, logger zerolog.Logger) (*HopAST, error) {
 	hop := &HopAST{
 		SlugRegister: make(map[string]bool),
 	}
 
 	evalctx := &hcl.EvalContext{
-		Functions: DefaultFunctions,
+		Functions: DefaultFunctions(hops),
 	}
 
-	err := DecodeSchedules(hop, hopsContent, evalctx)
+	err := DecodeSchedules(hop, hops.BodyContent, evalctx)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops schedules")
 		return hop, err
