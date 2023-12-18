@@ -1,8 +1,6 @@
 package dsl
 
 import (
-	"fmt"
-
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
@@ -33,5 +31,11 @@ func File(filename string, hops *HopsFiles) (string, error) {
 		return "", nil
 	}
 
-	return fmt.Sprintf("%s/%#v", filename, hops), nil
+	for _, f := range hops.Files {
+		if filename == f.File {
+			return string(hops.Files[0].Content), nil
+		}
+	}
+
+	return "", nil
 }
