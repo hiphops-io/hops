@@ -24,7 +24,7 @@ type (
 	HopsFiles struct {
 		Hash        string
 		BodyContent *hcl.BodyContent
-		Files       []FileContent
+		Files       []FileContent // Sorted by file name `File`
 	}
 
 	FileContent struct {
@@ -33,6 +33,20 @@ type (
 		Type    string `json:"type"`
 	}
 )
+
+// LookupFile searches for a file in the HopsFiles struct and returns a
+// reference to the file and true if found, or nil and false if not found.
+func (h *HopsFiles) LookupFile(filePath string) (*FileContent, bool) {
+	// Binary search since filePaths are sorted
+	i := sort.Search(len(h.Files), func(i int) bool {
+		return h.Files[i].File >= filePath
+	})
+	if i < len(h.Files) && h.Files[i].File == filePath {
+		return &h.Files[i], true
+	}
+
+	return nil, false
+}
 
 // ReadHopsFilePath loads and pre-parses the content of .hops files from all
 // .hops files in the first child sub directories.

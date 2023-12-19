@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/gosimple/slug"
@@ -15,7 +16,7 @@ import (
 
 const hopsMetadataKey = "hops"
 
-func ParseHops(ctx context.Context, hopsContent *hcl.BodyContent, eventBundle map[string][]byte, logger zerolog.Logger) (*HopAST, error) {
+func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]byte, logger zerolog.Logger) (*HopAST, error) {
 	hop := &HopAST{
 		SlugRegister: make(map[string]bool),
 	}
@@ -26,11 +27,11 @@ func ParseHops(ctx context.Context, hopsContent *hcl.BodyContent, eventBundle ma
 	}
 
 	evalctx := &hcl.EvalContext{
-		Functions: DefaultFunctions,
+		Functions: StatelessFunctions,
 		Variables: ctxVariables,
 	}
 
-	err = DecodeHopsBody(ctx, hop, hopsContent, evalctx, logger)
+	err = DecodeHopsBody(ctx, hop, hops, evalctx, logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to decode hops file")
 
@@ -45,10 +46,10 @@ func ParseHops(ctx context.Context, hopsContent *hcl.BodyContent, eventBundle ma
 	return hop, nil
 }
 
-func DecodeHopsBody(ctx context.Context, hop *HopAST, hopsContent *hcl.BodyContent, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
-	onBlocks := hopsContent.Blocks.OfType(OnID)
+func DecodeHopsBody(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+	onBlocks := hops.BodyContent.Blocks.OfType(OnID)
 	for idx, onBlock := range onBlocks {
-		err := DecodeOnBlock(ctx, hop, onBlock, idx, evalctx, logger)
+		err := DecodeOnBlock(ctx, hop, hops, onBlock, idx, evalctx, logger)
 		if err != nil {
 			return err
 		}
@@ -57,7 +58,7 @@ func DecodeHopsBody(ctx context.Context, hop *HopAST, hopsContent *hcl.BodyConte
 	return nil
 }
 
-func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	on := &OnAST{}
 
 	bc, d := block.Body.Content(OnSchema)
@@ -105,6 +106,7 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, 
 		return nil
 	}
 
+	evalctx = blockEvalContext(evalctx, hops, block)
 	evalctx = scopedEvalContext(evalctx, on.EventType, on.Name)
 
 	ifClause := bc.Attributes[IfAttr]
@@ -266,6 +268,23 @@ func DecodeConditionalAttr(attr *hcl.Attribute, defaultValue bool, ctx *hcl.Eval
 func slugify(parts ...string) string {
 	joined := strings.Join(parts, "-")
 	return slug.Make(joined)
+}
+
+// blockEvalContext adds directory level StatefulFunctions to the eval context
+// for a block
+//
+// Makes sure directory level StatefulFunctions are created with
+// the correct state.
+func blockEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Block) *hcl.EvalContext {
+	// For file() calls, get the directory prefix of the current hops file
+	hopsFilename := block.DefRange.Filename
+	hopsDir := path.Dir(hopsFilename)
+
+	blockEvalCtx := evalCtx.NewChild()
+	blockEvalCtx.Functions = StatefulFunctions(hops, hopsDir)
+	blockEvalCtx.Variables = evalCtx.Variables // Not inherited from parent (unlike Functions, which are merged)
+
+	return blockEvalCtx
 }
 
 // scopedEvalContext creates eval contexts that are relative to the current scope

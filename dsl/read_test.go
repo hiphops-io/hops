@@ -64,6 +64,8 @@ func TestConcatenateHopsFiles(t *testing.T) {
 			expectError:       false,
 		},
 		{
+			// DO NOT CHANGE without making sure the `file` built in function still works.
+			// The `file` function depends on these files being sorted alphabetically.
 			name: "Files sorted by filename/directory",
 			files: map[string]string{
 				"hopsb/b.hops": "content of b",

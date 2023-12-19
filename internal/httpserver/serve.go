@@ -8,7 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/hashicorp/hcl/v2"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 
@@ -23,7 +22,7 @@ type NatsClient interface {
 	GetEventHistory(context.Context, time.Time, bool) ([]*nats.MsgMeta, error)
 }
 
-func Serve(addr string, hopsContent *hcl.BodyContent, natsClient NatsClient, logger zerolog.Logger) error {
+func Serve(addr string, hops *dsl.HopsFiles, natsClient NatsClient, logger zerolog.Logger) error {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RedirectSlashes)
@@ -44,7 +43,7 @@ func Serve(addr string, hopsContent *hcl.BodyContent, natsClient NatsClient, log
 	r.Mount("/console", ConsoleRouter(logger))
 
 	// Serve the tasks API
-	taskHops, err := parseTasks(hopsContent)
+	taskHops, err := parseTasks(hops)
 	if err != nil {
 		return err
 	}
@@ -59,9 +58,9 @@ func Serve(addr string, hopsContent *hcl.BodyContent, natsClient NatsClient, log
 	return http.ListenAndServe(addr, r)
 }
 
-func parseTasks(hopsContent *hcl.BodyContent) (*dsl.HopAST, error) {
+func parseTasks(hops *dsl.HopsFiles) (*dsl.HopAST, error) {
 	ctx := context.Background()
-	taskHops, err := dsl.ParseHopsTasks(ctx, hopsContent)
+	taskHops, err := dsl.ParseHopsTasks(ctx, hops)
 	if err != nil {
 		return nil, err
 	}

@@ -92,7 +92,7 @@ func (r *Runner) SequenceCallback(
 		return fmt.Errorf("Unable to fetch assigned hops file for sequence: %w", err)
 	}
 
-	hop, err := dsl.ParseHops(ctx, hops.BodyContent, msgBundle, logger)
+	hop, err := dsl.ParseHops(ctx, hops, msgBundle, logger)
 	if err != nil {
 		return fmt.Errorf("Error parsing hops config: %w", err)
 	}
@@ -249,7 +249,7 @@ func (r *Runner) initHopsBackup(hops *dsl.HopsFiles) error {
 //
 // This function will not run the schedules, just prepare them
 func (r *Runner) initHopsSchedules(hops *dsl.HopsFiles) error {
-	hop, err := dsl.ParseHopsSchedules(hops.BodyContent, r.logger)
+	hop, err := dsl.ParseHopsSchedules(hops, r.logger)
 	if err != nil {
 		return err
 	}

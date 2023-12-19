@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -395,14 +394,14 @@ task foo {
 			ctx := context.Background()
 
 			// Ditch early if we're expecting invalid parsing
-			hopsHcl, _, err := createTmpHopsFile(tc.hops, t)
+			hops, err := createTmpHopsFile(tc.hops, t)
 			if !tc.validRead {
 				assert.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			hop, err := ParseHopsTasks(ctx, hopsHcl)
+			hop, err := ParseHopsTasks(ctx, hops)
 			if !tc.validParse {
 				assert.Error(t, err)
 				return
@@ -417,7 +416,7 @@ task foo {
 
 // createTmpHopsFile creates a temporary hops file in a subdirectory
 // with the given content and returns the parsed HCL body content
-func createTmpHopsFile(content string, t *testing.T) (*hcl.BodyContent, string, error) {
+func createTmpHopsFile(content string, t *testing.T) (*HopsFiles, error) {
 	// temporary directory
 	tmpDir, err := os.MkdirTemp("", "testdir")
 	if err != nil {
@@ -436,8 +435,8 @@ func createTmpHopsFile(content string, t *testing.T) (*hcl.BodyContent, string, 
 
 	hops, err := ReadHopsFilePath(tmpDir)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return hops.BodyContent, hops.Hash, nil
+	return hops, nil
 }

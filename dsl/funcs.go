@@ -7,8 +7,9 @@ import (
 	"github.com/zclconf/go-cty/cty/function/stdlib"
 )
 
+// StatelessFunctions can be instantiated once
 // TODO: Add encode/decode b64
-var DefaultFunctions = map[string]function.Function{
+var StatelessFunctions = map[string]function.Function{
 	"abs":             stdlib.AbsoluteFunc,
 	"alltrue":         AllTrueFunc,
 	"anytrue":         AnyTrueFunc,
@@ -69,4 +70,19 @@ var DefaultFunctions = map[string]function.Function{
 	"values":          stdlib.ValuesFunc,
 	"xglob":           ExclusiveGlobFunc,
 	"zipmap":          stdlib.ZipmapFunc,
+}
+
+// StatefulFunctions returns a map of all stateful functions that are scoped
+// to a block (and therefore a single .hops file).
+//
+// These must be added to the eval context for each block as the contents change.
+// This is a workaround to the fact that cty does not allow passing additional
+// context information beyond the parameters of the function. And specifically
+// does not allow passing the eval context.
+func StatefulFunctions(hops *HopsFiles, hopsDirectory string) map[string]function.Function {
+	statefulFunctions := map[string]function.Function{
+		"file": FileFunc(hops, hopsDirectory),
+	}
+
+	return statefulFunctions
 }
