@@ -2,7 +2,6 @@ package dsl
 
 import (
 	"path"
-	"sort"
 
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -45,12 +44,8 @@ func File(directory, filename string, hops *HopsFiles) (string, error) {
 
 	filePath := path.Join(directory, filename)
 
-	// Binary search since filePaths are sorted
-	i := sort.Search(len(hops.Files), func(i int) bool {
-		return hops.Files[i].File >= filePath
-	})
-	if i < len(hops.Files) && hops.Files[i].File == filePath {
-		return string(hops.Files[i].Content), nil
+	if file, ok := hops.LookupFile(filePath); ok {
+		return string(file.Content), nil
 	}
 
 	return "", nil
