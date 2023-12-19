@@ -12,6 +12,7 @@ import (
 	"github.com/hiphops-io/hops/internal/httpapp"
 	"github.com/hiphops-io/hops/internal/httpserver"
 	"github.com/hiphops-io/hops/internal/k8sapp"
+	"github.com/hiphops-io/hops/internal/plugin"
 	"github.com/hiphops-io/hops/internal/runner"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
@@ -43,6 +44,7 @@ type (
 		HTTPApp
 		K8sApp
 		Runner
+		Plugin
 	}
 
 	HTTPApp struct {
@@ -56,6 +58,10 @@ type (
 	}
 
 	Runner struct {
+		Serve bool
+	}
+
+	Plugin struct {
 		Serve bool
 	}
 )
@@ -168,6 +174,18 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		}()
 	}
 
+	if h.Plugin.Serve {
+		go func() {
+			err := startPlugin(
+				ctx,
+				h.Logger,
+			)
+			if err != nil {
+				errs <- err
+			}
+		}()
+	}
+
 	if err := <-errs; err != nil {
 		h.Logger.Error().Err(err).Msg("Start failed")
 		return err
@@ -225,4 +243,10 @@ func startK8sApp(ctx context.Context, natsClient *nats.Client, kubeConfPath stri
 
 	// Blocks until complete or errored
 	return worker.Run(ctx)
+}
+
+func startPlugin(ctx context.Context, logger zerolog.Logger) error {
+	logger.Info().Msg("Listening for plugin events")
+
+	return plugin.Run(ctx)
 }

@@ -14,11 +14,12 @@ func InitLogger(debug bool) zerolog.Logger {
 
 	var logWriter io.Writer
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	// Stderr because https://github.com/hashicorp/go-plugin/issues/199
 	if debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		logWriter = zerolog.ConsoleWriter{Out: os.Stdout}
+		logWriter = zerolog.ConsoleWriter{Out: os.Stderr}
 	} else {
-		logWriter = os.Stdout
+		logWriter = os.Stderr
 	}
 
 	logger := zerolog.New(logWriter).With().Timestamp().Logger()
