@@ -49,9 +49,7 @@ func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]by
 func DecodeHopsBody(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	onBlocks := hops.BodyContent.Blocks.OfType(OnID)
 	for idx, onBlock := range onBlocks {
-		blockEvalctx := blockEvalContext(evalctx, hops, onBlock)
-
-		err := DecodeOnBlock(ctx, hop, onBlock, idx, blockEvalctx, logger)
+		err := DecodeOnBlock(ctx, hop, hops, onBlock, idx, evalctx, logger)
 		if err != nil {
 			return err
 		}
@@ -60,7 +58,7 @@ func DecodeHopsBody(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *
 	return nil
 }
 
-func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	on := &OnAST{}
 
 	bc, d := block.Body.Content(OnSchema)
@@ -108,6 +106,7 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, block *hcl.Block, idx int, 
 		return nil
 	}
 
+	evalctx = blockEvalContext(evalctx, hops, block)
 	evalctx = scopedEvalContext(evalctx, on.EventType, on.Name)
 
 	ifClause := bc.Attributes[IfAttr]
@@ -281,11 +280,11 @@ func blockEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Bloc
 	hopsFilename := block.DefRange.Filename
 	hopsDir := path.Dir(hopsFilename)
 
-	scopedEvalCtx := evalCtx.NewChild()
-	scopedEvalCtx.Functions = StatefulFunctions(hops, hopsDir)
-	scopedEvalCtx.Variables = evalCtx.Variables // Not inherited from parent (unlike Functions, which are merged)
+	blockEvalCtx := evalCtx.NewChild()
+	blockEvalCtx.Functions = StatefulFunctions(hops, hopsDir)
+	blockEvalCtx.Variables = evalCtx.Variables // Not inherited from parent (unlike Functions, which are merged)
 
-	return scopedEvalCtx
+	return blockEvalCtx
 }
 
 // scopedEvalContext creates eval contexts that are relative to the current scope
