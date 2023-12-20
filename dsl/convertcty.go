@@ -16,19 +16,20 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 		return nil, nil
 	}
 
+	valType := val.Type()
 	switch {
 
-	case val.Type().Equals(cty.String):
+	case valType.Equals(cty.String):
 		return val.AsString(), nil
 
-	case val.Type().Equals(cty.Number):
+	case valType.Equals(cty.Number):
 		num, _ := val.AsBigFloat().Float64()
 		return num, nil
 
-	case val.Type().Equals(cty.Bool):
+	case valType.Equals(cty.Bool):
 		return val.True(), nil
 
-	case val.Type().IsMapType():
+	case valType.IsMapType():
 		resultMap := make(map[string]interface{})
 		for key, value := range val.AsValueMap() {
 			convertedVal, err := convertCtyValueToInterface(value)
@@ -39,7 +40,7 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 		}
 		return resultMap, nil
 
-	case val.Type().IsListType() || val.Type().IsSetType():
+	case valType.IsListType() || valType.IsSetType():
 		var resultList []interface{}
 		for _, item := range val.AsValueSlice() {
 			convertedItem, err := convertCtyValueToInterface(item)
@@ -50,7 +51,7 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 		}
 		return resultList, nil
 
-	case val.Type().IsObjectType():
+	case valType.IsObjectType():
 		objValMap := val.AsValueMap()
 		resultMap := make(map[string]interface{})
 		for key, value := range objValMap {
@@ -62,7 +63,7 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 		}
 		return resultMap, nil
 
-	case val.Type().IsTupleType():
+	case valType.IsTupleType():
 		var resultList []interface{}
 		for _, item := range val.AsValueSlice() {
 			convertedItem, err := convertCtyValueToInterface(item)

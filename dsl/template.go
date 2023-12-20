@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/flosch/pongo2/v6"
-	"github.com/goccy/go-json"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 )
@@ -35,27 +34,14 @@ func TemplateFunc(hops *HopsFiles, hopsDirectory string) function.Function {
 			filename := filenameVal.AsString()
 			variablesVal := args[1]
 
-			var variables map[string]interface{}
+			ctyVariables, err := convertCtyValueToInterface(variablesVal)
+			if err != nil {
+				return cty.Value{}, err
+			}
 
-			// Check if variablesVal is a string and try to json.Unmarshal it
-			if variablesVal.Type() == cty.String {
-				var jsonVariables map[string]interface{}
-				if err := json.Unmarshal([]byte(variablesVal.AsString()), &jsonVariables); err == nil {
-					variables = jsonVariables
-				} else {
-					// Handle the error if the string is not a valid JSON
-					return cty.Value{}, err
-				}
-			} else {
-				ctyVariables, err := convertCtyValueToInterface(variablesVal)
-				if err != nil {
-					return cty.Value{}, err
-				}
-				var ok bool
-				variables, ok = ctyVariables.(map[string]interface{})
-				if !ok {
-					return cty.Value{}, fmt.Errorf("variables must be key value pairs")
-				}
+			variables, ok := ctyVariables.(map[string]interface{})
+			if !ok {
+				return cty.Value{}, fmt.Errorf("Variables must be key value pairs")
 			}
 
 			file, err := Template(hopsDirectory, filename, hops, variables)
@@ -73,7 +59,7 @@ func TemplateFunc(hops *HopsFiles, hopsDirectory string) function.Function {
 // which protects against dangerous HTML inputs in variables.
 func Template(directory, filename string, hops *HopsFiles, variables map[string]any) (string, error) {
 	if filename == "" {
-		return "", nil
+		return "", fmt.Errorf("Filename must be provided")
 	}
 
 	fileContent, err := File(directory, filename, hops)
