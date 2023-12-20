@@ -41,6 +41,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fatih/color v1.13.0 // indirect
+	github.com/flosch/pongo2/v6 v6.0.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect

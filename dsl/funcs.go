@@ -81,7 +81,8 @@ var StatelessFunctions = map[string]function.Function{
 // does not allow passing the eval context.
 func StatefulFunctions(hops *HopsFiles, hopsDirectory string) map[string]function.Function {
 	statefulFunctions := map[string]function.Function{
-		"file": FileFunc(hops, hopsDirectory),
+		"file":     FileFunc(hops, hopsDirectory),
+		"template": TemplateFunc(hops, hopsDirectory),
 	}
 
 	return statefulFunctions
