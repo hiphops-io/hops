@@ -116,6 +116,7 @@ jobs:
           if [ ${{ matrix.goos }} == 'darwin' ]; then
             CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=arm64 go build -o bin/hops-arm64
             CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=amd64 go build -o bin/hops-amd64
+            # create universal binary
             lipo -create -output bin/hops${EXT} bin/hops-arm64 bin/hops-amd64
             rm bin/hops-arm64 bin/hops-amd64
           else
@@ -140,7 +141,7 @@ jobs:
         run: |
           mkdir -p zip
           cd bin
-          zip ../zip/hops-${{ inputs.ref }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip hops${EXT}
+          zip ../zip/hops-${{ matrix.goos }}-${{ matrix.goarch }}.zip hops${EXT}
           cd ..
 
       - name: Sign MacOS zip
@@ -148,7 +149,7 @@ jobs:
         env:
           APPLE_CODE_SIGNING_DEVELOPER_ID: ${{ secrets.APPLE_CODE_SIGNING_DEVELOPER_ID }}
         run: |
-          .github/scripts/codesign.sh zip/hops-${{ inputs.ref }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+          .github/scripts/codesign.sh zip/hops-${{ matrix.goos }}-${{ matrix.goarch }}.zip
 
       - name: Notarize
         if: matrix.goos == 'darwin'
@@ -157,7 +158,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_NOTARYTOOL_PASSWORD: ${{ secrets.APPLE_NOTARYTOOL_PASSWORD }}
         run: |
-          .github/scripts/notarize.sh zip/hops-${{ inputs.ref }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip --apple-id ${{ secrets.APPLE_LOGIN }} --team-id ${{ secrets.APPLE_TEAM_ID }} --password ${{ secrets.APPLE_NOTARYTOOL_PASSWORD }}
+          .github/scripts/notarize.sh zip/hops-${{ matrix.goos }}-${{ matrix.goarch }}.zip --apple-id ${{ secrets.APPLE_LOGIN }} --team-id ${{ secrets.APPLE_TEAM_ID }} --password ${{ secrets.APPLE_NOTARYTOOL_PASSWORD }}
 
       - name: Upload to release
         uses: softprops/action-gh-release@v1
