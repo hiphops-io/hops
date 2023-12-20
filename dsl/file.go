@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"fmt"
 	"path"
 
 	"github.com/zclconf/go-cty/cty"
@@ -48,5 +49,5 @@ func File(directory, filename string, hops *HopsFiles) (string, error) {
 		return string(file.Content), nil
 	}
 
-	return "", nil
+	return "", fmt.Errorf("File %s not found", filePath)
 }
