@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/hiphops-io/hops/logs"
 	"github.com/urfave/cli/v2"
@@ -68,17 +69,24 @@ func initAddKeyCommand(commonFlags []cli.Flag) *cli.Command {
 	}
 }
 
-func overwriteFile(filepath string, content []byte) error {
-	writeFile, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE, 0666)
+func overwriteFile(fileNamePath string, content []byte) error {
+	// Create all directories in the path if they do not exist
+	dirPath := filepath.Dir(fileNamePath)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return err
+	}
+
+	// Open the file with flags to create it if it doesn't exist, and for read-write
+	writeFile, err := os.OpenFile(fileNamePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer writeFile.Close()
 
-	writeFile.Truncate(0)
-	writeFile.Seek(0, 0)
-	writeFile.Write(content)
-	writeFile.Sync()
+	// Write the content to the file
+	if _, err := writeFile.Write(content); err != nil {
+		return err
+	}
 
-	return nil
+	return writeFile.Sync()
 }
