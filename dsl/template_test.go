@@ -61,3 +61,29 @@ func TestRunTemplate(t *testing.T) {
 		}
 	})
 }
+
+func TestRunTemplateLooping(t *testing.T) {
+	templateContent := `Items List:
+{% for item in items %}
+- {{ item }}
+{%- endfor %}
+`
+	items := map[string]any{
+		"items": []string{"item1", "item2", "item3"},
+	}
+	// Test for text mode (no autoescaping)
+	t.Run("Test Looping", func(t *testing.T) {
+		expectedOutput := `Items List:
+
+- item1
+- item2
+- item3
+`
+
+		output, err := runTemplate(templateContent, items)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, expectedOutput, output)
+		}
+	})
+}
