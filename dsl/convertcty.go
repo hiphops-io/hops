@@ -53,9 +53,7 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 		return resultList, nil
 
 	case valType.IsCapsuleType():
-		encapsulatedValue := val.EncapsulatedValue()
-
-		return reflect.ValueOf(encapsulatedValue).Interface(), nil
+		return reflect.ValueOf(val.EncapsulatedValue()).Interface(), nil
 
 	default:
 		return nil, fmt.Errorf("Unsupported cty type: %s", val.Type().FriendlyName())
