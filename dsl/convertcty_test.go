@@ -25,11 +25,6 @@ type (
 	}
 )
 
-var (
-	capsulatedType1Capsule = cty.Capsule("capsulatedType1", reflect.TypeOf(capsulatedType1{}))
-	capsulatedType2Capsule = cty.Capsule("capsulatedType2", reflect.TypeOf(capsulatedType2{}))
-)
-
 // TestConvertCtyValueToInterface tests convertCtyValueToInterface and
 // full functionality of conversion from cty.Value to interface{}.
 func TestConvertCtyValueToInterface(t *testing.T) {
@@ -163,6 +158,9 @@ func TestConvertCtyValueToInterface(t *testing.T) {
 }
 
 func TestConvertCtyValueToInterface_CapsuleTypes(t *testing.T) {
+	capsulatedType1Capsule := cty.Capsule("capsulatedType1", reflect.TypeOf(capsulatedType1{}))
+	capsulatedType2Capsule := cty.Capsule("capsulatedType2", reflect.TypeOf(capsulatedType2{}))
+
 	customValue1 := capsulatedType1{Field1: "Test1"}
 	customValue2 := capsulatedType2{Field2: 42}
 
