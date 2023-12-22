@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/zclconf/go-cty/cty"
 )
@@ -12,7 +13,7 @@ import (
 // Does not cover all possible cty types, such as unknown, capsule, empty object,
 // and empty tuple.
 func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
-	if val.IsNull() {
+	if val.IsNull() || !val.IsKnown() {
 		return nil, nil
 	}
 
@@ -41,7 +42,7 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 		return resultMap, nil
 
 	case valType.IsListType(), valType.IsSetType(), valType.IsTupleType():
-		var resultList []interface{}
+		resultList := []interface{}{}
 		for _, item := range val.AsValueSlice() {
 			convertedItem, err := convertCtyValueToInterface(item)
 			if err != nil {
@@ -51,7 +52,12 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 		}
 		return resultList, nil
 
+	case valType.IsCapsuleType():
+		encapsulatedValue := val.EncapsulatedValue()
+
+		return reflect.ValueOf(encapsulatedValue).Interface(), nil
+
 	default:
-		return nil, fmt.Errorf("unsupported cty type: %s", val.Type().FriendlyName())
+		return nil, fmt.Errorf("Unsupported cty type: %s", val.Type().FriendlyName())
 	}
 }
