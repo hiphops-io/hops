@@ -58,7 +58,7 @@ func initAddKeyCommand(commonFlags []cli.Flag) *cli.Command {
 		Action: func(c *cli.Context) error {
 			logger := logs.InitLogger(c.Bool("debug"))
 
-			err := overwriteFile(c.String("keyfile"), []byte(c.String("keydata")))
+			err := addOrUpdateKeyfile(c.String("keyfile"), []byte(c.String("keydata")))
 			if err != nil {
 				logger.Error().Err(err).Msg("Failed to write keyfile")
 				return err
@@ -69,7 +69,9 @@ func initAddKeyCommand(commonFlags []cli.Flag) *cli.Command {
 	}
 }
 
-func overwriteFile(fileNamePath string, content []byte) error {
+// addOrUpdateKeyfile writes the keyfile to the specified path, creating all directories in the path if they do not
+// exist. Overwrites the file if it already exists.
+func addOrUpdateKeyfile(fileNamePath string, content []byte) error {
 	// Create all directories in the path if they do not exist
 	dirPath := filepath.Dir(fileNamePath)
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
