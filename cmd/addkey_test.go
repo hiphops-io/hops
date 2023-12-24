@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestOverwriteFile(t *testing.T) {
+func TestAddKeyfile(t *testing.T) {
 	// Get the current umask
 	originalUmask := syscall.Umask(0)
 	syscall.Umask(originalUmask)
@@ -23,13 +23,13 @@ func TestOverwriteFile(t *testing.T) {
 		filePath := filepath.Join(tempDir, "testfile.txt")
 
 		initialContent := []byte("initial content")
-		err := overwriteFile(filePath, initialContent)
+		err := addOrUpdateKeyfile(filePath, initialContent)
 		if err != nil {
 			t.Fatal("Failed to write file with initial content:", err)
 		}
 
 		newContent := []byte("new content")
-		err = overwriteFile(filePath, newContent)
+		err = addOrUpdateKeyfile(filePath, newContent)
 		if err != nil {
 			t.Fatal("Failed to overwrite existing file with new content:", err)
 		}
@@ -54,7 +54,7 @@ func TestOverwriteFile(t *testing.T) {
 		filePath := filepath.Join(tempDir, "newfile.txt")
 
 		content := []byte("new file content")
-		err := overwriteFile(filePath, content)
+		err := addOrUpdateKeyfile(filePath, content)
 		if err != nil {
 			t.Fatal("Failed to write file with new content:", err)
 		}
@@ -79,7 +79,7 @@ func TestOverwriteFile(t *testing.T) {
 		filePath := filepath.Join(newDir, "newfile.txt")
 
 		content := []byte("content for new file in new directory")
-		err := overwriteFile(filePath, content)
+		err := addOrUpdateKeyfile(filePath, content)
 		if err != nil {
 			t.Fatal("Failed to create directory and file:", err)
 		}
@@ -107,7 +107,7 @@ func TestOverwriteFile(t *testing.T) {
 	// Test invalid input (e.g., directory path)
 	t.Run("invalid input - directory path", func(t *testing.T) {
 		tempDir := t.TempDir()
-		err := overwriteFile(tempDir, []byte("content"))
+		err := addOrUpdateKeyfile(tempDir, []byte("content"))
 		assert.Error(t, err)
 	})
 }
