@@ -17,16 +17,6 @@ import (
 	"github.com/hiphops-io/hops/worker"
 )
 
-// TODO: I'm not super happy with this string based toggle approach as it has
-// ended up being overly complex for such a simple capability.
-// This was formed due to limitations in the CLI library, but we should probably refactor a bit
-// and stop those limitations leaking into the rest of the code.
-const (
-	ServeConsoleOpt = "console"
-	ServeK8sAppOpt  = "k8sapp"
-	ServeRunnerOpt  = "runner"
-)
-
 type (
 	Console struct {
 		Address string
