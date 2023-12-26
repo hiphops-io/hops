@@ -60,6 +60,9 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 				Runner: hops.Runner{
 					Serve: c.Bool("serve-runner"),
 				},
+				Plugin: hops.Plugin{
+					Serve: c.Bool("plugin-mode"),
+				},
 			}
 
 			return hopsServer.Start(ctx)
@@ -134,6 +137,15 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Aliases:  []string{"k8s.portforward"},
 				Usage:    "Whether to auto port-forward, necessary when running outside of a k8s cluster and orchestrating pods",
 				Category: "Kubernetes App",
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:     "plugin-mode",
+				Aliases:  []string{"plugin.serve"},
+				Usage:    "Run as a plugin",
+				Category: serveCategory,
+				Value:    false,
 			},
 		),
 	}
