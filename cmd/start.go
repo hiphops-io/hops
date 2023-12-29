@@ -41,6 +41,9 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 			logger := logs.InitLogger(c.Bool("debug"))
 
 			hopsServer := &hops.HopsServer{
+				Admin: hops.Admin{
+					Serve: c.Bool("serve-admin"),
+				},
 				Console: hops.Console{
 					Address: c.String("address"),
 					Serve:   c.Bool("serve-console"),
@@ -81,6 +84,15 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 			&cli.StringFlag{
 				Name:  "replay-event",
 				Usage: "Replay a specific source event against current hops configs. Takes a source event ID",
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:     "serve-admin",
+				Aliases:  []string{"admin.serve"},
+				Usage:    "Whether to start the admin API",
+				Category: serveCategory,
+				Value:    false,
 			},
 		),
 		altsrc.NewBoolFlag(

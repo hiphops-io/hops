@@ -18,6 +18,10 @@ import (
 )
 
 type (
+	Admin struct {
+		Serve bool
+	}
+
 	Console struct {
 		Address string
 		Serve   bool
@@ -28,6 +32,7 @@ type (
 		KeyFilePath string
 		Logger      zerolog.Logger
 		ReplayEvent string
+		Admin
 		Console
 		HTTPApp
 		K8sApp
@@ -99,6 +104,12 @@ func (h *HopsServer) Start(ctx context.Context) error {
 	defer natsClient.Close()
 
 	errs := make(chan error, 1)
+
+	if h.Admin.Serve {
+		go func() {
+			// Admin API serving code goes here
+		}()
+	}
 
 	if h.Console.Serve {
 		go func() {
