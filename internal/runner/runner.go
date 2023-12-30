@@ -46,26 +46,26 @@ type (
 )
 
 func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger) (*Runner, error) {
-	runner := &Runner{
+	r := &Runner{
 		hopsKey:     hops.Hash,
 		hopsContent: hops.BodyContent,
 		logger:      logger,
 		natsClient:  natsClient,
 	}
 
-	runner.initCache()
+	r.initCache()
 
-	err := runner.initHopsBackup(hops)
+	err := r.initHopsBackup(hops)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to store hops files %w", err)
 	}
 
-	err = runner.initHopsSchedules(hops)
+	err = r.initHopsSchedules(hops)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to start schedules %w", err)
 	}
 
-	return runner, nil
+	return r, nil
 }
 
 func (r *Runner) Run(ctx context.Context, fromConsumer string) error {

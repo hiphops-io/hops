@@ -1,11 +1,13 @@
-package httpserver
+package hops
 
 import (
 	"net/http"
 	"strings"
+
+	"github.com/hiphops-io/hops/nats"
 )
 
-func Healthcheck(natsClient NatsClient, endpoint string) func(http.Handler) http.Handler {
+func Healthcheck(natsClient *nats.Client, endpoint string) func(http.Handler) http.Handler {
 	f := func(h http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			if (r.Method == "GET" || r.Method == "HEAD") && strings.EqualFold(r.URL.Path, endpoint) {

@@ -1,10 +1,8 @@
 package dsl
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-
 	"github.com/goccy/go-json"
+	"github.com/google/uuid"
 )
 
 type SourceMeta struct {
@@ -25,9 +23,9 @@ func CreateSourceEvent(rawEvent map[string]any, source string, event string, act
 		return nil, "", err
 	}
 
-	hasher := sha256.New()
-	hasher.Write(sourceBytes)
-	sha256Hash := hex.EncodeToString(hasher.Sum(nil))
+	// We don't really care about the UUID namespace, so we just use an existing one
+	sourceUUID := uuid.NewSHA1(uuid.NameSpaceDNS, sourceBytes)
+	hash := sourceUUID.String()
 
-	return sourceBytes, sha256Hash, nil
+	return sourceBytes, hash, nil
 }

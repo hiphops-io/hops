@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	k8sCategory   = "K8s App"
 	serveCategory = "Serve"
 
 	startDescription = `Start Hiphops
@@ -41,9 +42,6 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 			logger := logs.InitLogger(c.Bool("debug"))
 
 			hopsServer := &hops.HopsServer{
-				Admin: hops.Admin{
-					Serve: c.Bool("serve-admin"),
-				},
 				Console: hops.Console{
 					Address: c.String("address"),
 					Serve:   c.Bool("serve-console"),
@@ -63,6 +61,7 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 				Runner: hops.Runner{
 					Serve: c.Bool("serve-runner"),
 				},
+				Watch: c.Bool("watch"),
 			}
 
 			return hopsServer.Start(ctx)
@@ -84,15 +83,6 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 			&cli.StringFlag{
 				Name:  "replay-event",
 				Usage: "Replay a specific source event against current hops configs. Takes a source event ID",
-			},
-		),
-		altsrc.NewBoolFlag(
-			&cli.BoolFlag{
-				Name:     "serve-admin",
-				Aliases:  []string{"admin.serve"},
-				Usage:    "Whether to start the admin API",
-				Category: serveCategory,
-				Value:    false,
 			},
 		),
 		altsrc.NewBoolFlag(
@@ -135,7 +125,7 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Name:     "kubeconfig",
 				Aliases:  []string{"k", "k8s.kubeconfig"},
 				Usage:    "Path to the kubeconfig file for automating k8s (default will use kubernetes standard search locations)",
-				Category: "Kubernetes App",
+				Category: k8sCategory,
 				Value:    "",
 				Action:   expandHomePath("kubeconfig"),
 			},
@@ -145,7 +135,13 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Name:     "portforward",
 				Aliases:  []string{"k8s.portforward"},
 				Usage:    "Whether to auto port-forward, necessary when running outside of a k8s cluster and orchestrating pods",
-				Category: "Kubernetes App",
+				Category: k8sCategory,
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:  "watch",
+				Usage: "Auto reload on change to the given hops directory",
 			},
 		),
 	}

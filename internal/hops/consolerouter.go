@@ -1,4 +1,4 @@
-package httpserver
+package hops
 
 import (
 	"io/fs"
