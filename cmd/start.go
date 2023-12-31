@@ -42,15 +42,15 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 			logger := logs.InitLogger(c.Bool("debug"))
 
 			hopsServer := &hops.HopsServer{
-				Console: hops.Console{
+				HTTPServerConf: hops.HTTPServerConf{
 					Address: c.String("address"),
 					Serve:   c.Bool("serve-console"),
 				},
 				HopsPath: c.String("hops"),
-				HTTPApp: hops.HTTPApp{
+				HTTPAppConf: hops.HTTPAppConf{
 					Serve: c.Bool("serve-httpapp"),
 				},
-				K8sApp: hops.K8sApp{
+				K8sAppConf: hops.K8sAppConf{
 					KubeConfig:  c.String("kubeconfig"),
 					PortForward: c.Bool("portforward"),
 					Serve:       c.Bool("serve-k8sapp"),
@@ -58,7 +58,7 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 				KeyFilePath: c.String("keyfile"),
 				Logger:      logger,
 				ReplayEvent: c.String("replay-event"),
-				Runner: hops.Runner{
+				RunnerConf: hops.RunnerConf{
 					Serve: c.Bool("serve-runner"),
 				},
 				Watch: c.Bool("watch"),

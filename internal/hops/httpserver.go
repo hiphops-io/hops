@@ -18,7 +18,7 @@ import (
 )
 
 type (
-	ConsoleServer struct {
+	HTTPServer struct {
 		hopsFiles      *dsl.HopsFiles
 		hopsFileLoader *HopsFileLoader
 		logger         zerolog.Logger
@@ -36,10 +36,10 @@ type (
 	}
 )
 
-func NewConsole(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats.Client, logger zerolog.Logger) (*ConsoleServer, error) {
-	c := &ConsoleServer{hopsFileLoader: hopsFileLoader, logger: logger, natsClient: natsClient}
+func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats.Client, logger zerolog.Logger) (*HTTPServer, error) {
+	h := &HTTPServer{hopsFileLoader: hopsFileLoader, logger: logger, natsClient: natsClient}
 
-	err := c.Reload(context.Background())
+	err := h.Reload(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -65,23 +65,23 @@ func NewConsole(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats.Cl
 
 	// Serve the tasks API
 	r.Route("/tasks", func(r chi.Router) {
-		r.Post("/{taskName}", c.runTask)
-		r.Get("/", c.listTasks)
+		r.Post("/{taskName}", h.runTask)
+		r.Get("/", h.listTasks)
 	})
 
 	// Serve the events API
 	r.Mount("/events", EventRouter(natsClient, logger))
 
-	c.server = &http.Server{
+	h.server = &http.Server{
 		Addr:    addr,
 		Handler: r,
 	}
 
-	return c, nil
+	return h, nil
 }
 
-func (c *ConsoleServer) Reload(ctx context.Context) error {
-	hopsFiles, err := c.hopsFileLoader.Get()
+func (h *HTTPServer) Reload(ctx context.Context) error {
+	hopsFiles, err := h.hopsFileLoader.Get()
 	if err != nil {
 		return err
 	}
@@ -91,40 +91,40 @@ func (c *ConsoleServer) Reload(ctx context.Context) error {
 		return err
 	}
 
-	c.mu.Lock()
-	c.hopsFiles = hopsFiles
-	c.taskHops = taskHops
-	c.mu.Unlock()
+	h.mu.Lock()
+	h.hopsFiles = hopsFiles
+	h.taskHops = taskHops
+	h.mu.Unlock()
 
 	return nil
 }
 
-func (c *ConsoleServer) Serve() error {
-	c.logger.Info().Msgf("Console available on http://%s/console", c.server.Addr)
-	return c.server.ListenAndServe()
+func (h *HTTPServer) Serve() error {
+	h.logger.Info().Msgf("Console available on http://%s/console", h.server.Addr)
+	return h.server.ListenAndServe()
 }
 
-func (c *ConsoleServer) Shutdown(ctx context.Context) error {
-	return c.server.Shutdown(ctx)
+func (h *HTTPServer) Shutdown(ctx context.Context) error {
+	return h.server.Shutdown(ctx)
 }
 
-func (c *ConsoleServer) listTasks(w http.ResponseWriter, r *http.Request) {
-	c.mu.RLock()
-	tasks := c.taskHops.ListTasks()
-	c.mu.RUnlock()
+func (h *HTTPServer) listTasks(w http.ResponseWriter, r *http.Request) {
+	h.mu.RLock()
+	tasks := h.taskHops.ListTasks()
+	h.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tasks)
 }
 
-func (c *ConsoleServer) runTask(w http.ResponseWriter, r *http.Request) {
+func (h *HTTPServer) runTask(w http.ResponseWriter, r *http.Request) {
 	runResponse := taskRunResponse{}
 
 	taskName := chi.URLParam(r, "taskName")
 	if taskName == "" {
 		runResponse.statusCode = http.StatusBadRequest
 		runResponse.Message = "Task name is required"
-		c.writeTaskRunResponse(w, runResponse)
+		h.writeTaskRunResponse(w, runResponse)
 		return
 	}
 
@@ -133,18 +133,18 @@ func (c *ConsoleServer) runTask(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		runResponse.statusCode = http.StatusBadRequest
 		runResponse.Message = "Unable to parse payload JSON"
-		c.writeTaskRunResponse(w, runResponse)
+		h.writeTaskRunResponse(w, runResponse)
 		return
 	}
 
-	c.mu.RLock()
-	task, err := c.taskHops.GetTask(taskName)
-	c.mu.RUnlock()
+	h.mu.RLock()
+	task, err := h.taskHops.GetTask(taskName)
+	h.mu.RUnlock()
 
 	if err != nil {
 		runResponse.statusCode = http.StatusNotFound
 		runResponse.Message = "Not found"
-		c.writeTaskRunResponse(w, runResponse)
+		h.writeTaskRunResponse(w, runResponse)
 		return
 	}
 
@@ -154,7 +154,7 @@ func (c *ConsoleServer) runTask(w http.ResponseWriter, r *http.Request) {
 		runResponse.statusCode = http.StatusBadRequest
 		runResponse.Message = fmt.Sprintf("Invalid inputs for %s", task.Name)
 		runResponse.Errors = validationMessages
-		c.writeTaskRunResponse(w, runResponse)
+		h.writeTaskRunResponse(w, runResponse)
 		return
 	}
 
@@ -163,26 +163,26 @@ func (c *ConsoleServer) runTask(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		runResponse.statusCode = http.StatusInternalServerError
 		runResponse.Message = "Unable to create event"
-		c.writeTaskRunResponse(w, runResponse)
+		h.writeTaskRunResponse(w, runResponse)
 		return
 	}
 
 	// Push the event message to the topic, including the hash as sequence ID and "event" as event ID
-	_, _, err = c.natsClient.Publish(r.Context(), sourceEvent, nats.ChannelNotify, sequenceID, "event")
+	_, _, err = h.natsClient.Publish(r.Context(), sourceEvent, nats.ChannelNotify, sequenceID, "event")
 	if err != nil {
 		runResponse.statusCode = http.StatusInternalServerError
 		runResponse.Message = fmt.Sprintf("Unable to publish event: %s", err.Error())
-		c.writeTaskRunResponse(w, runResponse)
+		h.writeTaskRunResponse(w, runResponse)
 		return
 	}
 
 	runResponse.statusCode = http.StatusOK
 	runResponse.Message = "OK"
 	runResponse.SequenceID = sequenceID
-	c.writeTaskRunResponse(w, runResponse)
+	h.writeTaskRunResponse(w, runResponse)
 }
 
-func (c *ConsoleServer) writeTaskRunResponse(w http.ResponseWriter, runResponse taskRunResponse) {
+func (h *HTTPServer) writeTaskRunResponse(w http.ResponseWriter, runResponse taskRunResponse) {
 	// We only explicitly write non-200 status codes. This allows us to
 	// properly convey failed encoding to end users without sending headers twice.
 	isBadStatus := runResponse.statusCode != http.StatusOK
@@ -191,12 +191,12 @@ func (c *ConsoleServer) writeTaskRunResponse(w http.ResponseWriter, runResponse 
 
 	if isBadStatus {
 		w.WriteHeader(runResponse.statusCode)
-		c.logger.Error().Msg(runResponse.Message)
+		h.logger.Error().Msg(runResponse.Message)
 	}
 
 	err := json.NewEncoder(w).Encode(runResponse)
 	if err != nil {
-		c.logger.Error().Err(err).Msg("Error encoding task response")
+		h.logger.Error().Err(err).Msg("Error encoding task response")
 
 		// A bad status will already have been written, so we'll default to that
 		if !isBadStatus {

@@ -1,5 +1,5 @@
 // This file is a WIP - The tests in this file don't current test anything of use (TODO).
-package runner
+package hops
 
 import (
 	"os"
