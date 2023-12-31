@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -26,6 +27,7 @@ type (
 		natsClient     *nats.Client
 		server         *http.Server
 		taskHops       *dsl.HopAST
+		updatedAt      int64
 	}
 
 	taskRunResponse struct {
@@ -59,6 +61,8 @@ func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+
+	r.Get("/updated-at", h.getUpdatedAt)
 
 	// Serve the single page app for the console from the UI dir
 	r.Mount("/console", ConsoleRouter(logger))
@@ -94,6 +98,7 @@ func (h *HTTPServer) Reload(ctx context.Context) error {
 	h.mu.Lock()
 	h.hopsFiles = hopsFiles
 	h.taskHops = taskHops
+	h.updatedAt = time.Now().UnixMicro()
 	h.mu.Unlock()
 
 	return nil
@@ -106,6 +111,15 @@ func (h *HTTPServer) Serve() error {
 
 func (h *HTTPServer) Shutdown(ctx context.Context) error {
 	return h.server.Shutdown(ctx)
+}
+
+func (h *HTTPServer) getUpdatedAt(w http.ResponseWriter, r *http.Request) {
+	h.mu.RLock()
+	updatedAt := h.updatedAt
+	h.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedAt)
 }
 
 func (h *HTTPServer) listTasks(w http.ResponseWriter, r *http.Request) {
