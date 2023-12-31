@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	k8sCategory   = "K8s App"
 	serveCategory = "Serve"
 
 	startDescription = `Start Hiphops
@@ -41,15 +42,15 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 			logger := logs.InitLogger(c.Bool("debug"))
 
 			hopsServer := &hops.HopsServer{
-				Console: hops.Console{
+				HTTPServerConf: hops.HTTPServerConf{
 					Address: c.String("address"),
 					Serve:   c.Bool("serve-console"),
 				},
 				HopsPath: c.String("hops"),
-				HTTPApp: hops.HTTPApp{
+				HTTPAppConf: hops.HTTPAppConf{
 					Serve: c.Bool("serve-httpapp"),
 				},
-				K8sApp: hops.K8sApp{
+				K8sAppConf: hops.K8sAppConf{
 					KubeConfig:  c.String("kubeconfig"),
 					PortForward: c.Bool("portforward"),
 					Serve:       c.Bool("serve-k8sapp"),
@@ -57,9 +58,10 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 				KeyFilePath: c.String("keyfile"),
 				Logger:      logger,
 				ReplayEvent: c.String("replay-event"),
-				Runner: hops.Runner{
+				RunnerConf: hops.RunnerConf{
 					Serve: c.Bool("serve-runner"),
 				},
+				Watch: c.Bool("watch"),
 			}
 
 			return hopsServer.Start(ctx)
@@ -123,7 +125,7 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Name:     "kubeconfig",
 				Aliases:  []string{"k", "k8s.kubeconfig"},
 				Usage:    "Path to the kubeconfig file for automating k8s (default will use kubernetes standard search locations)",
-				Category: "Kubernetes App",
+				Category: k8sCategory,
 				Value:    "",
 				Action:   expandHomePath("kubeconfig"),
 			},
@@ -133,7 +135,13 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Name:     "portforward",
 				Aliases:  []string{"k8s.portforward"},
 				Usage:    "Whether to auto port-forward, necessary when running outside of a k8s cluster and orchestrating pods",
-				Category: "Kubernetes App",
+				Category: k8sCategory,
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:  "watch",
+				Usage: "Auto reload on change to the given hops directory",
 			},
 		),
 	}

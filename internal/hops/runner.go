@@ -1,4 +1,4 @@
-package runner
+package hops
 
 import (
 	"context"
@@ -10,9 +10,6 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/hashicorp/go-multierror"
-	"github.com/hashicorp/hcl/v2"
-	natsgo "github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron"
 	"github.com/rs/zerolog"
@@ -25,47 +22,53 @@ const (
 	hopsKeyPrefix = "hopsconf-"
 )
 
-type (
-	NatsClient interface {
-		ConsumeSequences(context.Context, string, nats.SequenceHandler) error
-		GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error)
-		GetSysObject(key string) ([]byte, error)
-		Publish(context.Context, []byte, ...string) (*jetstream.PubAck, bool, error)
-		PublishResult(context.Context, time.Time, interface{}, error, ...string) (error, bool)
-		PutSysObject(string, []byte) (*natsgo.ObjectInfo, error)
+type Runner struct {
+	cache          *cache.Cache
+	hopsFileLoader *HopsFileLoader
+	hopsFiles      *dsl.HopsFiles
+	hopsLock       sync.RWMutex
+	logger         zerolog.Logger
+	natsClient     *nats.Client
+	schedules      []*Schedule
+}
+
+func NewRunner(natsClient *nats.Client, hopsFileLoader *HopsFileLoader, logger zerolog.Logger) (*Runner, error) {
+	r := &Runner{
+		logger:         logger,
+		natsClient:     natsClient,
+		hopsFileLoader: hopsFileLoader,
+		cache:          cache.New(5*time.Minute, 10*time.Minute),
 	}
 
-	Runner struct {
-		cache       *cache.Cache
-		hopsContent *hcl.BodyContent
-		hopsKey     string
-		logger      zerolog.Logger
-		natsClient  NatsClient
-		schedules   []*Schedule
-	}
-)
-
-func NewRunner(natsClient NatsClient, hops *dsl.HopsFiles, logger zerolog.Logger) (*Runner, error) {
-	runner := &Runner{
-		hopsKey:     hops.Hash,
-		hopsContent: hops.BodyContent,
-		logger:      logger,
-		natsClient:  natsClient,
-	}
-
-	runner.initCache()
-
-	err := runner.initHopsBackup(hops)
+	err := r.Reload(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("Unable to store hops files %w", err)
+		return nil, err
 	}
 
-	err = runner.initHopsSchedules(hops)
+	return r, nil
+}
+
+func (r *Runner) Reload(ctx context.Context) error {
+	hopsFiles, err := r.hopsFileLoader.Get()
 	if err != nil {
-		return nil, fmt.Errorf("Unable to start schedules %w", err)
+		return err
 	}
 
-	return runner, nil
+	r.hopsLock.Lock()
+	defer r.hopsLock.Unlock()
+
+	r.hopsFiles = hopsFiles
+	err = r.storeHops()
+	if err != nil {
+		return fmt.Errorf("Unable to store hops files %w", err)
+	}
+
+	err = r.prepareHopsSchedules()
+	if err != nil {
+		return fmt.Errorf("Unable to create schedules %w", err)
+	}
+
+	return nil
 }
 
 func (r *Runner) Run(ctx context.Context, fromConsumer string) error {
@@ -221,35 +224,13 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 	errorchan <- nil
 }
 
-func (r *Runner) initCache() {
-	r.cache = cache.New(5*time.Minute, 10*time.Minute)
-}
-
-func (r *Runner) initHopsBackup(hops *dsl.HopsFiles) error {
-	hopsFileB, err := json.Marshal(hops.Files)
-	if err != nil {
-		return err
-	}
-
-	// Store in object store
-	_, err = r.natsClient.PutSysObject(r.hopsKey, hopsFileB)
-	if err != nil {
-		return err
-	}
-
-	// Pre-populate local cache (local hops cache item should never expire)
-	r.logger.Debug().Msgf("Populating local cache with hops config: %s", r.hopsKey)
-	r.cache.Set(r.hopsKey, hops, cache.NoExpiration)
-
-	return nil
-}
-
-// initHopsSchedules parses the schedule blocks in a hops config and inits
+// prepareHopsSchedules parses the schedule blocks in a hops config and inits
 // the cron schedules ready for running
 //
 // This function will not run the schedules, just prepare them
-func (r *Runner) initHopsSchedules(hops *dsl.HopsFiles) error {
-	hop, err := dsl.ParseHopsSchedules(hops, r.logger)
+// This function should only ever be called within a lock on r.hopsLock
+func (r *Runner) prepareHopsSchedules() error {
+	hop, err := dsl.ParseHopsSchedules(r.hopsFiles, r.logger)
 	if err != nil {
 		return err
 	}
@@ -291,6 +272,10 @@ func (r *Runner) sequenceHops(ctx context.Context, sequenceId string, msgBundle 
 
 // sequenceHopsKey gets or sets the hops key for a sequence, returning the final key
 func (r *Runner) sequenceHopsKey(ctx context.Context, sequenceId string, msgBundle nats.MessageBundle) (string, error) {
+	r.hopsLock.RLock()
+	hash := r.hopsFiles.Hash
+	r.hopsLock.RUnlock()
+
 	hopsKeyB, ok := msgBundle["hops"]
 	if ok {
 		return hopsKeyFromBytes(hopsKeyB)
@@ -298,15 +283,15 @@ func (r *Runner) sequenceHopsKey(ctx context.Context, sequenceId string, msgBund
 
 	tokens := nats.SequenceHopsKeyTokens(sequenceId)
 
-	hopsJson := fmt.Sprintf("\"%s\"", r.hopsKey)
-	_, sent, err := r.natsClient.Publish(ctx, []byte(hopsJson), tokens...)
+	jsonHash := fmt.Sprintf("\"%s\"", hash)
+	_, sent, err := r.natsClient.Publish(ctx, []byte(jsonHash), tokens...)
 	if err != nil {
 		return "", fmt.Errorf("Unable to assign hops config to pipeline: %w", err)
 	}
 
 	// If the message was successfully sent, it means we assigned first and can continue
 	if sent {
-		return r.hopsKey, nil
+		return hash, nil
 	}
 
 	// Otherwise it means another client won the race - we need to get that hops key
@@ -369,6 +354,28 @@ func (r *Runner) sequenceHopsStored(key string) (*dsl.HopsFiles, error) {
 	r.cache.Set(key, hopsFiles, cache.DefaultExpiration)
 
 	return hopsFiles, nil
+}
+
+// storeHops stores the current hopsfiles in object storage and local cache
+//
+// This function should only ever be called within a write lock on r.hopsLock
+func (r *Runner) storeHops() error {
+	hopsFileB, err := json.Marshal(r.hopsFiles.Files)
+	if err != nil {
+		return err
+	}
+
+	// Store in object store
+	_, err = r.natsClient.PutSysObject(r.hopsFiles.Hash, hopsFileB)
+	if err != nil {
+		return err
+	}
+
+	// Pre-populate local cache (local hops cache item should never expire)
+	r.logger.Debug().Msgf("Populating local cache with hops config: %s", r.hopsFiles.Hash)
+	r.cache.Set(r.hopsFiles.Hash, r.hopsFiles, cache.NoExpiration)
+
+	return nil
 }
 
 func hopsKeyFromBytes(keyB []byte) (string, error) {

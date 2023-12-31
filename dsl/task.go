@@ -16,7 +16,7 @@ import (
 )
 
 func ParseHopsTasks(ctx context.Context, hops *HopsFiles) (*HopAST, error) {
-	logger := zerolog.Ctx(ctx)
+	logger := zerolog.Ctx(ctx) // TODO: This needs removing and proper logger passing through
 
 	hop := &HopAST{
 		SlugRegister: make(map[string]bool),
