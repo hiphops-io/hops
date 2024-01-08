@@ -159,7 +159,6 @@ func (r *Runner) dispatchDone(ctx context.Context, onSlug string, done *dsl.Done
 		time.Now(),
 		done.Result,
 		done.Error,
-		nats.DefaultInterestTopic,
 		nats.ChannelNotify,
 		sequenceId,
 		onSlug,
@@ -212,7 +211,7 @@ func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.
 		return
 	}
 
-	_, _, err := r.natsClient.Publish(ctx, call.Inputs, nats.DefaultInterestTopic, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
+	_, _, err := r.natsClient.Publish(ctx, call.Inputs, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
 	if err != nil {
 		errorchan <- err
 		return

@@ -73,7 +73,7 @@ func (m *MsgMeta) Msg() jetstream.Msg {
 func (m *MsgMeta) ResponseSubject() string {
 	tokens := []string{
 		m.AccountId,
-		DefaultInterestTopic,
+		m.InterestTopic,
 		ChannelNotify,
 		m.SequenceId,
 		m.MessageId,
@@ -85,7 +85,7 @@ func (m *MsgMeta) ResponseSubject() string {
 func (m *MsgMeta) SequenceFilter() string {
 	tokens := []string{
 		m.AccountId,
-		DefaultInterestTopic,
+		m.InterestTopic,
 		ChannelNotify,
 		m.SequenceId,
 		">",
@@ -180,10 +180,10 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 //
 // accountId: The account id to filter on
 // eventFilter: either AllEventId or SourceEventId
-func EventLogSubject(accountId string, eventFilter string) string {
+func EventLogSubject(accountId string, interestTopic string, eventFilter string) string {
 	tokens := []string{
 		accountId,
-		DefaultInterestTopic,
+		interestTopic,
 		"*",
 		"*",
 		eventFilter,
@@ -194,32 +194,32 @@ func EventLogSubject(accountId string, eventFilter string) string {
 
 // LocalServerConsumerNotifyFilterSubject returns the filter subject for the
 // local server consumer to get notify messages for the account.
-func LocalServerConsumerNotifyFilterSubject(accountId string) string {
-	return fmt.Sprintf("%s.%s.%s.>", accountId, DefaultInterestTopic, ChannelNotify)
+func LocalServerConsumerNotifyFilterSubject(accountId string, interestTopic string) string {
+	return fmt.Sprintf("%s.%s.%s.>", accountId, interestTopic, ChannelNotify)
 }
 
 // LocalServerConsumerNotifyName returns the name for the local server consumer to
 // get notify messages for the account.
-func LocalServerConsumerNotifyName(accountId string) string {
-	return fmt.Sprintf("%s-%s-%s", accountId, DefaultInterestTopic, ChannelNotify)
+func LocalServerConsumerNotifyName(accountId string, interestTopic string) string {
+	return fmt.Sprintf("%s-%s-%s", accountId, interestTopic, ChannelNotify)
 }
 
 // LocalServerConsumerRequestFilterSubject returns the filter subject for the
 // local server consumer to get request messages for the account.
-func LocalServerConsumerRequestFilterSubject(accountId string) string {
-	return fmt.Sprintf("%s.%s.%s.>", accountId, DefaultInterestTopic, ChannelRequest)
+func LocalServerConsumerRequestFilterSubject(accountId string, interestTopic string) string {
+	return fmt.Sprintf("%s.%s.%s.>", accountId, interestTopic, ChannelRequest)
 }
 
 // LocalServerConsumerRequestName returns the name for the local server consumer to
 // get request messages for the account.
-func LocalServerConsumerRequestName(accountId string) string {
-	return fmt.Sprintf("%s-%s-%s", accountId, DefaultInterestTopic, ChannelRequest)
+func LocalServerConsumerRequestName(accountId string, interestTopic string) string {
+	return fmt.Sprintf("%s-%s-%s", accountId, interestTopic, ChannelRequest)
 }
 
-func ReplayFilterSubject(accountId string, sequenceId string) string {
+func ReplayFilterSubject(accountId string, interestTopic string, sequenceId string) string {
 	tokens := []string{
 		accountId,
-		DefaultInterestTopic,
+		interestTopic,
 		"*",
 		sequenceId,
 		">",
@@ -230,17 +230,16 @@ func ReplayFilterSubject(accountId string, sequenceId string) string {
 
 func SequenceHopsKeyTokens(sequenceId string) []string {
 	return []string{
-		DefaultInterestTopic,
 		ChannelNotify,
 		sequenceId,
 		HopsMessageId,
 	}
 }
 
-func SourceEventSubject(accountId string, sequenceId string) string {
+func SourceEventSubject(accountId string, interestTopic string, sequenceId string) string {
 	tokens := []string{
 		accountId,
-		DefaultInterestTopic,
+		interestTopic,
 		ChannelNotify,
 		sequenceId,
 		"event",
@@ -248,10 +247,10 @@ func SourceEventSubject(accountId string, sequenceId string) string {
 	return strings.Join(tokens, ".")
 }
 
-func WorkerRequestSubject(accountId string, appName string, handler string) string {
+func WorkerRequestSubject(accountId string, interestTopic string, appName string, handler string) string {
 	tokens := []string{
 		accountId,
-		DefaultInterestTopic,
+		interestTopic,
 		ChannelRequest,
 		"*",
 		"*",

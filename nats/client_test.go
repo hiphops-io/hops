@@ -52,7 +52,7 @@ func TestClientConsume(t *testing.T) {
 		})
 	}()
 
-	_, _, err := hopsNats.Publish(ctx, []byte("Hello world"), DefaultInterestTopic, ChannelNotify, "SEQ_ID", "MSG_ID")
+	_, _, err := hopsNats.Publish(ctx, []byte("Hello world"), ChannelNotify, "SEQ_ID", "MSG_ID")
 	if assert.NoError(t, err, "Message should be published without errror") {
 		receivedMsg := <-receivedChan
 		assert.Contains(t, receivedMsg.subject, "SEQ_ID.MSG_ID")
@@ -97,19 +97,19 @@ func TestClientConsumeSequences(t *testing.T) {
 		hopsNats.ConsumeSequences(ctx, DefaultConsumerName, sqncHandler)
 	}()
 
-	_, _, err := hopsNats.Publish(ctx, []byte("One"), DefaultInterestTopic, ChannelNotify, "SEQ_ID", "event")
+	_, _, err := hopsNats.Publish(ctx, []byte("One"), ChannelNotify, "SEQ_ID", "event")
 	if assert.NoError(t, err, "Message should be published without error") {
 		receivedMsgBundle := <-receivedChan
 		assert.Equal(t, receivedMsgBundle, expectedBundleOne)
 	}
 
-	_, _, err = hopsNats.Publish(ctx, []byte("Two"), DefaultInterestTopic, ChannelNotify, "SEQ_ID", "event-two")
+	_, _, err = hopsNats.Publish(ctx, []byte("Two"), ChannelNotify, "SEQ_ID", "event-two")
 	if assert.NoError(t, err, "Second message in sequence should be published without error") {
 		receivedMsgBundle := <-receivedChan
 		assert.Equal(t, receivedMsgBundle, expectedBundleTwo)
 	}
 
-	_, _, err = hopsNats.Publish(ctx, []byte("Three"), DefaultInterestTopic, ChannelNotify, "SEQ_ID", "event-three")
+	_, _, err = hopsNats.Publish(ctx, []byte("Three"), ChannelNotify, "SEQ_ID", "event-three")
 	if assert.NoError(t, err, "Third message in sequence should be published without error") {
 		receivedMsgBundle := <-receivedChan
 		assert.Equal(t, receivedMsgBundle, expectedBundleThree)
