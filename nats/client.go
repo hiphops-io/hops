@@ -20,6 +20,9 @@ const (
 	// How far back to look for events by default
 	DefaultEventLookback = -time.Hour
 
+	// Interest topic which is used by default
+	DefaultInterestTopic = "default"
+
 	// Number of events returned max
 	GetEventHistoryEventLimit = 100
 
@@ -476,7 +479,7 @@ func WithReplay(name string, sequenceId string) ClientOpt {
 
 		// Publish the source message with replayed sequence ID so it's picked up by
 		// ephemeral consumer
-		c.Publish(ctx, rawMsg.Data, ChannelNotify, replaySequenceId, "event")
+		c.Publish(ctx, rawMsg.Data, DefaultInterestTopic, ChannelNotify, replaySequenceId, "event")
 
 		// Set the consumer on the client
 		c.Consumers[name] = consumer

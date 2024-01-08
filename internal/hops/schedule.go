@@ -64,7 +64,7 @@ func (s *Schedule) Run() {
 	}
 
 	// Dispatch the source event
-	_, _, err = s.natsClient.Publish(ctx, sourceEvent, nats.ChannelNotify, sequenceID, "event")
+	_, _, err = s.natsClient.Publish(ctx, sourceEvent, nats.DefaultInterestTopic, nats.ChannelNotify, sequenceID, "event")
 	if err != nil {
 		s.logger.Error().Err(err).Msgf("Unable to dispatch source event for schedule: %s", s.Config.Name)
 	}

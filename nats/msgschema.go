@@ -28,6 +28,7 @@ type (
 		ConsumerSequence uint64
 		Done             bool
 		HandlerName      string
+		InterestTopic    string
 		MessageId        string
 		SequenceId       string
 		StreamSequence   uint64
@@ -72,6 +73,7 @@ func (m *MsgMeta) Msg() jetstream.Msg {
 func (m *MsgMeta) ResponseSubject() string {
 	tokens := []string{
 		m.AccountId,
+		DefaultInterestTopic,
 		ChannelNotify,
 		m.SequenceId,
 		m.MessageId,
@@ -83,6 +85,7 @@ func (m *MsgMeta) ResponseSubject() string {
 func (m *MsgMeta) SequenceFilter() string {
 	tokens := []string{
 		m.AccountId,
+		DefaultInterestTopic,
 		ChannelNotify,
 		m.SequenceId,
 		">",
@@ -107,39 +110,36 @@ func (m *MsgMeta) initMetadata() error {
 // initTokens parses tokens from a message subject into the Msg struct
 //
 // Example hops subjects are:
-// `account_id.notify.sequence_id.event`
-// `account_id.notify.sequence_id.hops`
-// `account_id.notify.sequence_id.message_id`
-// `account_id.request.sequence_id.message_id.app.handler`
+// `account_id.interest_topic.notify.sequence_id.event`
+// `account_id.interest_topic.notify.sequence_id.hops`
+// `account_id.interest_topic.notify.sequence_id.message_id`
+// `account_id.interest_topic.request.sequence_id.message_id.app.handler`
 func (m *MsgMeta) initTokens() error {
 	subjectTokens := strings.Split(m.msg.Subject(), ".")
-	if len(subjectTokens) < 4 {
+	if len(subjectTokens) < 5 {
 		return fmt.Errorf("Invalid message subject (too few tokens): %s", m.msg.Subject())
 	}
 
 	m.AccountId = subjectTokens[0]
-	m.Channel = subjectTokens[1]
-	m.SequenceId = subjectTokens[2]
-	m.MessageId = subjectTokens[3]
+	m.InterestTopic = subjectTokens[1]
+	m.Channel = subjectTokens[2]
+	m.SequenceId = subjectTokens[3]
+	m.MessageId = subjectTokens[4]
 
-	if len(subjectTokens) == 5 {
-		m.Done = subjectTokens[4] == DoneMessageId
-	}
-
-	if m.Channel == ChannelNotify {
-		return nil
+	if len(subjectTokens) == 6 {
+		m.Done = subjectTokens[5] == DoneMessageId
 	}
 
 	switch m.Channel {
 	case ChannelNotify:
 		return nil
 	case ChannelRequest:
-		if len(subjectTokens) < 6 {
+		if len(subjectTokens) < 7 {
 			return fmt.Errorf("Invalid request message subject (too few tokens): %s", m.msg.Subject())
 		}
 
-		m.AppName = subjectTokens[4]
-		m.HandlerName = subjectTokens[5]
+		m.AppName = subjectTokens[5]
+		m.HandlerName = subjectTokens[6]
 
 		return nil
 	default:
@@ -175,6 +175,30 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 	return resultMsg
 }
 
+// ConsumerNotifyFilterSubject returns the filter subject for the consumer to
+// get notify messages for the account.
+func ConsumerNotifyFilterSubject(accountId string) string {
+	return fmt.Sprintf("%s.%s.%s.>", accountId, DefaultInterestTopic, ChannelNotify)
+}
+
+// ConsumerNotifyName returns the name for the consumer to
+// get notify messages for the account.
+func ConsumerNotifyName(accountId string) string {
+	return fmt.Sprintf("%s-%s-%s", accountId, DefaultInterestTopic, ChannelNotify)
+}
+
+// ConsumerRequestFilterSubject returns the filter subject for the consumer to
+// get request messages for the account.
+func ConsumerRequestFilterSubject(accountId string) string {
+	return fmt.Sprintf("%s.%s.%s.>", accountId, DefaultInterestTopic, ChannelRequest)
+}
+
+// ConsumerRequestName returns the name for the consumer to
+// get request messages for the account.
+func ConsumerRequestName(accountId string) string {
+	return fmt.Sprintf("%s-%s-%s", accountId, DefaultInterestTopic, ChannelRequest)
+}
+
 // EventLogSubject returns the subject used to get events for display to the
 // user in the UI.
 //
@@ -183,6 +207,7 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 func EventLogSubject(accountId string, eventFilter string) string {
 	tokens := []string{
 		accountId,
+		DefaultInterestTopic,
 		"*",
 		"*",
 		eventFilter,
@@ -194,6 +219,7 @@ func EventLogSubject(accountId string, eventFilter string) string {
 func ReplayFilterSubject(accountId string, sequenceId string) string {
 	tokens := []string{
 		accountId,
+		DefaultInterestTopic,
 		"*",
 		sequenceId,
 		">",
@@ -204,6 +230,7 @@ func ReplayFilterSubject(accountId string, sequenceId string) string {
 
 func SequenceHopsKeyTokens(sequenceId string) []string {
 	return []string{
+		DefaultInterestTopic,
 		ChannelNotify,
 		sequenceId,
 		HopsMessageId,
@@ -213,6 +240,7 @@ func SequenceHopsKeyTokens(sequenceId string) []string {
 func SourceEventSubject(accountId string, sequenceId string) string {
 	tokens := []string{
 		accountId,
+		DefaultInterestTopic,
 		ChannelNotify,
 		sequenceId,
 		"event",
@@ -223,6 +251,7 @@ func SourceEventSubject(accountId string, sequenceId string) string {
 func WorkerRequestSubject(accountId string, appName string, handler string) string {
 	tokens := []string{
 		accountId,
+		DefaultInterestTopic,
 		ChannelRequest,
 		"*",
 		"*",

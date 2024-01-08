@@ -146,8 +146,8 @@ func (l *LocalServer) initJetstreamSetup() error {
 
 	// Create the server consumer
 	consumerConf := jetstream.ConsumerConfig{
-		Name:          fmt.Sprintf("%s-%s", user.Account.Name, ChannelNotify),
-		FilterSubject: fmt.Sprintf("%s.notify.>", user.Account.Name),
+		Name:          ConsumerNotifyName(user.Account.Name),
+		FilterSubject: ConsumerNotifyFilterSubject(user.Account.Name),
 		DeliverPolicy: jetstream.DeliverNewPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		MaxDeliver:    3,
@@ -160,8 +160,8 @@ func (l *LocalServer) initJetstreamSetup() error {
 
 	// Create the request consumer
 	requestConsumerConf := jetstream.ConsumerConfig{
-		Name:          fmt.Sprintf("%s-%s", user.Account.Name, ChannelRequest),
-		FilterSubject: fmt.Sprintf("%s.request.>", user.Account.Name),
+		Name:          ConsumerRequestName(user.Account.Name),
+		FilterSubject: ConsumerRequestFilterSubject(user.Account.Name),
 		DeliverPolicy: jetstream.DeliverNewPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		MaxDeliver:    3,

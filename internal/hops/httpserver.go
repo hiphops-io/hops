@@ -182,7 +182,7 @@ func (h *HTTPServer) runTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Push the event message to the topic, including the hash as sequence ID and "event" as event ID
-	_, _, err = h.natsClient.Publish(r.Context(), sourceEvent, nats.ChannelNotify, sequenceID, "event")
+	_, _, err = h.natsClient.Publish(r.Context(), sourceEvent, nats.DefaultInterestTopic, nats.ChannelNotify, sequenceID, "event")
 	if err != nil {
 		runResponse.statusCode = http.StatusInternalServerError
 		runResponse.Message = fmt.Sprintf("Unable to publish event: %s", err.Error())
