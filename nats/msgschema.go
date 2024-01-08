@@ -175,30 +175,6 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 	return resultMsg
 }
 
-// ConsumerNotifyFilterSubject returns the filter subject for the consumer to
-// get notify messages for the account.
-func ConsumerNotifyFilterSubject(accountId string) string {
-	return fmt.Sprintf("%s.%s.%s.>", accountId, DefaultInterestTopic, ChannelNotify)
-}
-
-// ConsumerNotifyName returns the name for the consumer to
-// get notify messages for the account.
-func ConsumerNotifyName(accountId string) string {
-	return fmt.Sprintf("%s-%s-%s", accountId, DefaultInterestTopic, ChannelNotify)
-}
-
-// ConsumerRequestFilterSubject returns the filter subject for the consumer to
-// get request messages for the account.
-func ConsumerRequestFilterSubject(accountId string) string {
-	return fmt.Sprintf("%s.%s.%s.>", accountId, DefaultInterestTopic, ChannelRequest)
-}
-
-// ConsumerRequestName returns the name for the consumer to
-// get request messages for the account.
-func ConsumerRequestName(accountId string) string {
-	return fmt.Sprintf("%s-%s-%s", accountId, DefaultInterestTopic, ChannelRequest)
-}
-
 // EventLogSubject returns the subject used to get events for display to the
 // user in the UI.
 //
@@ -214,6 +190,30 @@ func EventLogSubject(accountId string, eventFilter string) string {
 	}
 
 	return strings.Join(tokens, ".")
+}
+
+// LocalServerConsumerNotifyFilterSubject returns the filter subject for the
+// local server consumer to get notify messages for the account.
+func LocalServerConsumerNotifyFilterSubject(accountId string) string {
+	return fmt.Sprintf("%s.%s.%s.>", accountId, DefaultInterestTopic, ChannelNotify)
+}
+
+// LocalServerConsumerNotifyName returns the name for the local server consumer to
+// get notify messages for the account.
+func LocalServerConsumerNotifyName(accountId string) string {
+	return fmt.Sprintf("%s-%s-%s", accountId, DefaultInterestTopic, ChannelNotify)
+}
+
+// LocalServerConsumerRequestFilterSubject returns the filter subject for the
+// local server consumer to get request messages for the account.
+func LocalServerConsumerRequestFilterSubject(accountId string) string {
+	return fmt.Sprintf("%s.%s.%s.>", accountId, DefaultInterestTopic, ChannelRequest)
+}
+
+// LocalServerConsumerRequestName returns the name for the local server consumer to
+// get request messages for the account.
+func LocalServerConsumerRequestName(accountId string) string {
+	return fmt.Sprintf("%s-%s-%s", accountId, DefaultInterestTopic, ChannelRequest)
 }
 
 func ReplayFilterSubject(accountId string, sequenceId string) string {
