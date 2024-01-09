@@ -453,7 +453,7 @@ func ConsumerBaseName(accountId string, interestTopic string) string {
 // DefaultClientOpts configures the hiphops nats.Client as a RunnerClient
 func DefaultClientOpts() []ClientOpt {
 	return []ClientOpt{
-		WithRunner(DefaultConsumerName, DefaultInterestTopic),
+		WithRunner(DefaultConsumerName),
 	}
 }
 
@@ -504,11 +504,11 @@ func WithReplay(name string, sequenceId string) ClientOpt {
 }
 
 // WithRunner initialises the client with a consumer for running pipelines
-func WithRunner(name string, interestTopic string) ClientOpt {
+func WithRunner(name string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		consumerName := fmt.Sprintf("%s-%s", ConsumerBaseName(c.accountId, interestTopic), ChannelNotify)
+		consumerName := fmt.Sprintf("%s-%s", ConsumerBaseName(c.accountId, c.interestTopic), ChannelNotify)
 		consumerName = nameReplacer.Replace(consumerName)
 
 		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
