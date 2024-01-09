@@ -64,13 +64,13 @@ type (
 //
 // By default it is configured as a runner consumer (listening for incoming source events)
 // Passing *any* ClientOpts will override this default.
-func NewClient(natsUrl string, accountId string, logger Logger, clientOpts ...ClientOpt) (*Client, error) {
+func NewClient(natsUrl string, accountId string, interestTopic string, logger Logger, clientOpts ...ClientOpt) (*Client, error) {
 	ctx := context.Background()
 
 	natsClient := &Client{
 		Consumers:     map[string]jetstream.Consumer{},
 		accountId:     accountId,
-		interestTopic: DefaultInterestTopic,
+		interestTopic: interestTopic,
 		// Override this using WithStreamName ClientOpt if required.
 		streamName: nameReplacer.Replace(accountId),
 		logger:     logger,
@@ -334,8 +334,7 @@ func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.R
 		return nil, err
 	}
 
-	tokens := append([]string{c.accountId}, subjTokens...)
-	subject := strings.Join(tokens, ".")
+	subject := c.buildSubject(subjTokens...)
 
 	return stream.GetLastMsgForSubject(ctx, subject)
 }
@@ -349,10 +348,9 @@ func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string)
 	subject := ""
 	isFullSubject := len(subjTokens) == 1 && strings.Contains(subjTokens[0], ".")
 
-	// If we have individual subject tokens, construct into string and prefix with accountId
+	// If we have individual subject tokens, construct into string and prefix with accountId and interestTopic
 	if !isFullSubject {
-		tokens := append([]string{c.accountId, c.interestTopic}, subjTokens...)
-		subject = strings.Join(tokens, ".")
+		subject = c.buildSubject(subjTokens...)
 	} else {
 		subject = subjTokens[0]
 	}
@@ -434,13 +432,30 @@ func (c *Client) initObjectStore(ctx context.Context, accountId string) error {
 	return nil
 }
 
+func (c *Client) buildSubject(subjTokens ...string) string {
+	tokens := append([]string{c.accountId, c.interestTopic}, subjTokens...)
+	return strings.Join(tokens, ".")
+}
+
+// ConsumerNotifyName returns the name for the consumer to
+// get notify messages for the account.
+func ConsumerNotifyName(accountId string, interestTopic string) string {
+	return fmt.Sprintf("%s-%s-%s", accountId, interestTopic, ChannelNotify)
+}
+
 // ClientOpts - passed through to NewClient() to configure the client setup
 
 // DefaultClientOpts configures the hiphops nats.Client as a RunnerClient
 func DefaultClientOpts() []ClientOpt {
 	return []ClientOpt{
-		WithRunner(DefaultConsumerName),
+		WithRunner(DefaultConsumerName, DefaultInterestTopic),
 	}
+}
+
+// LocalServerConsumerRequestName returns the name for the local server consumer to
+// get request messages for the account.
+func LocalServerConsumerRequestName(accountId string, interestTopic string) string {
+	return fmt.Sprintf("%s-%s-%s", accountId, interestTopic, ChannelRequest)
 }
 
 // WithReplay initialises the client with a consumer for replaying a sequence
@@ -490,11 +505,13 @@ func WithReplay(name string, sequenceId string) ClientOpt {
 }
 
 // WithRunner initialises the client with a consumer for running pipelines
-func WithRunner(name string) ClientOpt {
+func WithRunner(name string, interestTopic string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
 		consumerName := fmt.Sprintf("%s-%s", c.accountId, ChannelNotify)
+		// TODO
+		// consumerName := ConsumerNotifyName(c.accountId, interestTopic)
 		consumerName = nameReplacer.Replace(consumerName)
 
 		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
@@ -523,7 +540,7 @@ func WithWorker(appName string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		name := fmt.Sprintf("%s-%s-%s", c.accountId, ChannelRequest, appName)
+		name := WorkerRequestName(c.accountId, c.interestTopic, appName)
 		name = nameReplacer.Replace(name)
 
 		// Create or update the consumer, since these are created dynamically
@@ -541,4 +558,9 @@ func WithWorker(appName string) ClientOpt {
 		c.Consumers[appName] = consumer
 		return nil
 	}
+}
+
+// WorkerRequestName returns the name for the worker consumer
+func WorkerRequestName(accountId string, interestTopic string, appName string) string {
+	return fmt.Sprintf("%s-%s-%s-%s", accountId, interestTopic, ChannelRequest, appName)
 }

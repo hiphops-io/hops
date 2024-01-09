@@ -129,7 +129,7 @@ func setupClient(ctx context.Context, t *testing.T) (*Client, func()) {
 	user, err := localNats.User("")
 	require.NoError(t, err, "Test setup: Should have valid NATS user")
 
-	hopsNats, err := NewClient(authUrl, user.Account.Name, &natsLogger)
+	hopsNats, err := NewClient(authUrl, user.Account.Name, DefaultInterestTopic, &natsLogger)
 	require.NoError(t, err, "Test setup: HopsNats should initialise without error")
 
 	cleanup := func() {

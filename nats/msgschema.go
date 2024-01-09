@@ -195,25 +195,27 @@ func EventLogSubject(accountId string, interestTopic string, eventFilter string)
 // LocalServerConsumerNotifyFilterSubject returns the filter subject for the
 // local server consumer to get notify messages for the account.
 func LocalServerConsumerNotifyFilterSubject(accountId string, interestTopic string) string {
-	return fmt.Sprintf("%s.%s.%s.>", accountId, interestTopic, ChannelNotify)
-}
+	tokens := []string{
+		accountId,
+		interestTopic,
+		ChannelNotify,
+		">",
+	}
 
-// LocalServerConsumerNotifyName returns the name for the local server consumer to
-// get notify messages for the account.
-func LocalServerConsumerNotifyName(accountId string, interestTopic string) string {
-	return fmt.Sprintf("%s-%s-%s", accountId, interestTopic, ChannelNotify)
+	return strings.Join(tokens, ".")
 }
 
 // LocalServerConsumerRequestFilterSubject returns the filter subject for the
 // local server consumer to get request messages for the account.
 func LocalServerConsumerRequestFilterSubject(accountId string, interestTopic string) string {
-	return fmt.Sprintf("%s.%s.%s.>", accountId, interestTopic, ChannelRequest)
-}
+	tokens := []string{
+		accountId,
+		interestTopic,
+		ChannelRequest,
+		">",
+	}
 
-// LocalServerConsumerRequestName returns the name for the local server consumer to
-// get request messages for the account.
-func LocalServerConsumerRequestName(accountId string, interestTopic string) string {
-	return fmt.Sprintf("%s-%s-%s", accountId, interestTopic, ChannelRequest)
+	return strings.Join(tokens, ".")
 }
 
 func ReplayFilterSubject(accountId string, interestTopic string, sequenceId string) string {
@@ -247,6 +249,7 @@ func SourceEventSubject(accountId string, interestTopic string, sequenceId strin
 	return strings.Join(tokens, ".")
 }
 
+// WorkerRequestSubject returns the filter subject for the worker consumer
 func WorkerRequestSubject(accountId string, interestTopic string, appName string, handler string) string {
 	tokens := []string{
 		accountId,

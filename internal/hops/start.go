@@ -231,7 +231,7 @@ func (h *HopsServer) startNATSClient() (*nats.Client, error) {
 		clientOpts = append(clientOpts, nats.WithReplay(nats.DefaultConsumerName, h.ReplayEvent))
 		h.Logger.Info().Msgf("Replaying source event: %s", h.ReplayEvent)
 	} else if h.RunnerConf.Serve {
-		clientOpts = append(clientOpts, nats.WithRunner(nats.DefaultConsumerName))
+		clientOpts = append(clientOpts, nats.WithRunner(nats.DefaultConsumerName, nats.DefaultInterestTopic))
 	}
 
 	if h.HTTPAppConf.Serve {
@@ -245,6 +245,7 @@ func (h *HopsServer) startNATSClient() (*nats.Client, error) {
 	natsClient, err := nats.NewClient(
 		keyFile.NatsUrl(),
 		keyFile.AccountId,
+		nats.DefaultInterestTopic,
 		&zlog,
 		clientOpts...,
 	)

@@ -146,7 +146,9 @@ func (l *LocalServer) initJetstreamSetup() error {
 
 	// Create the server consumer
 	consumerConf := jetstream.ConsumerConfig{
-		Name:          LocalServerConsumerNotifyName(user.Account.Name, DefaultInterestTopic),
+		Name: fmt.Sprintf("%s-%s", user.Account.Name, ChannelNotify),
+		// TODO
+		// Name:          ConsumerNotifyName(user.Account.Name, DefaultInterestTopic),
 		FilterSubject: LocalServerConsumerNotifyFilterSubject(user.Account.Name, DefaultInterestTopic),
 		DeliverPolicy: jetstream.DeliverNewPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy,
