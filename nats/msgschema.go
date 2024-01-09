@@ -192,8 +192,8 @@ func EventLogSubject(accountId string, interestTopic string, eventFilter string)
 	return strings.Join(tokens, ".")
 }
 
-// NotifyFilterSubject returns the filter subject to get notify messages for the account
-func NotifyFilterSubject(accountId string, interestTopic string) string {
+// NotifySubject returns the filter subject to get notify messages for the account
+func NotifySubject(accountId string, interestTopic string) string {
 	tokens := []string{
 		accountId,
 		interestTopic,
@@ -204,7 +204,7 @@ func NotifyFilterSubject(accountId string, interestTopic string) string {
 	return strings.Join(tokens, ".")
 }
 
-func ReplayFilterSubject(accountId string, interestTopic string, sequenceId string) string {
+func ReplaySubject(accountId string, interestTopic string, sequenceId string) string {
 	tokens := []string{
 		accountId,
 		interestTopic,
@@ -216,8 +216,8 @@ func ReplayFilterSubject(accountId string, interestTopic string, sequenceId stri
 	return strings.Join(tokens, ".")
 }
 
-// RequestFilterSubject returns the filter subject to get request messages for the account
-func RequestFilterSubject(accountId string, interestTopic string) string {
+// RequestSubject returns the filter subject to get request messages for the account
+func RequestSubject(accountId string, interestTopic string) string {
 	tokens := []string{
 		accountId,
 		interestTopic,
@@ -248,8 +248,8 @@ func SourceEventSubject(accountId string, interestTopic string, sequenceId strin
 	return strings.Join(tokens, ".")
 }
 
-// WorkerRequestFilterSubject returns the filter subject for the worker consumer
-func WorkerRequestFilterSubject(accountId string, interestTopic string, appName string, handler string) string {
+// WorkerRequestSubject returns the filter subject for the worker consumer
+func WorkerRequestSubject(accountId string, interestTopic string, appName string, handler string) string {
 	tokens := []string{
 		accountId,
 		interestTopic,
