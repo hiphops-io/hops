@@ -437,17 +437,6 @@ func (c *Client) buildSubject(subjTokens ...string) string {
 	return strings.Join(tokens, ".")
 }
 
-// ConsumerBaseName returns the base name for a consumer to which variants are appended
-//
-// Only adds interestTopic if it's not the default
-func ConsumerBaseName(accountId string, interestTopic string) string {
-	if interestTopic == DefaultInterestTopic {
-		return accountId
-	} else {
-		return fmt.Sprintf("%s-%s", accountId, interestTopic)
-	}
-}
-
 // ClientOpts - passed through to NewClient() to configure the client setup
 
 // DefaultClientOpts configures the hiphops nats.Client as a RunnerClient
@@ -508,7 +497,7 @@ func WithRunner(name string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		consumerName := fmt.Sprintf("%s-%s", ConsumerBaseName(c.accountId, c.interestTopic), ChannelNotify)
+		consumerName := fmt.Sprintf("%s-%s-%s", c.accountId, c.interestTopic, ChannelNotify)
 		consumerName = nameReplacer.Replace(consumerName)
 
 		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
@@ -537,7 +526,7 @@ func WithWorker(appName string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		name := fmt.Sprintf("%s-%s-%s", ConsumerBaseName(c.accountId, c.interestTopic), ChannelRequest, appName)
+		name := fmt.Sprintf("%s-%s-%s-%s", c.accountId, c.interestTopic, ChannelRequest, appName)
 		name = nameReplacer.Replace(name)
 
 		// Create or update the consumer, since these are created dynamically
