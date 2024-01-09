@@ -437,18 +437,15 @@ func (c *Client) buildSubject(subjTokens ...string) string {
 	return strings.Join(tokens, ".")
 }
 
+// ConsumerBaseName returns the base name for a consumer to which variants are appended
+//
+// Only adds interestTopic if it's not the default
 func ConsumerBaseName(accountId string, interestTopic string) string {
 	if interestTopic == DefaultInterestTopic {
 		return accountId
 	} else {
 		return fmt.Sprintf("%s-%s", accountId, interestTopic)
 	}
-}
-
-// ConsumerNotifyName returns the name for the consumer to
-// get notify messages for the account.
-func ConsumerNotifyName(accountId string, interestTopic string) string {
-	return fmt.Sprintf("%s-%s", ConsumerBaseName(accountId, interestTopic), ChannelNotify)
 }
 
 // ClientOpts - passed through to NewClient() to configure the client setup
@@ -458,12 +455,6 @@ func DefaultClientOpts() []ClientOpt {
 	return []ClientOpt{
 		WithRunner(DefaultConsumerName, DefaultInterestTopic),
 	}
-}
-
-// LocalServerConsumerRequestName returns the name for the local server consumer to
-// get request messages for the account.
-func LocalServerConsumerRequestName(accountId string, interestTopic string) string {
-	return fmt.Sprintf("%s-%s", ConsumerBaseName(accountId, interestTopic), ChannelRequest)
 }
 
 // WithReplay initialises the client with a consumer for replaying a sequence
@@ -517,7 +508,7 @@ func WithRunner(name string, interestTopic string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		consumerName := ConsumerNotifyName(c.accountId, interestTopic)
+		consumerName := fmt.Sprintf("%s-%s", ConsumerBaseName(c.accountId, interestTopic), ChannelNotify)
 		consumerName = nameReplacer.Replace(consumerName)
 
 		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
@@ -546,7 +537,7 @@ func WithWorker(appName string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		name := WorkerRequestName(c.accountId, c.interestTopic, appName)
+		name := fmt.Sprintf("%s-%s-%s", ConsumerBaseName(c.accountId, c.interestTopic), ChannelRequest, appName)
 		name = nameReplacer.Replace(name)
 
 		// Create or update the consumer, since these are created dynamically
@@ -564,9 +555,4 @@ func WithWorker(appName string) ClientOpt {
 		c.Consumers[appName] = consumer
 		return nil
 	}
-}
-
-// WorkerRequestName returns the name for the worker consumer
-func WorkerRequestName(accountId string, interestTopic string, appName string) string {
-	return fmt.Sprintf("%s-%s-%s", ConsumerBaseName(accountId, interestTopic), ChannelRequest, appName)
 }
