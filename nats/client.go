@@ -265,7 +265,7 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 	}
 
 	consumerConf := jetstream.OrderedConsumerConfig{
-		FilterSubjects: []string{EventLogSubject(c.accountId, c.interestTopic, eventId)},
+		FilterSubjects: []string{EventLogFilterSubject(c.accountId, c.interestTopic, eventId)},
 		DeliverPolicy:  jetstream.DeliverByStartTimePolicy,
 		OptStartTime:   &start,
 	}
@@ -474,7 +474,7 @@ func WithReplay(name string, sequenceId string) ClientOpt {
 		consumerCfg := jetstream.ConsumerConfig{
 			Name:          replaySequenceId,
 			Description:   fmt.Sprintf("Replay request for sequence: '%s'", sequenceId),
-			FilterSubject: ReplaySubject(c.accountId, c.interestTopic, replaySequenceId),
+			FilterSubject: ReplayFilterSubject(c.accountId, c.interestTopic, replaySequenceId),
 			DeliverPolicy: jetstream.DeliverAllPolicy,
 		}
 		consumer, err := c.JetStream.CreateConsumer(ctx, c.streamName, consumerCfg)
@@ -533,7 +533,7 @@ func WithWorker(appName string) ClientOpt {
 		consumerCfg := jetstream.ConsumerConfig{
 			Name:          name,
 			Durable:       name,
-			FilterSubject: WorkerRequestSubject(c.accountId, c.interestTopic, appName, "*"),
+			FilterSubject: WorkerRequestFilterSubject(c.accountId, c.interestTopic, appName, "*"),
 			AckWait:       1 * time.Minute,
 		}
 		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, consumerCfg)
