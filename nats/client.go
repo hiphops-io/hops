@@ -544,7 +544,7 @@ func WithWorker(appName string) ClientOpt {
 		consumerCfg := jetstream.ConsumerConfig{
 			Name:          name,
 			Durable:       name,
-			FilterSubject: WorkerRequestSubject(c.accountId, c.interestTopic, appName, "*"),
+			FilterSubject: WorkerRequestFilterSubject(c.accountId, c.interestTopic, appName, "*"),
 			AckWait:       1 * time.Minute,
 		}
 		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, consumerCfg)
