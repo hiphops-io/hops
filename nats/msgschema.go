@@ -192,9 +192,8 @@ func EventLogSubject(accountId string, interestTopic string, eventFilter string)
 	return strings.Join(tokens, ".")
 }
 
-// LocalServerConsumerNotifyFilterSubject returns the filter subject for the
-// local server consumer to get notify messages for the account.
-func LocalServerConsumerNotifyFilterSubject(accountId string, interestTopic string) string {
+// NotifySubject returns the filter subject to get notify messages for the account
+func NotifySubject(accountId string, interestTopic string) string {
 	tokens := []string{
 		accountId,
 		interestTopic,
@@ -205,9 +204,8 @@ func LocalServerConsumerNotifyFilterSubject(accountId string, interestTopic stri
 	return strings.Join(tokens, ".")
 }
 
-// LocalServerConsumerRequestFilterSubject returns the filter subject for the
-// local server consumer to get request messages for the account.
-func LocalServerConsumerRequestFilterSubject(accountId string, interestTopic string) string {
+// RequestSubject returns the filter subject to get request messages for the account
+func RequestSubject(accountId string, interestTopic string) string {
 	tokens := []string{
 		accountId,
 		interestTopic,
