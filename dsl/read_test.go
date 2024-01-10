@@ -186,6 +186,67 @@ func TestGetOtherFiles(t *testing.T) {
 	assert.Equal(t, HopsFile, hopsFiles.Files[1].Type)
 }
 
+// Exclude directories, symlinks and files whose name starts with '..'
+// This is because kubernetes configMaps create a set of symlinked
+// directories for the mapped files and we don't want to pick those
+// up. Those directories are named '..<various names>'
+// Example:
+// /automations
+// |-- main.hops -> ..data/main.hops
+// |-- ..data -> ..2024_01_10_10_32_09.1478597074
+// |-- ..2024_01_10_10_32_09.1478597074
+// |   |-- main.hops
+func TestKubernetesHopsStructure(t *testing.T) {
+	// Create a temporary directory to mimic ~/hops-conf/automations
+	baseDir, err := os.MkdirTemp("", "hops-conf")
+	if err != nil {
+		t.Fatalf("Failed to create base directory: %s", err)
+	}
+	defer os.RemoveAll(baseDir)
+
+	automationsDir := filepath.Join(baseDir, "automations")
+	err = os.MkdirAll(automationsDir, 0777)
+	if err != nil {
+		t.Fatalf("Failed to create automations directory: %s", err)
+	}
+
+	// Creating the dated directory
+	datedDir := filepath.Join(automationsDir, "..2024_01_10_10_32_09.1478597074")
+	err = os.Mkdir(datedDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create dated directory: %s", err)
+	}
+
+	// Create main.hops file in datedDir
+	mainHopsFile := filepath.Join(datedDir, "main.hops")
+	file, err := os.Create(mainHopsFile)
+	if err != nil {
+		t.Fatalf("Failed to create main.hops file: %s", err)
+	}
+	file.Close()
+
+	// Creating the symbolic link ..data
+	dataLink := filepath.Join(automationsDir, "..data")
+	err = os.Symlink(datedDir, dataLink)
+	if err != nil {
+		t.Fatalf("Failed to create data symlink: %s", err)
+	}
+
+	// Creating the symbolic link main.hops
+	mainHopsLink := filepath.Join(automationsDir, "main.hops")
+	targetMainHops := filepath.Join(dataLink, "main.hops")
+	err = os.Symlink(targetMainHops, mainHopsLink)
+	if err != nil {
+		t.Fatalf("Failed to create main.hops symlink: %s", err)
+	}
+
+	// Run the function
+	resultFileContent, err := readHops(baseDir)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(resultFileContent))
+	assert.Equal(t, "automations/main.hops", resultFileContent[0].File)
+}
+
 // createFile creates a file in the given temp directory with the given content
 // including any required subdirectories
 func createFile(t *testing.T, tmpDir string, filename string, content string) {
