@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -134,7 +135,14 @@ func (h *HTTPServer) listTasks(w http.ResponseWriter, r *http.Request) {
 
 // listFileTasks returns all tasks contained within a path and it's sub paths
 func (h *HTTPServer) listFileTasks(w http.ResponseWriter, r *http.Request) {
-	filePath := chi.URLParam(r, "filePath")
+	filePathParam := chi.URLParam(r, "filePath")
+	filePath, err := url.QueryUnescape(filePathParam)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		msg := fmt.Sprintf("Invalid file path given: %s", err.Error())
+		w.Write([]byte(msg))
+		return
+	}
 
 	h.mu.RLock()
 	tasks := h.taskHops.ListFileTasks(filePath)
