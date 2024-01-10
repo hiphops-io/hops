@@ -39,6 +39,7 @@ func NewRunner(natsClient *nats.Client, hopsFileLoader *HopsFileLoader, logger z
 		logger:         logger,
 		natsClient:     natsClient,
 		hopsFileLoader: hopsFileLoader,
+		cron:           cron.New(),
 		cache:          cache.New(5*time.Minute, 10*time.Minute),
 	}
 
@@ -70,19 +71,15 @@ func (r *Runner) Reload(ctx context.Context) error {
 		return fmt.Errorf("Unable to create schedules %w", err)
 	}
 
+	r.resetCron()
+
+	log.Println(r.cron.Entries())
+
 	return nil
 }
 
 func (r *Runner) Run(ctx context.Context, fromConsumer string) error {
-	c := cron.New()
-	defer c.Stop()
-
-	for _, schedule := range r.schedules {
-		c.Schedule(schedule.CronSchedule, schedule)
-	}
-	c.Start()
-
-	r.cron = c
+	defer r.cron.Stop()
 
 	return r.natsClient.ConsumeSequences(ctx, fromConsumer, r)
 }
@@ -251,22 +248,18 @@ func (r *Runner) prepareHopsSchedules() error {
 
 	r.schedules = schedules
 
-	// this nil check is a bit shit but reload is called in NewRunner
-	if r.cron != nil {
-		r.cron.Stop()
-
-		r.cron = cron.New()
-		for _, schedule := range r.schedules {
-			r.cron.Schedule(schedule.CronSchedule, schedule)
-		}
-		r.cron.Start()
-
-		// temp , remmember to remove
-		log.Println(r.cron.Entries())
-
-	}
-
 	return nil
+}
+
+func (r *Runner) resetCron() {
+	r.cron.Stop()
+
+	r.cron = cron.New()
+
+	for _, schedule := range r.schedules {
+		r.cron.Schedule(schedule.CronSchedule, schedule)
+	}
+	r.cron.Start()
 }
 
 // sequenceHops attempts to assign the local hops config to a sequence,
