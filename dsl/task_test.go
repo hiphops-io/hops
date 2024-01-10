@@ -26,7 +26,7 @@ func TestTaskParse(t *testing.T) {
 			name: "Simple valid task",
 			hops: `task foo {}`,
 			tasks: []TaskAST{
-				{Name: "foo", DisplayName: "Foo"},
+				{Name: "foo", DisplayName: "Foo", FilePath: "hopsdir/hops.hops"},
 			},
 			validParse: true,
 			validRead:  true,
@@ -41,7 +41,7 @@ func TestTaskParse(t *testing.T) {
 			}
 			`,
 			tasks: []TaskAST{
-				{Name: "foo", DisplayName: "Run Foo Task"},
+				{Name: "foo", DisplayName: "Run Foo Task", FilePath: "hopsdir/hops.hops"},
 			},
 			validParse: true,
 			validRead:  true,
@@ -67,6 +67,7 @@ func TestTaskParse(t *testing.T) {
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
+					FilePath:    "hopsdir/hops.hops",
 					Params: []ParamAST{
 						{
 							Name:        "foo",
@@ -97,6 +98,7 @@ func TestTaskParse(t *testing.T) {
 				{
 					Name:        "first",
 					DisplayName: "First",
+					FilePath:    "hopsdir/hops.hops",
 					Params: []ParamAST{
 						{
 							Name:        "bar",
@@ -109,6 +111,7 @@ func TestTaskParse(t *testing.T) {
 				{
 					Name:        "second",
 					DisplayName: "Second",
+					FilePath:    "hopsdir/hops.hops",
 					Params: []ParamAST{
 						{
 							Name:        "bar",
@@ -138,6 +141,7 @@ func TestTaskParse(t *testing.T) {
 					Summary:     "Run a foo",
 					Description: "Run you a foo for great good!",
 					Emoji:       "🤖",
+					FilePath:    "hopsdir/hops.hops",
 				},
 			},
 			validParse: true,
@@ -165,7 +169,7 @@ func TestTaskParse(t *testing.T) {
 
 		task foo {}`,
 			tasks: []TaskAST{
-				{Name: "foo", DisplayName: "Foo"},
+				{Name: "foo", DisplayName: "Foo", FilePath: "hopsdir/hops.hops"},
 			},
 			validParse: true,
 			validRead:  true,
@@ -182,6 +186,7 @@ func TestTaskParse(t *testing.T) {
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
+					FilePath:    "hopsdir/hops.hops",
 					Params: []ParamAST{
 						{
 							Name:        "a",
@@ -213,6 +218,7 @@ task foo {
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
+					FilePath:    "hopsdir/hops.hops",
 					Params: []ParamAST{
 						{
 							Name:        "a",
@@ -250,6 +256,7 @@ task foo {
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
+					FilePath:    "hopsdir/hops.hops",
 					Params: []ParamAST{
 						{
 							Name:        "a",
@@ -289,6 +296,7 @@ task foo {
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
+					FilePath:    "hopsdir/hops.hops",
 					Params: []ParamAST{
 						{
 							Name:        "a",
@@ -335,6 +343,7 @@ task foo {
 				{
 					Name:        "foo",
 					DisplayName: "Foo",
+					FilePath:    "hopsdir/hops.hops",
 					Params: []ParamAST{
 						{
 							Name:        "a",

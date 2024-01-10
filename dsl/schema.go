@@ -141,12 +141,13 @@ type ConditionalAST struct {
 }
 
 type TaskAST struct {
-	Name        string     `json:"name"`
-	DisplayName string     `json:"display_name"`
-	Summary     string     `json:"summary"`
 	Description string     `json:"description"`
+	DisplayName string     `json:"display_name"`
 	Emoji       string     `json:"emoji"`
+	FilePath    string     `json:"file_path"`
+	Name        string     `json:"name"`
 	Params      []ParamAST `json:"params"`
+	Summary     string     `json:"summary"`
 }
 
 const (

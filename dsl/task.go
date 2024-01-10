@@ -50,7 +50,9 @@ func DecodeTasks(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *hcl
 }
 
 func DecodeTaskBlock(ctx context.Context, hop *HopAST, block *hcl.Block, evalctx *hcl.EvalContext) error {
-	task := TaskAST{}
+	task := TaskAST{
+		FilePath: block.DefRange.Filename,
+	}
 
 	content, diag := block.Body.Content(taskSchema)
 	if diag.HasErrors() {
