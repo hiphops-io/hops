@@ -28,6 +28,7 @@ type (
 		ConsumerSequence uint64
 		Done             bool
 		HandlerName      string
+		InterestTopic    string
 		MessageId        string
 		SequenceId       string
 		StreamSequence   uint64
@@ -72,6 +73,7 @@ func (m *MsgMeta) Msg() jetstream.Msg {
 func (m *MsgMeta) ResponseSubject() string {
 	tokens := []string{
 		m.AccountId,
+		m.InterestTopic,
 		ChannelNotify,
 		m.SequenceId,
 		m.MessageId,
@@ -83,6 +85,7 @@ func (m *MsgMeta) ResponseSubject() string {
 func (m *MsgMeta) SequenceFilter() string {
 	tokens := []string{
 		m.AccountId,
+		m.InterestTopic,
 		ChannelNotify,
 		m.SequenceId,
 		">",
@@ -107,39 +110,36 @@ func (m *MsgMeta) initMetadata() error {
 // initTokens parses tokens from a message subject into the Msg struct
 //
 // Example hops subjects are:
-// `account_id.notify.sequence_id.event`
-// `account_id.notify.sequence_id.hops`
-// `account_id.notify.sequence_id.message_id`
-// `account_id.request.sequence_id.message_id.app.handler`
+// `account_id.interest_topic.notify.sequence_id.event`
+// `account_id.interest_topic.notify.sequence_id.hops`
+// `account_id.interest_topic.notify.sequence_id.message_id`
+// `account_id.interest_topic.request.sequence_id.message_id.app.handler`
 func (m *MsgMeta) initTokens() error {
 	subjectTokens := strings.Split(m.msg.Subject(), ".")
-	if len(subjectTokens) < 4 {
+	if len(subjectTokens) < 5 {
 		return fmt.Errorf("Invalid message subject (too few tokens): %s", m.msg.Subject())
 	}
 
 	m.AccountId = subjectTokens[0]
-	m.Channel = subjectTokens[1]
-	m.SequenceId = subjectTokens[2]
-	m.MessageId = subjectTokens[3]
+	m.InterestTopic = subjectTokens[1]
+	m.Channel = subjectTokens[2]
+	m.SequenceId = subjectTokens[3]
+	m.MessageId = subjectTokens[4]
 
-	if len(subjectTokens) == 5 {
-		m.Done = subjectTokens[4] == DoneMessageId
-	}
-
-	if m.Channel == ChannelNotify {
-		return nil
+	if len(subjectTokens) == 6 {
+		m.Done = subjectTokens[5] == DoneMessageId
 	}
 
 	switch m.Channel {
 	case ChannelNotify:
 		return nil
 	case ChannelRequest:
-		if len(subjectTokens) < 6 {
+		if len(subjectTokens) < 7 {
 			return fmt.Errorf("Invalid request message subject (too few tokens): %s", m.msg.Subject())
 		}
 
-		m.AppName = subjectTokens[4]
-		m.HandlerName = subjectTokens[5]
+		m.AppName = subjectTokens[5]
+		m.HandlerName = subjectTokens[6]
 
 		return nil
 	default:
@@ -175,14 +175,15 @@ func NewResultMsg(startedAt time.Time, result interface{}, err error) ResultMsg 
 	return resultMsg
 }
 
-// EventLogSubject returns the subject used to get events for display to the
+// EventLogFilterSubject returns the subject used to get events for display to the
 // user in the UI.
 //
 // accountId: The account id to filter on
 // eventFilter: either AllEventId or SourceEventId
-func EventLogSubject(accountId string, eventFilter string) string {
+func EventLogFilterSubject(accountId string, interestTopic string, eventFilter string) string {
 	tokens := []string{
 		accountId,
+		interestTopic,
 		"*",
 		"*",
 		eventFilter,
@@ -191,11 +192,36 @@ func EventLogSubject(accountId string, eventFilter string) string {
 	return strings.Join(tokens, ".")
 }
 
-func ReplayFilterSubject(accountId string, sequenceId string) string {
+// NotifyFilterSubject returns the filter subject to get notify messages for the account
+func NotifyFilterSubject(accountId string, interestTopic string) string {
 	tokens := []string{
 		accountId,
+		interestTopic,
+		ChannelNotify,
+		">",
+	}
+
+	return strings.Join(tokens, ".")
+}
+
+func ReplayFilterSubject(accountId string, interestTopic string, sequenceId string) string {
+	tokens := []string{
+		accountId,
+		interestTopic,
 		"*",
 		sequenceId,
+		">",
+	}
+
+	return strings.Join(tokens, ".")
+}
+
+// RequestFilterSubject returns the filter subject to get request messages for the account
+func RequestFilterSubject(accountId string, interestTopic string) string {
+	tokens := []string{
+		accountId,
+		interestTopic,
+		ChannelRequest,
 		">",
 	}
 
@@ -210,19 +236,23 @@ func SequenceHopsKeyTokens(sequenceId string) []string {
 	}
 }
 
-func SourceEventSubject(accountId string, sequenceId string) string {
+func SourceEventSubject(accountId string, interestTopic string, sequenceId string) string {
 	tokens := []string{
 		accountId,
+		interestTopic,
 		ChannelNotify,
 		sequenceId,
 		"event",
 	}
+
 	return strings.Join(tokens, ".")
 }
 
-func WorkerRequestSubject(accountId string, appName string, handler string) string {
+// WorkerRequestFilterSubject returns the filter subject for the worker consumer
+func WorkerRequestFilterSubject(accountId string, interestTopic string, appName string, handler string) string {
 	tokens := []string{
 		accountId,
+		interestTopic,
 		ChannelRequest,
 		"*",
 		"*",

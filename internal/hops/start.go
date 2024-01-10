@@ -245,6 +245,7 @@ func (h *HopsServer) startNATSClient() (*nats.Client, error) {
 	natsClient, err := nats.NewClient(
 		keyFile.NatsUrl(),
 		keyFile.AccountId,
+		nats.DefaultInterestTopic,
 		&zlog,
 		clientOpts...,
 	)

@@ -20,6 +20,9 @@ const (
 	// How far back to look for events by default
 	DefaultEventLookback = -time.Hour
 
+	// Interest topic which is used by default
+	DefaultInterestTopic = "default"
+
 	// Number of events returned max
 	GetEventHistoryEventLimit = 100
 
@@ -32,13 +35,14 @@ var nameReplacer = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
 
 type (
 	Client struct {
-		Consumers   map[string]jetstream.Consumer
-		JetStream   jetstream.JetStream
-		NatsConn    *nats.Conn
-		SysObjStore nats.ObjectStore
-		accountId   string
-		logger      Logger
-		streamName  string
+		Consumers     map[string]jetstream.Consumer
+		JetStream     jetstream.JetStream
+		NatsConn      *nats.Conn
+		SysObjStore   nats.ObjectStore
+		accountId     string
+		interestTopic string
+		logger        Logger
+		streamName    string
 	}
 
 	// ClientOpt functions configure a nats.Client via NewClient()
@@ -60,12 +64,13 @@ type (
 //
 // By default it is configured as a runner consumer (listening for incoming source events)
 // Passing *any* ClientOpts will override this default.
-func NewClient(natsUrl string, accountId string, logger Logger, clientOpts ...ClientOpt) (*Client, error) {
+func NewClient(natsUrl string, accountId string, interestTopic string, logger Logger, clientOpts ...ClientOpt) (*Client, error) {
 	ctx := context.Background()
 
 	natsClient := &Client{
-		Consumers: map[string]jetstream.Consumer{},
-		accountId: accountId,
+		Consumers:     map[string]jetstream.Consumer{},
+		accountId:     accountId,
+		interestTopic: interestTopic,
 		// Override this using WithStreamName ClientOpt if required.
 		streamName: nameReplacer.Replace(accountId),
 		logger:     logger,
@@ -260,7 +265,7 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 	}
 
 	consumerConf := jetstream.OrderedConsumerConfig{
-		FilterSubjects: []string{EventLogSubject(c.accountId, eventId)},
+		FilterSubjects: []string{EventLogFilterSubject(c.accountId, c.interestTopic, eventId)},
 		DeliverPolicy:  jetstream.DeliverByStartTimePolicy,
 		OptStartTime:   &start,
 	}
@@ -329,8 +334,7 @@ func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.R
 		return nil, err
 	}
 
-	tokens := append([]string{c.accountId}, subjTokens...)
-	subject := strings.Join(tokens, ".")
+	subject := c.buildSubject(subjTokens...)
 
 	return stream.GetLastMsgForSubject(ctx, subject)
 }
@@ -344,10 +348,9 @@ func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string)
 	subject := ""
 	isFullSubject := len(subjTokens) == 1 && strings.Contains(subjTokens[0], ".")
 
-	// If we have individual subject tokens, construct into string and prefix with accountId
+	// If we have individual subject tokens, construct into string and prefix with accountId and interestTopic
 	if !isFullSubject {
-		tokens := append([]string{c.accountId}, subjTokens...)
-		subject = strings.Join(tokens, ".")
+		subject = c.buildSubject(subjTokens...)
 	} else {
 		subject = subjTokens[0]
 	}
@@ -429,6 +432,11 @@ func (c *Client) initObjectStore(ctx context.Context, accountId string) error {
 	return nil
 }
 
+func (c *Client) buildSubject(subjTokens ...string) string {
+	tokens := append([]string{c.accountId, c.interestTopic}, subjTokens...)
+	return strings.Join(tokens, ".")
+}
+
 // ClientOpts - passed through to NewClient() to configure the client setup
 
 // DefaultClientOpts configures the hiphops nats.Client as a RunnerClient
@@ -450,7 +458,7 @@ func WithReplay(name string, sequenceId string) ClientOpt {
 		}
 
 		// Get the source message to be replayed from the stream
-		sourceMsgSubject := SourceEventSubject(c.accountId, sequenceId)
+		sourceMsgSubject := SourceEventSubject(c.accountId, c.interestTopic, sequenceId)
 		rawMsg, err := stream.GetLastMsgForSubject(ctx, sourceMsgSubject)
 		if err != nil {
 			return fmt.Errorf("Failed to fetch source event: %w", err)
@@ -466,7 +474,7 @@ func WithReplay(name string, sequenceId string) ClientOpt {
 		consumerCfg := jetstream.ConsumerConfig{
 			Name:          replaySequenceId,
 			Description:   fmt.Sprintf("Replay request for sequence: '%s'", sequenceId),
-			FilterSubject: ReplayFilterSubject(c.accountId, replaySequenceId),
+			FilterSubject: ReplayFilterSubject(c.accountId, c.interestTopic, replaySequenceId),
 			DeliverPolicy: jetstream.DeliverAllPolicy,
 		}
 		consumer, err := c.JetStream.CreateConsumer(ctx, c.streamName, consumerCfg)
@@ -489,7 +497,7 @@ func WithRunner(name string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		consumerName := fmt.Sprintf("%s-%s", c.accountId, ChannelNotify)
+		consumerName := fmt.Sprintf("%s-%s-%s", c.accountId, c.interestTopic, ChannelNotify)
 		consumerName = nameReplacer.Replace(consumerName)
 
 		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
@@ -518,14 +526,14 @@ func WithWorker(appName string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		name := fmt.Sprintf("%s-%s-%s", c.accountId, ChannelRequest, appName)
+		name := fmt.Sprintf("%s-%s-%s-%s", c.accountId, c.interestTopic, ChannelRequest, appName)
 		name = nameReplacer.Replace(name)
 
 		// Create or update the consumer, since these are created dynamically
 		consumerCfg := jetstream.ConsumerConfig{
 			Name:          name,
 			Durable:       name,
-			FilterSubject: WorkerRequestSubject(c.accountId, appName, "*"),
+			FilterSubject: WorkerRequestFilterSubject(c.accountId, c.interestTopic, appName, "*"),
 			AckWait:       1 * time.Minute,
 		}
 		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, consumerCfg)
