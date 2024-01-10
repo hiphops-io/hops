@@ -76,15 +76,13 @@ func (r *Runner) Reload(ctx context.Context) error {
 
 func (r *Runner) Run(ctx context.Context, fromConsumer string) error {
 
-	err := r.natsClient.ConsumeSequences(ctx, fromConsumer, r)
+	defer func() {
+		if r.cron != nil {
+			r.cron.Stop()
+		}
+	}()
 
-	if err != nil {
-		return err
-	}
-
-	r.cron.Stop()
-
-	return nil
+	return r.natsClient.ConsumeSequences(ctx, fromConsumer, r)
 }
 
 func (r *Runner) SequenceCallback(
