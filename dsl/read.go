@@ -153,8 +153,9 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 			return nil
 		}
 
-		// Symlinks to dirs are not seen as dirs by Go, so we need to check
-		// and exclude them as well
+		// Symlinks to dirs are not seen as dirs by filepath.WalkDir, so we need to
+		// check and exclude them as well
+		// TODO walk symlinks if top level directory is a symlink
 		if strings.HasPrefix(d.Name(), "..") {
 			return nil
 		}
