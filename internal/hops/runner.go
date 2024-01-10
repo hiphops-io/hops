@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -72,8 +71,6 @@ func (r *Runner) Reload(ctx context.Context) error {
 	}
 
 	r.resetCron()
-
-	log.Println(r.cron.Entries())
 
 	return nil
 }
