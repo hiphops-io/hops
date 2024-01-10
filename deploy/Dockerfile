@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:alpine as builder
+FROM golang:1.21.6-alpine as builder
 
 RUN apk add --no-cache --update git nodejs-current npm
 
