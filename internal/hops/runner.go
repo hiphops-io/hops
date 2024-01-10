@@ -38,7 +38,6 @@ func NewRunner(natsClient *nats.Client, hopsFileLoader *HopsFileLoader, logger z
 		logger:         logger,
 		natsClient:     natsClient,
 		hopsFileLoader: hopsFileLoader,
-		cron:           cron.New(),
 		cache:          cache.New(5*time.Minute, 10*time.Minute),
 	}
 
@@ -76,9 +75,16 @@ func (r *Runner) Reload(ctx context.Context) error {
 }
 
 func (r *Runner) Run(ctx context.Context, fromConsumer string) error {
-	defer r.cron.Stop()
 
-	return r.natsClient.ConsumeSequences(ctx, fromConsumer, r)
+	err := r.natsClient.ConsumeSequences(ctx, fromConsumer, r)
+
+	if err != nil {
+		return err
+	}
+
+	r.cron.Stop()
+
+	return nil
 }
 
 func (r *Runner) SequenceCallback(
