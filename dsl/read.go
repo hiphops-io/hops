@@ -153,6 +153,11 @@ func getHopsDirFilePaths(root string) ([]string, error) {
 			return nil
 		}
 
+		// Symlinks to dirs are not seen as dirs by Go, so we need to check
+		// and exclude them as well
+		if strings.HasPrefix(d.Name(), "..") {
+			return nil
+		}
 		// Files in root (i.e root/a.hops), and anything other than first
 		// child directory of the root (i.e. root/sub/sub/a.hops) are skipped
 		if strings.Count(relativePath, string(filepath.Separator)) != 1 {
