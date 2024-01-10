@@ -70,7 +70,7 @@ func (r *Runner) Reload(ctx context.Context) error {
 		return fmt.Errorf("Unable to create schedules %w", err)
 	}
 
-	r.resetCron()
+	r.setCron()
 
 	return nil
 }
@@ -248,8 +248,11 @@ func (r *Runner) prepareHopsSchedules() error {
 	return nil
 }
 
-func (r *Runner) resetCron() {
-	r.cron.Stop()
+func (r *Runner) setCron() {
+
+	if r.cron != nil {
+		r.cron.Stop()
+	}
 
 	r.cron = cron.New()
 
