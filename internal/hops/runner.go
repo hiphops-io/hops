@@ -24,6 +24,7 @@ const (
 
 type Runner struct {
 	cache          *cache.Cache
+	cron           *cron.Cron
 	hopsFileLoader *HopsFileLoader
 	hopsFiles      *dsl.HopsFiles
 	hopsLock       sync.RWMutex
@@ -68,17 +69,18 @@ func (r *Runner) Reload(ctx context.Context) error {
 		return fmt.Errorf("Unable to create schedules %w", err)
 	}
 
+	r.setCron()
+
 	return nil
 }
 
 func (r *Runner) Run(ctx context.Context, fromConsumer string) error {
-	c := cron.New()
-	defer c.Stop()
 
-	for _, schedule := range r.schedules {
-		c.Schedule(schedule.CronSchedule, schedule)
-	}
-	c.Start()
+	defer func() {
+		if r.cron != nil {
+			r.cron.Stop()
+		}
+	}()
 
 	return r.natsClient.ConsumeSequences(ctx, fromConsumer, r)
 }
@@ -248,6 +250,20 @@ func (r *Runner) prepareHopsSchedules() error {
 	r.schedules = schedules
 
 	return nil
+}
+
+func (r *Runner) setCron() {
+
+	if r.cron != nil {
+		r.cron.Stop()
+	}
+
+	r.cron = cron.New()
+
+	for _, schedule := range r.schedules {
+		r.cron.Schedule(schedule.CronSchedule, schedule)
+	}
+	r.cron.Start()
 }
 
 // sequenceHops attempts to assign the local hops config to a sequence,
