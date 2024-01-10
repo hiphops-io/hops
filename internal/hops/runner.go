@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ const (
 
 type Runner struct {
 	cache          *cache.Cache
+	cron           *cron.Cron
 	hopsFileLoader *HopsFileLoader
 	hopsFiles      *dsl.HopsFiles
 	hopsLock       sync.RWMutex
@@ -79,6 +81,8 @@ func (r *Runner) Run(ctx context.Context, fromConsumer string) error {
 		c.Schedule(schedule.CronSchedule, schedule)
 	}
 	c.Start()
+
+	r.cron = c
 
 	return r.natsClient.ConsumeSequences(ctx, fromConsumer, r)
 }
@@ -246,6 +250,21 @@ func (r *Runner) prepareHopsSchedules() error {
 	}
 
 	r.schedules = schedules
+
+	// this nil check is a bit shit but reload is called in NewRunner
+	if r.cron != nil {
+		r.cron.Stop()
+
+		r.cron = cron.New()
+		for _, schedule := range r.schedules {
+			r.cron.Schedule(schedule.CronSchedule, schedule)
+		}
+		r.cron.Start()
+
+		// temp , remmember to remove
+		log.Println(r.cron.Entries())
+
+	}
 
 	return nil
 }
