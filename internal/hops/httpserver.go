@@ -71,6 +71,7 @@ func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats
 	r.Route("/tasks", func(r chi.Router) {
 		r.Post("/{taskName}", h.runTask)
 		r.Get("/", h.listTasks)
+		r.Get("/file/{filePath}", h.listFileTasks)
 	})
 
 	// Serve the events API
@@ -125,6 +126,18 @@ func (h *HTTPServer) getUpdatedAt(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPServer) listTasks(w http.ResponseWriter, r *http.Request) {
 	h.mu.RLock()
 	tasks := h.taskHops.ListTasks()
+	h.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tasks)
+}
+
+// listFileTasks returns all tasks contained within a path and it's sub paths
+func (h *HTTPServer) listFileTasks(w http.ResponseWriter, r *http.Request) {
+	filePath := chi.URLParam(r, "filePath")
+
+	h.mu.RLock()
+	tasks := h.taskHops.ListFileTasks(filePath)
 	h.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")

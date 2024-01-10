@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
@@ -101,6 +102,19 @@ func (h *HopAST) ListSchedules() []ScheduleAST {
 
 func (h *HopAST) ListTasks() []TaskAST {
 	return h.Tasks
+}
+
+func (h *HopAST) ListFileTasks(path string) []TaskAST {
+	fileTasks := []TaskAST{}
+
+	for _, task := range h.Tasks {
+		if !strings.HasPrefix(task.FilePath, path) {
+			continue
+		}
+
+		fileTasks = append(fileTasks, task)
+	}
+	return fileTasks
 }
 
 func (h *HopAST) GetTask(taskName string) (TaskAST, error) {
