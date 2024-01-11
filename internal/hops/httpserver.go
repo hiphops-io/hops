@@ -75,6 +75,11 @@ func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats
 		r.Get("/file/{filePath}", h.listFileTasks)
 	})
 
+	r.Route("/schedules", func(r chi.Router) {
+		r.Get("/", h.listSchedules)
+		r.Get("/file/{filePath}", h.listFileSchedules)
+	})
+
 	// Serve the events API
 	r.Mount("/events", EventRouter(natsClient, logger))
 
@@ -122,6 +127,34 @@ func (h *HTTPServer) getUpdatedAt(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updatedAt)
+}
+
+func (h *HTTPServer) listSchedules(w http.ResponseWriter, r *http.Request) {
+	h.mu.RLock()
+	tasks := h.taskHops.ListTasks()
+	h.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tasks)
+}
+
+// listFileSchedules returns all tasks contained within a path and it's sub paths
+func (h *HTTPServer) listFileSchedules(w http.ResponseWriter, r *http.Request) {
+	filePathParam := chi.URLParam(r, "filePath")
+	filePath, err := url.QueryUnescape(filePathParam)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		msg := fmt.Sprintf("Invalid file path given: %s", err.Error())
+		w.Write([]byte(msg))
+		return
+	}
+
+	h.mu.RLock()
+	tasks := h.taskHops.ListFileTasks(filePath)
+	h.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tasks)
 }
 
 func (h *HTTPServer) listTasks(w http.ResponseWriter, r *http.Request) {
