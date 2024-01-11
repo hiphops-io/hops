@@ -103,7 +103,7 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 	}
 
 	if len(content.Blocks) == 0 {
-		return nil, "", errors.New("At least one resource must be defined in your hops config(s)")
+		return nil, "", errors.New("Ensure --hops is set to a valid dir containing automations. A valid automation must include at least one non-empty *.hops file")
 	}
 
 	filesSha := sha256Hash.Sum(nil)

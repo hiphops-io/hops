@@ -3,7 +3,6 @@ package hops
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/oklog/run"
@@ -76,7 +75,6 @@ func (h *HopsServer) Start(ctx context.Context) error {
 
 	hopsLoader, err := NewHopsFileLoader(h.HopsPath)
 	if err != nil {
-		err := fmt.Errorf("Failed to read hops files: %w", err)
 		h.Logger.Error().Err(err).Msg("Start failed")
 		return err
 	}
