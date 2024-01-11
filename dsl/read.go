@@ -103,7 +103,7 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 	}
 
 	if len(content.Blocks) == 0 {
-		return nil, "", errors.New("Could not read hops files. Ensure the hops folder path is correctly defined. The hops folder should contain at least one resource")
+		return nil, "", errors.New("Ensure the hops folder path is correctly defined. The hops folder should contain at least one resource")
 	}
 
 	filesSha := sha256Hash.Sum(nil)
