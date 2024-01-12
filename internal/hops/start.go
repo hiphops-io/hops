@@ -152,7 +152,14 @@ func (h *HopsServer) startHTTPServer(hopsLoader *HopsFileLoader, natsClient *nat
 
 	if h.Watch {
 		h.reloadManager.Add(10, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-			return httpServer.Reload(ctx)
+			err := httpServer.Reload(ctx)
+			if errors.As(err, &ErrFailedHopsParse{}) {
+				h.Logger.Debug().Msgf("(Ignored in watch mode) %s", err.Error())
+			} else if err != nil {
+				return err
+			}
+
+			return nil
 		}))
 	}
 

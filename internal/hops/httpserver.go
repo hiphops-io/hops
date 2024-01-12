@@ -50,7 +50,7 @@ func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RedirectSlashes)
-	r.Use(logs.AccessLogMiddleware(logger)) // TODO: Make logging less verbose for static/frontend requests
+	r.Use(logs.AccessLogMiddleware(logger))
 	r.Use(Healthcheck(natsClient, "/health"))
 	// TODO: Make CORS configurable and lock down by default. As-is it could be
 	// insecure for production/deployed use.
@@ -94,7 +94,7 @@ func (h *HTTPServer) Reload(ctx context.Context) error {
 	// Serve the tasks API
 	taskHops, err := dsl.ParseHopsTasks(ctx, hopsFiles)
 	if err != nil {
-		return err
+		return ErrFailedHopsParse{err.Error()}
 	}
 
 	h.mu.Lock()
