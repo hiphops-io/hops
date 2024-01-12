@@ -7,6 +7,7 @@ export const load: PageLoad = async () => {
 
 	try {
 		tasks = await ky.get(`${PUBLIC_BACKEND_URL}/tasks`).json();
+		tasks ??= [];
 	} catch (error) {
 		// TODO: Would be better to let users know something went wrong,
 		//       rather than just show empty

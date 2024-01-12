@@ -28,6 +28,7 @@ type (
 		natsClient     *nats.Client
 		server         *http.Server
 		taskHops       *dsl.HopAST
+		tolerantParse  bool // tolerantParse makes failed hops parsing non-fatal (useful in --watch mode)
 		updatedAt      int64
 	}
 
@@ -39,8 +40,14 @@ type (
 	}
 )
 
-func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats.Client, logger zerolog.Logger) (*HTTPServer, error) {
-	h := &HTTPServer{hopsFileLoader: hopsFileLoader, logger: logger, natsClient: natsClient}
+func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, tolerantParse bool, natsClient *nats.Client, logger zerolog.Logger) (*HTTPServer, error) {
+	h := &HTTPServer{
+		hopsFileLoader: hopsFileLoader,
+		logger:         logger,
+		natsClient:     natsClient,
+		tolerantParse:  tolerantParse,
+		taskHops:       &dsl.HopAST{},
+	}
 
 	err := h.Reload(context.Background())
 	if err != nil {
@@ -50,7 +57,7 @@ func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, natsClient *nats
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RedirectSlashes)
-	r.Use(logs.AccessLogMiddleware(logger)) // TODO: Make logging less verbose for static/frontend requests
+	r.Use(logs.AccessLogMiddleware(logger))
 	r.Use(Healthcheck(natsClient, "/health"))
 	// TODO: Make CORS configurable and lock down by default. As-is it could be
 	// insecure for production/deployed use.
@@ -93,8 +100,10 @@ func (h *HTTPServer) Reload(ctx context.Context) error {
 	}
 	// Serve the tasks API
 	taskHops, err := dsl.ParseHopsTasks(ctx, hopsFiles)
-	if err != nil {
-		return err
+	if err != nil && h.tolerantParse {
+		return nil
+	} else if err != nil {
+		return ErrFailedHopsParse{err.Error()}
 	}
 
 	h.mu.Lock()
