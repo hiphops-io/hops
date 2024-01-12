@@ -145,7 +145,7 @@ func (h *HopsServer) startHTTPServer(hopsLoader *HopsFileLoader, natsClient *nat
 		return nil
 	}
 
-	httpServer, err := NewHTTPServer(h.Address, hopsLoader, natsClient, h.Logger)
+	httpServer, err := NewHTTPServer(h.Address, hopsLoader, h.Watch, natsClient, h.Logger)
 	if err != nil {
 		return err
 	}
