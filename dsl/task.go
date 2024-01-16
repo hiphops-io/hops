@@ -36,6 +36,11 @@ func ParseHopsTasks(ctx context.Context, hops *HopsFiles) (*HopAST, error) {
 }
 
 func DecodeTasks(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext) error {
+	if hops == nil || hops.BodyContent == nil {
+		hop.Tasks = []TaskAST{}
+		return nil
+	}
+
 	blocks := hops.BodyContent.Blocks.OfType(TaskID)
 	for _, block := range blocks {
 		blockEvalctx := blockEvalContext(evalctx, hops, block)

@@ -96,20 +96,31 @@ func (d *DirNotifier) initWatcher(path string) error {
 	return nil
 }
 
-func NewHopsFileLoader(path string) (*HopsFileLoader, error) {
+func NewHopsFileLoader(path string, tolerant bool) (*HopsFileLoader, error) {
 	h := &HopsFileLoader{path: path}
-	err := h.Reload(context.Background())
+	err := h.Reload(context.Background(), tolerant)
 	if err != nil {
-		return nil, err
+		return h, err
 	}
 
 	return h, nil
 }
 
-func (h *HopsFileLoader) Reload(ctx context.Context) error {
+func (h *HopsFileLoader) Reload(ctx context.Context, tolerant bool) error {
 	hops, err := dsl.ReadHopsFilePath(h.path)
-	if err != nil {
+	if err != nil && !tolerant {
 		return fmt.Errorf("Failed to read hops files: %w", err)
+	}
+	if err != nil && h.hopsFiles.Hash != "" {
+		// If hopsFiles already set, then just don't update it with the broken one
+		return nil
+	}
+
+	if err != nil {
+		hops = &dsl.HopsFiles{
+			Hash:  "empty",
+			Files: []dsl.FileContent{},
+		}
 	}
 
 	h.mu.Lock()

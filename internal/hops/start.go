@@ -73,9 +73,12 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		return err
 	}
 
-	hopsLoader, err := NewHopsFileLoader(h.HopsPath)
+	hopsLoader, err := NewHopsFileLoader(h.HopsPath, h.Watch)
 	if err != nil {
 		h.Logger.Error().Err(err).Msg("Start failed")
+	}
+	if !h.Watch && err != nil {
+		// Error here is fatal when not in watch mode
 		return err
 	}
 
@@ -268,7 +271,7 @@ func (h *HopsServer) startReloader(ctx context.Context, hopsLoader *HopsFileLoad
 	}
 
 	h.reloadManager.Add(0, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-		err := hopsLoader.Reload(ctx)
+		err := hopsLoader.Reload(ctx, true)
 		if err != nil {
 			h.Logger.Warn().Msgf("Hops files could not be reloaded: %s", err.Error())
 			return nil
