@@ -57,7 +57,6 @@ func DecodeScheduleBlock(block *hcl.Block, hop *HopAST, evalctx *hcl.EvalContext
 
 func DecodeSchedules(hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext) error {
 	if hops.BodyContent == nil {
-		// TODO: Create a good default
 		return nil
 	}
 
