@@ -76,9 +76,6 @@ func (h *HopsServer) Start(ctx context.Context) error {
 	hopsLoader, err := NewHopsFileLoader(h.HopsPath, h.Watch)
 	if err != nil {
 		h.Logger.Error().Err(err).Msg("Start failed")
-	}
-	if !h.Watch && err != nil {
-		// Error here is fatal when not in watch mode
 		return err
 	}
 
