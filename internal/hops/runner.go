@@ -127,12 +127,14 @@ func (r *Runner) SequenceCallback(
 }
 
 func (r *Runner) checkIfDone(ctx context.Context, sensor *dsl.OnAST, sequenceId string, msgBundle nats.MessageBundle, logger zerolog.Logger) (bool, error) {
+	// Custom done logic
 	if sensor.Done != nil {
 		err := r.dispatchDone(ctx, sensor.Slug, sensor.Done, sequenceId, logger)
 		return true, err
 	}
 
-	// If all dispatchable calls have results already, then we're done regardless
+	// Default done logic (If all dispatchable calls have results
+	// then we're done as it's impossible to progress further)
 	done := true
 	for _, call := range sensor.Calls {
 		_, ok := msgBundle[call.Slug]
@@ -143,6 +145,9 @@ func (r *Runner) checkIfDone(ctx context.Context, sensor *dsl.OnAST, sequenceId 
 	}
 
 	if done {
+		// TODO: Properly calculate done result
+		// - if any are errored = true, result = error
+		// - if all are done = true, result = ??
 		done := &dsl.DoneAST{
 			Result: []byte("{}"),
 		}

@@ -146,8 +146,9 @@ type CallAST struct {
 }
 
 type DoneAST struct {
-	Error  error
-	Result []byte
+	Errored   bool
+	Completed bool
+	Done      bool
 }
 
 type ConditionalAST struct {
