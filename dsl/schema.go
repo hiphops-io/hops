@@ -59,14 +59,9 @@ var (
 		},
 	}
 
-	DoneID     = "done"
-	doneSchema = &hcl.BodySchema{
-		Blocks: []hcl.BlockHeaderSchema{},
-		Attributes: []hcl.AttributeSchema{
-			{Name: ErrorAttr, Required: false},
-			{Name: ResultAttr, Required: false},
-		},
-	}
+	DoneID     = "done"     // Schema defined via tags on the struct
+	ParamID    = "param"    // Schema defined via tags on the struct
+	ScheduleID = "schedule" // Schema defined via tags on the struct
 
 	TaskID     = "task"
 	taskSchema = &hcl.BodySchema{
@@ -83,9 +78,6 @@ var (
 			{Name: "emoji", Required: false},
 		},
 	}
-
-	ParamID    = "param"    // Schema defined via tags on the struct
-	ScheduleID = "schedule" // Schema defined via tags on the struct
 )
 
 type HopAST struct {
@@ -146,8 +138,8 @@ type CallAST struct {
 }
 
 type DoneAST struct {
-	Errored   bool
-	Completed bool
+	Errored   bool `hcl:"errored,optional" json:"errored"`
+	Completed bool `hcl:"completed,optional" json:"completed"`
 	Done      bool
 }
 

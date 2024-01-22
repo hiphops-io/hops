@@ -149,7 +149,7 @@ func (r *Runner) checkIfDone(ctx context.Context, sensor *dsl.OnAST, sequenceId 
 		// - if any are errored = true, result = error
 		// - if all are done = true, result = ??
 		done := &dsl.DoneAST{
-			Result: []byte("{}"),
+			Completed: true,
 		}
 		err := r.dispatchDone(ctx, sensor.Slug, done, sequenceId, logger)
 		return true, err
@@ -164,8 +164,8 @@ func (r *Runner) dispatchDone(ctx context.Context, onSlug string, done *dsl.Done
 	err, sent := r.natsClient.PublishResult(
 		ctx,
 		time.Now(),
-		done.Result,
-		done.Error,
+		[]byte("{}"), // TODO: Temporary result value
+		nil,          // TODO: Temporary error value
 		nats.ChannelNotify,
 		sequenceId,
 		onSlug,

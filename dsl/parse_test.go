@@ -143,8 +143,8 @@ func TestValidParseDone(t *testing.T) {
 	require.NotNil(t, hop.Ons[0].Done)
 
 	done := hop.Ons[0].Done
-	assert.NotNil(t, done.Result)
-	assert.NoError(t, done.Error)
+	assert.True(t, done.Completed)
+	assert.False(t, done.Errored)
 }
 
 func TestInvalidParse(t *testing.T) {
