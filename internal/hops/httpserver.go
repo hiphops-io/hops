@@ -79,7 +79,6 @@ func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, tolerantParse bo
 	r.Route("/tasks", func(r chi.Router) {
 		r.Post("/{taskName}", h.runTask)
 		r.Get("/", h.listTasks)
-		r.Get("/file/{filePath}", h.listFileTasks)
 	})
 
 	// Serve the events API
@@ -134,28 +133,27 @@ func (h *HTTPServer) getUpdatedAt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPServer) listTasks(w http.ResponseWriter, r *http.Request) {
-	h.mu.RLock()
-	tasks := h.taskHops.ListTasks()
-	h.mu.RUnlock()
+	var tasks []dsl.TaskAST
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tasks)
-}
+	filePathParam := r.URL.Query().Get("filepath")
 
-// listFileTasks returns all tasks contained within a path and it's sub paths
-func (h *HTTPServer) listFileTasks(w http.ResponseWriter, r *http.Request) {
-	filePathParam := chi.URLParam(r, "filePath")
-	filePath, err := url.QueryUnescape(filePathParam)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		msg := fmt.Sprintf("Invalid file path given: %s", err.Error())
-		w.Write([]byte(msg))
-		return
+	if filePathParam == "" {
+		h.mu.RLock()
+		tasks = h.taskHops.ListTasks()
+		h.mu.RUnlock()
+	} else {
+		filePath, err := url.QueryUnescape(filePathParam)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			msg := fmt.Sprintf("Invalid file path given: %s", err.Error())
+			w.Write([]byte(msg))
+			return
+		}
+
+		h.mu.RLock()
+		tasks = h.taskHops.ListFileTasks(filePath)
+		h.mu.RUnlock()
 	}
-
-	h.mu.RLock()
-	tasks := h.taskHops.ListFileTasks(filePath)
-	h.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tasks)
