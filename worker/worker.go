@@ -1,5 +1,8 @@
 package worker
 
+// Note: This code has been superseded by the AppWorker pattern, which should now be used instead.
+// It will be removed in a future version.
+
 import (
 	"context"
 	"time"
@@ -17,6 +20,7 @@ type (
 	// TODO: Update function to return a pointer to a ResultMsg
 	Handler func(context.Context, jetstream.Msg) error
 
+	// Deprecated: Use AppWorker instead
 	Worker struct {
 		app        App
 		logger     Logger
@@ -25,6 +29,7 @@ type (
 	}
 )
 
+// Deprecated: Use NewAppWorker instead
 func NewWorker(natsClient *nats.Client, app App, logger Logger) *Worker {
 	w := &Worker{
 		app:        app,

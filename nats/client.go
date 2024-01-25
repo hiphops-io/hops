@@ -367,7 +367,11 @@ func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string)
 	return puback, sent, err
 }
 
-// PublishResult is a convenience wrapper that json encodes a ResultMsg and publishes it
+// Deprecated: PublishResult is a convenience wrapper that json encodes a ResultMsg and publishes it
+//
+// In most cases you should use PublishResultWithAck instead, deferring acking of the original messaging
+// until after we've sent a result.
+// This method will be removed in future.
 func (c *Client) PublishResult(ctx context.Context, startedAt time.Time, result interface{}, err error, subjTokens ...string) (error, bool) {
 	resultMsg, ok := result.(ResultMsg)
 	if !ok {
@@ -381,6 +385,16 @@ func (c *Client) PublishResult(ctx context.Context, startedAt time.Time, result 
 
 	_, sent, err := c.Publish(ctx, resultBytes, subjTokens...)
 	return err, sent
+}
+
+func (c *Client) PublishResultWithAck(ctx context.Context, msg jetstream.Msg, startedAt time.Time, result interface{}, err error, subjTokens ...string) (bool, error) {
+	err, sent := c.PublishResult(ctx, startedAt, result, err, subjTokens...)
+
+	if err == nil && sent {
+		err = DoubleAck(ctx, msg)
+	}
+
+	return sent, err
 }
 
 func (c *Client) PutSysObject(name string, data []byte) (*nats.ObjectInfo, error) {
@@ -510,7 +524,7 @@ func WithRunner(name string) ClientOpt {
 	}
 }
 
-// WithStreamName overrides the stream name to be used (which default to accountId otherwise)
+// WithStreamName overrides the stream name to be used (which defaults to accountId otherwise)
 //
 // Should be given before any ClientOpts that use the stream,
 // as otherwise they will be initialised with the default stream name
