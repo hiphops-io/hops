@@ -19,9 +19,9 @@ type (
 		workChan   chan requestMsg
 	}
 
-	HandlerFunc func([]byte) (Executor, error)
+	HandlerFunc func([]byte, *nats.MsgMeta) (Executor, error)
 
-	Executor func() (interface{}, error)
+	Executor func(context.Context) (interface{}, error)
 
 	Handlers map[string]HandlerFunc
 
@@ -92,7 +92,7 @@ func (a *AppWorker) listenForRequests(ctx context.Context) {
 		}
 
 		// Parse the payload with the handler
-		executor, err := handler(msg.Data())
+		executor, err := handler(msg.Data(), parsedMsg)
 		if err != nil {
 			a.logger.Errf(err, "Failed to parse request")
 			a.natsClient.PublishResultWithAck(
@@ -155,7 +155,7 @@ func (a *AppWorker) executeRequest(ctx context.Context, request requestMsg) {
 
 	// Execute the actual request handling code
 	go func() {
-		result, err := request.executor()
+		result, err := request.executor(ctx)
 		if err != nil {
 			errChan <- err
 		}
