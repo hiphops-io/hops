@@ -48,12 +48,10 @@ func (d *DirNotifier) Notifier() reload.Notifier {
 		case event := <-d.watcher.Events:
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				// File created, is it a dir?
-				fileInfo, _ := os.Stat(event.Name)
-				// We ignore the error from above as normal use would cause this to
-				// return an error (e.g. when saving files via vim)
-
-				if fileInfo.IsDir() {
-					d.watcher.Add(event.Name)
+				// We ignore the error from os.Stat as normal use would cause this to
+				// return an error (e.g., when saving files via vim).
+				if fileInfo, err := os.Stat(event.Name); err == nil && fileInfo.IsDir() {
+					_ = d.watcher.Add(event.Name)
 				}
 			}
 
