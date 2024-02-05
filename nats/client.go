@@ -215,10 +215,7 @@ func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (
 
 	msgCtx, err := cons.Messages()
 	if msgCtx != nil {
-		defer func() {
-			msgCtx.Stop()
-			c.JetStream.DeleteConsumer(ctx, c.streamName, cons.CachedInfo().Name)
-		}()
+		defer msgCtx.Stop()
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Unable to read back messages: %w", err)
@@ -312,8 +309,8 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 			rawEvents = append(rawEvents, rawM)
 		}
 
-		// Keep only the most recent 100 items
-		if len(rawEvents) > 200 {
+		// Keep only the most recent (last) 100 items
+		if len(rawEvents) > 100 {
 			rawEvents = rawEvents[len(rawEvents)-100:]
 		}
 
@@ -321,11 +318,6 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 		if numPending == 0 {
 			break
 		}
-	}
-
-	// Final strip down to most recent 100 items
-	if len(rawEvents) > 100 {
-		rawEvents = rawEvents[len(rawEvents)-100:]
 	}
 
 	c.logger.Debugf("Events received %d", len(rawEvents))
