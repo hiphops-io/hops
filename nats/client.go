@@ -215,7 +215,10 @@ func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (
 
 	msgCtx, err := cons.Messages()
 	if msgCtx != nil {
-		defer msgCtx.Stop()
+		defer func() {
+			msgCtx.Stop()
+			c.JetStream.DeleteConsumer(ctx, c.streamName, cons.CachedInfo().Name)
+		}()
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Unable to read back messages: %w", err)
@@ -257,6 +260,7 @@ func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (
 // Only returns the first 100 events. (const GetEventHistoryEventLimit)
 // If sourceOnly is true, only returns source events (i.e. not pipeline events)
 func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnly bool) ([]*MsgMeta, error) {
+	rawEvents := []jetstream.Msg{}
 	events := []*MsgMeta{}
 	var eventId string
 
@@ -301,22 +305,16 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 		}
 
 		for rawM := range msgs.Messages() {
-			m, err := Parse(rawM)
-			if err != nil {
-				c.logger.Errf(err, "Unable to parse message")
-				return nil, err
-			}
-
 			// count down so we don't have to timeout on the last fetch
 			numPending--
 
-			// Prepend to the events
-			events = append([]*MsgMeta{m}, events...)
+			// Append to the events
+			rawEvents = append(rawEvents, rawM)
 		}
 
-		// Keep only the first 100 items
-		if len(events) > 100 {
-			events = events[:100]
+		// Keep only the most recent 100 items
+		if len(rawEvents) > 200 {
+			rawEvents = rawEvents[len(rawEvents)-100:]
 		}
 
 		// If we've got all the events, we can stop
@@ -325,7 +323,24 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 		}
 	}
 
-	c.logger.Debugf("Events received %d", len(events))
+	// Final strip down to most recent 100 items
+	if len(rawEvents) > 100 {
+		rawEvents = rawEvents[len(rawEvents)-100:]
+	}
+
+	c.logger.Debugf("Events received %d", len(rawEvents))
+
+	// Parse the events in reverse order (most recent first)
+	for i := len(rawEvents) - 1; i >= 0; i-- {
+		rawM := rawEvents[i]
+		m, err := Parse(rawM)
+		if err != nil {
+			c.logger.Errf(err, "Unable to parse message")
+			return nil, err
+		}
+
+		events = append(events, m)
+	}
 
 	return events, nil
 }
