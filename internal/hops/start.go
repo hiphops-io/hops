@@ -49,6 +49,7 @@ type (
 
 	RunnerConf struct {
 		Serve bool
+		Local bool
 	}
 )
 
@@ -79,12 +80,12 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		return err
 	}
 
-	err = h.startHTTPServer(hopsLoader, natsClient)
+	err = h.startRunner(ctx, hopsLoader, natsClient)
 	if err != nil {
 		return err
 	}
 
-	err = h.startRunner(ctx, hopsLoader, natsClient)
+	err = h.startHTTPServer(hopsLoader, natsClient)
 	if err != nil {
 		return err
 	}
@@ -235,6 +236,9 @@ func (h *HopsServer) startNATSClient() (*nats.Client, error) {
 	if h.ReplayEvent != "" {
 		clientOpts = append(clientOpts, nats.WithReplay(nats.DefaultConsumerName, h.ReplayEvent))
 		h.Logger.Info().Msgf("Replaying source event: %s", h.ReplayEvent)
+	} else if h.RunnerConf.Local && h.RunnerConf.Serve {
+		clientOpts = append(clientOpts, nats.WithLocalRunner(nats.DefaultConsumerName))
+		h.Logger.Info().Msgf("Running in local mode")
 	} else if h.RunnerConf.Serve {
 		clientOpts = append(clientOpts, nats.WithRunner(nats.DefaultConsumerName))
 	}

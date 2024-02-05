@@ -104,6 +104,8 @@ func NewClient(natsUrl string, accountId string, interestTopic string, logger Lo
 		}
 	}
 
+	logger.Debugf("Interest topic is: %s", natsClient.interestTopic)
+
 	return natsClient, err
 }
 
@@ -196,8 +198,8 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 // FetchMessageBundle pulls all historic messages for a sequenceId from the stream, converting them to a message bundle
 //
 // The returned message bundle will contain all previous messages in addition to the newly received message
-func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (MessageBundle, error) {
-	filter := newMsg.SequenceFilter()
+func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (MessageBundle, error) {
+	filter := incomingMsg.SequenceFilter()
 
 	// TODO: Create a deadline for the context
 	consumerConf := jetstream.OrderedConsumerConfig{
@@ -233,15 +235,15 @@ func (c *Client) FetchMessageBundle(ctx context.Context, newMsg *MsgMeta) (Messa
 		}
 
 		// Ensure we've not surpassed the nats message sequence we're reading up to
-		if msg.StreamSequence > newMsg.StreamSequence {
-			return nil, fmt.Errorf("Unable to find original message with NATS sequence of: %d", newMsg.StreamSequence)
+		if msg.StreamSequence > incomingMsg.StreamSequence {
+			return nil, fmt.Errorf("Unable to find original message with NATS sequence of: %d", incomingMsg.StreamSequence)
 		}
 
 		// Add to the message bundle
 		msgBundle[msg.MessageId] = m.Data()
 
 		// If we're at the newMsg, we can stop
-		if msg.StreamSequence == newMsg.StreamSequence {
+		if msg.StreamSequence == incomingMsg.StreamSequence {
 			break
 		}
 	}
@@ -515,6 +517,35 @@ func WithRunner(name string) ClientOpt {
 		consumerName = nameReplacer.Replace(consumerName)
 
 		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
+		if err != nil {
+			return err
+		}
+
+		c.Consumers[name] = consumer
+		return nil
+	}
+}
+
+// WithLocalRunner initialises a runner with a randomised interest topic and ephemeral consumer
+func WithLocalRunner(name string) ClientOpt {
+	return func(c *Client) error {
+		ctx := context.Background()
+
+		c.interestTopic = fmt.Sprintf("local-%s", uuid.NewString()[:7])
+
+		consumerName := fmt.Sprintf("%s-%s-%s", c.accountId, c.interestTopic, ChannelNotify)
+		consumerName = nameReplacer.Replace(consumerName)
+
+		cfg := jetstream.ConsumerConfig{
+			Name:          c.interestTopic,
+			FilterSubject: NotifyFilterSubject(c.accountId, c.interestTopic),
+			DeliverPolicy: jetstream.DeliverAllPolicy,
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			AckWait:       time.Minute * 1,
+			MaxDeliver:    5,
+			ReplayPolicy:  jetstream.ReplayInstantPolicy,
+		}
+		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, cfg)
 		if err != nil {
 			return err
 		}

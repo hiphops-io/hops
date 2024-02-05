@@ -60,6 +60,7 @@ func initStartCommand(commonFlags []cli.Flag) *cli.Command {
 				ReplayEvent: c.String("replay-event"),
 				RunnerConf: hops.RunnerConf{
 					Serve: c.Bool("serve-runner"),
+					Local: c.Bool("local"),
 				},
 				Watch: c.Bool("watch"),
 			}
@@ -77,6 +78,13 @@ func initStartFlags(commonFlags []cli.Flag) []cli.Flag {
 				Aliases: []string{"a", "console.address"},
 				Usage:   "Address to serve console/API on",
 				Value:   "127.0.0.1:8916",
+			},
+		),
+		altsrc.NewBoolFlag(
+			&cli.BoolFlag{
+				Name:    "local",
+				Aliases: []string{"runner.local"},
+				Usage:   "Start in local mode, creating a temporary stream of events and not handling new inbound requests from your connected apps",
 			},
 		),
 		altsrc.NewStringFlag(
