@@ -203,8 +203,9 @@ func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (
 
 	// TODO: Create a deadline for the context
 	consumerConf := jetstream.OrderedConsumerConfig{
-		FilterSubjects: []string{filter},
-		DeliverPolicy:  jetstream.DeliverAllPolicy,
+		FilterSubjects:    []string{filter},
+		DeliverPolicy:     jetstream.DeliverAllPolicy,
+		InactiveThreshold: time.Millisecond * 500,
 	}
 	cons, err := c.JetStream.OrderedConsumer(ctx, c.streamName, consumerConf)
 	if err != nil {
@@ -267,9 +268,10 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 	}
 
 	consumerConf := jetstream.OrderedConsumerConfig{
-		FilterSubjects: []string{EventLogFilterSubject(c.accountId, c.interestTopic, eventId)},
-		DeliverPolicy:  jetstream.DeliverByStartTimePolicy,
-		OptStartTime:   &start,
+		FilterSubjects:    []string{EventLogFilterSubject(c.accountId, c.interestTopic, eventId)},
+		DeliverPolicy:     jetstream.DeliverByStartTimePolicy,
+		InactiveThreshold: time.Millisecond * 500,
+		OptStartTime:      &start,
 	}
 	cons, err := c.JetStream.OrderedConsumer(ctx, c.streamName, consumerConf)
 	if err != nil {
