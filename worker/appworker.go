@@ -142,6 +142,7 @@ func (a *AppWorker) executeRequest(ctx context.Context, request requestMsg) {
 	// Immediately extend redelivery before commencing work
 	err := request.msg.InProgress()
 	if err != nil {
+		a.logger.Errf(err, "Unable to extend message ack deadline")
 		// Abort as the message will either be re-sent or has already been handled
 		return
 	}
@@ -173,6 +174,7 @@ runRequest:
 		case <-ticker.C:
 			err := request.msg.InProgress()
 			if err != nil {
+				a.logger.Errf(err, "Unable to extend message ack deadline")
 				// Abort as the message will either be re-sent or has already been handled
 				return
 			}
