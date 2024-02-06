@@ -18,7 +18,7 @@ spec:
         - name: hops
           image: "hiphops/hiphops:{{ .Values.hiphops.imageVersion }}"
           command: ["/hops"]
-          args: ["start", "--address=0.0.0.0:8916", "--keyfile=/root/hiphops-key/hiphops.key", "--hops=/root/hops-conf/", "serve-k8sapp"]
+          args: ["start", "--address=0.0.0.0:8916", "--keyfile=/root/hiphops-key/hiphops.key", "--hops=/root/hops-conf/", "--serve-k8sapp"]
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
