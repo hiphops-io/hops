@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hiphops
+  name: hops
 spec:
   selector:
     matchLabels:
@@ -12,13 +12,18 @@ spec:
       labels:
         app: hiphops
     spec:
-      serviceAccountName: hiphops-worker
+      serviceAccountName: hops-worker
       containers:
-      - name: hiphops
-        image: hiphops/hiphops:v0.6.1
-        command: ["/hops"]
-        args: ["start", "--address=0.0.0.0:8916", "--keyfile=/root/hiphops-key/hiphops.key", "--hops=/root/hops/"]
+      - name: hops
+        image: hiphops/hiphops:v0.15.3
+        command: ["./hops"]
+        args: ["start", "--address=0.0.0.0:8916", "--keyfile=./hiphops-key/hiphops.key", "--hops=./hops-conf/", "--serve-k8sapp"]
         imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
         ports:
         - containerPort: 8916
 
@@ -53,18 +58,15 @@ spec:
           timeoutSeconds: 1
 
         volumeMounts:
-        - name: hiphops-conf
-          mountPath: /root/hops
+        - name: hops-conf
+          mountPath: /home/hops/hops-conf/automations/
         - name: hiphops-key
-          mountPath: /root/hiphops-key
+          mountPath: /home/hops/hiphops-key
 
       volumes:
-      - name: hiphops-conf
+      - name: hops-conf
         configMap:
-          name: hiphops-conf
-          items:
-            - key: main.hops
-              path: main/main.hops
+          name: hops-conf
       - name: hiphops-key
         secret:
           secretName: hiphops-key
