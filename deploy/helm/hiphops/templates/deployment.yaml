@@ -17,12 +17,14 @@ spec:
       containers:
         - name: hops
           image: "hiphops/hiphops:{{ .Values.hiphops.imageVersion }}"
-          command: ["/hops"]
-          args: ["start", "--address=0.0.0.0:8916", "--keyfile=/root/hiphops-key/hiphops.key", "--hops=/root/hops-conf/", "--serve-k8sapp"]
-          imagePullPolicy: Always
+          command: ["./hops"]
+          args: ["start", "--address=0.0.0.0:8916", "--keyfile=./hiphops-key/hiphops.key", "--hops=./hops-conf/", "--serve-k8sapp"]
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
           ports:
             - containerPort: 8916
 
