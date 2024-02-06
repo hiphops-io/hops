@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goccy/go-json"
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -48,7 +50,36 @@ type (
 		StatusCode int               `json:"status_code,omitempty"`
 		URL        string            `json:"url,omitempty"`
 	}
+
+	SourceMeta struct {
+		Source string `json:"source"`
+		Event  string `json:"event"`
+		Action string `json:"action"`
+		Unique string `json:"unique,omitempty"`
+	}
 )
+
+func CreateSourceEvent(rawEvent map[string]any, source string, event string, action string, unique string) ([]byte, string, error) {
+	rawEvent["hops"] = SourceMeta{
+		Source: source,
+		Event:  event,
+		Action: action,
+		// unique is used when we want identical input to be regarded as a different message.
+		// Any random string will do the job of changing the hash result.
+		Unique: unique,
+	}
+
+	sourceBytes, err := json.Marshal(rawEvent)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// We don't really care about the UUID namespace, so we just use an existing one
+	sourceUUID := uuid.NewSHA1(uuid.NameSpaceDNS, sourceBytes)
+	hash := sourceUUID.String()
+
+	return sourceBytes, hash, nil
+}
 
 func Parse(msg jetstream.Msg) (*MsgMeta, error) {
 	message := &MsgMeta{msg: msg}
