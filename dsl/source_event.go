@@ -11,6 +11,7 @@ type SourceMeta struct {
 	Action string `json:"action"`
 }
 
+// Deprecated: Use github.com/hiphops-io/hops/nats CreateSourceEvent
 func CreateSourceEvent(rawEvent map[string]any, source string, event string, action string) ([]byte, string, error) {
 	rawEvent["hops"] = SourceMeta{
 		Source: source,
