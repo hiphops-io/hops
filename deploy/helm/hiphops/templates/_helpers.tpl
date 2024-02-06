@@ -3,6 +3,10 @@ This looping pattern for getting the directories was adapted from:
 https://github.com/helm/helm/issues/4157#issuecomment-490748085
 */}}
 
+{{- define "hiphops.path" }}
+{{- printf "/home/hops/%s" . | clean }}
+{{- end }}
+
 {{- define "hiphops.automationConfigMaps" }}
 {{/* This dict tracks which directories have already been added */}}
 {{- $processedDict := dict -}}
@@ -53,7 +57,7 @@ hops-automation-{{ . }}
 {{- if not (hasKey $processedDict $name) }}
 {{- $_ := set $processedDict $name "true" }}
 - name: {{ include "hiphops.automationName" $name }}
-  mountPath: /root/hops-conf/{{ $name }}/
+  mountPath: {{ include "hiphops.path" (printf "hops-conf/%s" $name) }}
 {{- end }}
 {{- end }}
 {{- end }}

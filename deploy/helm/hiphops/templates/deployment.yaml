@@ -58,7 +58,7 @@ spec:
 
           volumeMounts:
             - name: hiphops-key
-              mountPath: /root/hiphops-key
+              mountPath: {{ include "hiphops.path" "hiphops-key" }}
             {{- include "hiphops.automationVolumeMounts" . | trim | nindent 12 }}
 
       volumes:
