@@ -589,6 +589,7 @@ func WithWorker(appName string) ClientOpt {
 			Durable:       name,
 			FilterSubject: WorkerRequestFilterSubject(c.accountId, c.interestTopic, appName, "*"),
 			AckWait:       1 * time.Minute,
+			MaxDeliver:    120, // Two hours of redelivery attempts
 		}
 		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, consumerCfg)
 		if err != nil {
