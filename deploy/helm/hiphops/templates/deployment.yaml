@@ -61,14 +61,14 @@ spec:
 
           volumeMounts:
             {{- include "hiphops.automationVolumeMounts" . | trim | nindent 12 }}
-            {{- if .Values.hiphops.key }}
+            {{- if .Values.hiphops.key -}}
             - name: hiphops-key
               mountPath: {{ .Values.hiphops.keyPath | dir }}
             {{- end }}
 
       volumes:
         {{- include "hiphops.automationVolumes" . | trim | nindent 8 }}
-        {{- if .Values.hiphops.key }}
+        {{- if .Values.hiphops.key -}}
         - name: hiphops-key
           secret:
             secretName: hiphops-key
