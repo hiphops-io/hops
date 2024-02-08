@@ -24,6 +24,7 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
+            # hops user created in the Dockerfile with a home directory at /home/hops/
             runAsUser: 1000
           ports:
             - containerPort: 8916
