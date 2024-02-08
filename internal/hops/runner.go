@@ -89,17 +89,20 @@ func (r *Runner) SequenceCallback(
 	ctx context.Context,
 	sequenceId string,
 	msgBundle nats.MessageBundle,
-) error {
+) (bool, error) {
 	logger := r.logger.With().Str("sequence_id", sequenceId).Logger()
 
 	hops, err := r.sequenceHops(ctx, sequenceId, msgBundle)
 	if err != nil {
-		return fmt.Errorf("Unable to fetch assigned hops file for sequence: %w", err)
+		return false, fmt.Errorf("Unable to fetch assigned hops file for sequence: %w", err)
 	}
 
 	hop, err := dsl.ParseHops(ctx, hops, msgBundle, logger)
 	if err != nil {
-		return fmt.Errorf("Error parsing hops config: %w", err)
+		return false, fmt.Errorf("Error parsing hops config: %w", err)
+	}
+	if len(hop.Ons) == 0 {
+		return false, nil
 	}
 
 	r.logger.Debug().Msg("Successfully parsed hops file")
@@ -123,7 +126,7 @@ func (r *Runner) SequenceCallback(
 		}
 	}
 
-	return mergedErrors
+	return true, mergedErrors
 }
 
 func (r *Runner) checkIfDone(ctx context.Context, sensor *dsl.OnAST, sequenceId string, msgBundle nats.MessageBundle, logger zerolog.Logger) (bool, error) {

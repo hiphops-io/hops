@@ -97,12 +97,7 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 	}
 
 	blockEventType, blockAction, hasAction := strings.Cut(on.EventType, "_")
-	if blockEventType != eventType {
-		logger.Debug().Msgf("%s does not match event type %s", on.Slug, eventType)
-		return nil
-	}
-	if hasAction && blockAction != eventAction {
-		logger.Debug().Msgf("%s does not match event action %s", on.Slug, eventAction)
+	if (blockEventType != eventType) || (hasAction && blockAction != eventAction) {
 		return nil
 	}
 

@@ -56,7 +56,7 @@ type (
 
 	// SequenceHandler is a function that receives the sequenceId and message bundle for a sequence of messages
 	SequenceHandler interface {
-		SequenceCallback(context.Context, string, MessageBundle) error
+		SequenceCallback(context.Context, string, MessageBundle) (bool, error)
 	}
 )
 
@@ -153,8 +153,6 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 		}
 
 		if hopsMsg.MessageId == HopsMessageId {
-			c.logger.Debugf("Skipping 'hops assignment' message")
-
 			err := DoubleAck(ctx, msg)
 			if err != nil {
 				c.logger.Errf(err, "Unable to ack 'hops assignment' message")
@@ -182,10 +180,16 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 			return
 		}
 
-		err = handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
+		handled, err := handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
 		if err != nil {
 			c.logger.Errf(err, "Failed to process message")
 			msg.NakWithDelay(3 * time.Second)
+			return
+		}
+
+		// Ignore messages we have no handler for
+		if !handled {
+			msg.Term()
 			return
 		}
 

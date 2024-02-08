@@ -64,9 +64,9 @@ type testSequenceHandler struct {
 	receivedChan chan MessageBundle
 }
 
-func (t *testSequenceHandler) SequenceCallback(ctx context.Context, sequenceId string, msgBundle MessageBundle) error {
+func (t *testSequenceHandler) SequenceCallback(ctx context.Context, sequenceId string, msgBundle MessageBundle) (bool, error) {
 	t.receivedChan <- msgBundle
-	return nil
+	return true, nil
 }
 
 func TestClientConsumeSequences(t *testing.T) {
