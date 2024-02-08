@@ -9,5 +9,7 @@ hiphops:
   automationsPath: "automations"
   # key is the hiphops key related to the account you want the automations to run against
   key: "secret_key"
+  # keyPath is the path to the hiphops key on the container
+  keyPath: "/home/hops/hiphops-key/hiphops.key"
   # hostPort is used to set which port hiphops is accessible via (default: 8196)
   hostPort: 8196
