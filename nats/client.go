@@ -162,9 +162,6 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 		}
 
 		if hopsMsg.Done {
-			// TODO: Actually finalise the pipeline here
-			c.logger.Debugf("Skipping 'pipeline done' message")
-
 			err := DoubleAck(ctx, msg)
 			if err != nil {
 				c.logger.Errf(err, "Unable to ack 'pipeline done' message")
