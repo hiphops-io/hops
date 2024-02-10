@@ -42,6 +42,7 @@ type (
 		accountId     string
 		interestTopic string
 		logger        Logger
+		stream        jetstream.Stream
 		streamName    string
 	}
 
@@ -104,6 +105,14 @@ func NewClient(natsUrl string, accountId string, interestTopic string, logger Lo
 		}
 	}
 
+	// We initialise the stream after applying clientopts, as they may alter
+	// the stream we need to create.
+	err = natsClient.initStream(ctx)
+	if err != nil {
+		defer natsClient.Close()
+		return nil, err
+	}
+
 	logger.Debugf("Interest topic is: %s", natsClient.interestTopic)
 
 	return natsClient, err
@@ -152,19 +161,10 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 			return
 		}
 
-		if hopsMsg.MessageId == HopsMessageId {
+		if hopsMsg.MessageId == HopsMessageId || hopsMsg.Done {
 			err := DoubleAck(ctx, msg)
 			if err != nil {
-				c.logger.Errf(err, "Unable to ack 'hops assignment' message")
-			}
-
-			return
-		}
-
-		if hopsMsg.Done {
-			err := DoubleAck(ctx, msg)
-			if err != nil {
-				c.logger.Errf(err, "Unable to ack 'pipeline done' message")
+				c.logger.Errf(err, "Unable to acknowledge message: %s", msg.Subject())
 			}
 
 			return
@@ -184,9 +184,11 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 			return
 		}
 
-		// Ignore messages we have no handler for
-		if !handled {
-			msg.Term()
+		// Immediately clean up source events we have no handler for
+		// we check for two events in the bundle as it should have a hops
+		// assignment message too.
+		if !handled && len(msgBundle) <= 2 {
+			go c.DeleteMsgSequence(ctx, hopsMsg)
 			return
 		}
 
@@ -194,6 +196,19 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 	}
 
 	return c.Consume(ctx, fromConsumer, wrappedCB)
+}
+
+// DeleteMsgSequence deletes a given message and the entire sequence it is part of
+//
+// Main use case is preventing build up of source events that do not relate to any
+// configured automation
+func (c *Client) DeleteMsgSequence(ctx context.Context, msgMeta *MsgMeta) error {
+	err := c.stream.Purge(ctx, jetstream.WithPurgeSubject(msgMeta.SequenceFilter()))
+	if err != nil {
+		c.logger.Errf(err, "Unable to delete sequence %s", msgMeta.SequenceId)
+	}
+
+	return err
 }
 
 // FetchMessageBundle pulls all historic messages for a sequenceId from the stream, converting them to a message bundle
@@ -341,14 +356,9 @@ func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnl
 }
 
 func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error) {
-	stream, err := c.JetStream.Stream(ctx, c.streamName)
-	if err != nil {
-		return nil, err
-	}
-
 	subject := c.buildSubject(subjTokens...)
 
-	return stream.GetLastMsgForSubject(ctx, subject)
+	return c.stream.GetLastMsgForSubject(ctx, subject)
 }
 
 func (c *Client) GetSysObject(key string) ([]byte, error) {
@@ -413,6 +423,11 @@ func (c *Client) PutSysObject(name string, data []byte) (*nats.ObjectInfo, error
 	return c.SysObjStore.PutBytes(name, data)
 }
 
+func (c *Client) buildSubject(subjTokens ...string) string {
+	tokens := append([]string{c.accountId, c.interestTopic}, subjTokens...)
+	return strings.Join(tokens, ".")
+}
+
 func (c *Client) initJetStream() error {
 	js, err := jetstream.New(c.NatsConn)
 	if err != nil {
@@ -458,9 +473,15 @@ func (c *Client) initObjectStore(ctx context.Context, accountId string) error {
 	return nil
 }
 
-func (c *Client) buildSubject(subjTokens ...string) string {
-	tokens := append([]string{c.accountId, c.interestTopic}, subjTokens...)
-	return strings.Join(tokens, ".")
+func (c *Client) initStream(ctx context.Context) error {
+	stream, err := c.JetStream.Stream(ctx, c.streamName)
+	if err != nil {
+		return err
+	}
+
+	c.stream = stream
+
+	return nil
 }
 
 // ClientOpts - passed through to NewClient() to configure the client setup
