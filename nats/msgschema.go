@@ -239,7 +239,7 @@ func ReplayFilterSubject(accountId string, interestTopic string, sequenceId stri
 	tokens := []string{
 		accountId,
 		interestTopic,
-		"*",
+		ChannelNotify,
 		sequenceId,
 		">",
 	}

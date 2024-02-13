@@ -35,15 +35,16 @@ var nameReplacer = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
 
 type (
 	Client struct {
-		Consumers     map[string]jetstream.Consumer
-		JetStream     jetstream.JetStream
-		NatsConn      *nats.Conn
-		SysObjStore   nats.ObjectStore
-		accountId     string
-		interestTopic string
-		logger        Logger
-		stream        jetstream.Stream
-		streamName    string
+		Consumers       map[string]jetstream.Consumer
+		JetStream       jetstream.JetStream
+		NatsConn        *nats.Conn
+		SysObjStore     nats.ObjectStore
+		accountId       string
+		interestTopic   string
+		logger          Logger
+		preferEphemeral bool
+		stream          jetstream.Stream
+		streamName      string
 	}
 
 	// ClientOpt functions configure a nats.Client via NewClient()
@@ -203,6 +204,13 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 // Main use case is preventing build up of source events that do not relate to any
 // configured automation
 func (c *Client) DeleteMsgSequence(ctx context.Context, msgMeta *MsgMeta) error {
+	c.logger.Debugf("Deleting sequence: %s", msgMeta.SequenceId)
+
+	if err := msgMeta.Msg().Term(); err != nil {
+		c.logger.Errf(err, "Failed to terminate unhandled message")
+		return nil
+	}
+
 	err := c.stream.Purge(ctx, jetstream.WithPurgeSubject(msgMeta.SequenceFilter()))
 	if err != nil {
 		c.logger.Errf(err, "Unable to delete sequence %s", msgMeta.SequenceId)
@@ -544,10 +552,20 @@ func WithRunner(name string) ClientOpt {
 	return func(c *Client) error {
 		ctx := context.Background()
 
-		consumerName := fmt.Sprintf("%s-%s-%s", c.accountId, c.interestTopic, ChannelNotify)
+		consumerName := fmt.Sprintf("%s-%s-%s-v2", c.accountId, c.interestTopic, ChannelNotify)
 		consumerName = nameReplacer.Replace(consumerName)
 
-		consumer, err := c.JetStream.Consumer(ctx, c.streamName, consumerName)
+		cfg := jetstream.ConsumerConfig{
+			Name:          consumerName,
+			Durable:       consumerName,
+			FilterSubject: NotifyFilterSubject(c.accountId, c.interestTopic),
+			DeliverPolicy: jetstream.DeliverNewPolicy,
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			AckWait:       time.Minute * 1,
+			MaxDeliver:    5,
+			ReplayPolicy:  jetstream.ReplayInstantPolicy,
+		}
+		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, cfg)
 		if err != nil {
 			return err
 		}
@@ -563,14 +581,12 @@ func WithLocalRunner(name string) ClientOpt {
 		ctx := context.Background()
 
 		c.interestTopic = fmt.Sprintf("local-%s", uuid.NewString()[:7])
-
-		consumerName := fmt.Sprintf("%s-%s-%s", c.accountId, c.interestTopic, ChannelNotify)
-		consumerName = nameReplacer.Replace(consumerName)
+		c.preferEphemeral = true
 
 		cfg := jetstream.ConsumerConfig{
 			Name:          c.interestTopic,
 			FilterSubject: NotifyFilterSubject(c.accountId, c.interestTopic),
-			DeliverPolicy: jetstream.DeliverAllPolicy,
+			DeliverPolicy: jetstream.DeliverNewPolicy,
 			AckPolicy:     jetstream.AckExplicitPolicy,
 			AckWait:       time.Minute * 1,
 			MaxDeliver:    5,
@@ -608,11 +624,14 @@ func WithWorker(appName string) ClientOpt {
 		// Create or update the consumer, since these are created dynamically
 		consumerCfg := jetstream.ConsumerConfig{
 			Name:          name,
-			Durable:       name,
 			FilterSubject: WorkerRequestFilterSubject(c.accountId, c.interestTopic, appName, "*"),
 			AckWait:       1 * time.Minute,
 			MaxDeliver:    120, // Two hours of redelivery attempts
 		}
+		if !c.preferEphemeral {
+			consumerCfg.Durable = name
+		}
+
 		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, consumerCfg)
 		if err != nil {
 			return err
