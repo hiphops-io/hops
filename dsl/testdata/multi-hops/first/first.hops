@@ -8,6 +8,7 @@ on change_merged {
 
     inputs = {
       a = "b"
+      source = event.source
       from_env = env("HIPHOPS_TEST_ENV", "")
     }
   }

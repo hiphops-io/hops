@@ -147,7 +147,7 @@ func (r *Runner) checkIfDone(ctx context.Context, sensor *dsl.OnAST, sequenceId 
 
 	if done {
 		done := &dsl.DoneAST{
-			Result: []byte("{}"),
+			Completed: true,
 		}
 		err := r.dispatchDone(ctx, sensor.Slug, done, sequenceId, logger)
 		return true, err
@@ -159,11 +159,16 @@ func (r *Runner) checkIfDone(ctx context.Context, sensor *dsl.OnAST, sequenceId 
 func (r *Runner) dispatchDone(ctx context.Context, onSlug string, done *dsl.DoneAST, sequenceId string, logger zerolog.Logger) error {
 	logger = logger.With().Str("on", onSlug).Logger()
 
+	var err error
+	if done.Errored {
+		err = errors.New("Pipeline errored")
+	}
+
 	err, sent := r.natsClient.PublishResult(
 		ctx,
 		time.Now(),
-		done.Result,
-		done.Error,
+		done.Completed,
+		err,
 		nats.ChannelNotify,
 		sequenceId,
 		onSlug,
@@ -210,7 +215,7 @@ func (r *Runner) dispatchCalls(ctx context.Context, sensor *dsl.OnAST, sequenceI
 func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call dsl.CallAST, sequenceId string, errorchan chan<- error, logger zerolog.Logger) {
 	defer wg.Done()
 
-	app, handler, found := strings.Cut(call.TaskType, "_")
+	app, handler, found := strings.Cut(call.ActionType, "_")
 	if !found {
 		errorchan <- fmt.Errorf("Unable to parse app/handler from call %s", call.Name)
 		return

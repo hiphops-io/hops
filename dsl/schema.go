@@ -6,94 +6,36 @@ import (
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/gohcl"
 )
 
 var (
-	ErrorAttr  = "error"
-	ResultAttr = "result"
-	IfAttr     = "if"
-	NameAttr   = "name"
+	ErroredAttr   = "errored"
+	CompletedAttr = "completed"
+	IfAttr        = "if"
+	NameAttr      = "name"
+	OnID          = "on"
+	CallID        = "call"
+	DoneID        = "done"
+	TaskID        = "task"
+	ParamID       = "param"
+	ScheduleID    = "schedule"
+)
 
-	HopSchema = &hcl.BodySchema{
-		Attributes: []hcl.AttributeSchema{},
-		Blocks: []hcl.BlockHeaderSchema{
-			{
-				Type:       OnID,
-				LabelNames: []string{"eventType"},
-			},
-			{
-				Type:       TaskID,
-				LabelNames: []string{"Name"},
-			},
-			{
-				Type:       ScheduleID,
-				LabelNames: []string{"Name"},
-			},
-		},
-	}
-
-	OnID     = "on"
-	OnSchema = &hcl.BodySchema{
-		Blocks: []hcl.BlockHeaderSchema{
-			{
-				Type:       CallID,
-				LabelNames: []string{"taskType"},
-			},
-			{
-				Type: DoneID,
-			},
-		},
-		Attributes: []hcl.AttributeSchema{
-			{Name: "name", Required: false},
-			{Name: IfAttr, Required: false},
-		},
-	}
-
-	CallID     = "call"
-	callSchema = &hcl.BodySchema{
-		Blocks: []hcl.BlockHeaderSchema{},
-		Attributes: []hcl.AttributeSchema{
-			{Name: "name", Required: false},
-			{Name: IfAttr, Required: false},
-			{Name: "inputs", Required: false},
-		},
-	}
-
-	DoneID     = "done"
-	doneSchema = &hcl.BodySchema{
-		Blocks: []hcl.BlockHeaderSchema{},
-		Attributes: []hcl.AttributeSchema{
-			{Name: ErrorAttr, Required: false},
-			{Name: ResultAttr, Required: false},
-		},
-	}
-
-	TaskID     = "task"
-	taskSchema = &hcl.BodySchema{
-		Blocks: []hcl.BlockHeaderSchema{
-			{
-				Type:       ParamID,
-				LabelNames: []string{"Name"},
-			},
-		},
-		Attributes: []hcl.AttributeSchema{
-			{Name: "display_name", Required: false},
-			{Name: "summary", Required: false},
-			{Name: "description", Required: false},
-			{Name: "emoji", Required: false},
-		},
-	}
-
-	ParamID    = "param"    // Schema defined via tags on the struct
-	ScheduleID = "schedule" // Schema defined via tags on the struct
+var (
+	HopSchema, _  = gohcl.ImpliedBodySchema(HopAST{})
+	OnSchema, _   = gohcl.ImpliedBodySchema(OnAST{})
+	CallSchema, _ = gohcl.ImpliedBodySchema(CallAST{})
+	DoneSchema, _ = gohcl.ImpliedBodySchema(DoneAST{})
+	TaskSchema, _ = gohcl.ImpliedBodySchema(TaskAST{})
 )
 
 type HopAST struct {
-	Ons          []OnAST
-	Schedules    []ScheduleAST
+	Ons          []OnAST       `hcl:"on,block" json:"ons"`
+	Schedules    []ScheduleAST `hcl:"schedule,block" json:"schedules"`
+	Tasks        []TaskAST     `hcl:"task,block" json:"tasks"`
+	StartedAt    time.Time     `json:"started_at"`
 	SlugRegister map[string]bool
-	StartedAt    time.Time
-	Tasks        []TaskAST
 }
 
 func (h *HopAST) ListSchedules() []ScheduleAST {
@@ -129,39 +71,36 @@ func (h *HopAST) GetTask(taskName string) (TaskAST, error) {
 }
 
 type OnAST struct {
+	EventType string    `hcl:"event_type,label" json:"event_type"`
+	Calls     []CallAST `hcl:"call,block" json:"calls"`
+	Done      *DoneAST  `hcl:"done,block" json:"done"` // TODO: This probably needs to be swapped to a slice of Done blocks
+	If        *bool     `hcl:"if" json:"if"`
+	Name      string    `hcl:"name,optional" json:"name"`
 	Slug      string
-	EventType string
-	Name      string
-	Calls     []CallAST
-	Done      *DoneAST
-	ConditionalAST
 }
 
 type CallAST struct {
-	Slug     string
-	TaskType string
-	Name     string
-	Inputs   []byte
-	ConditionalAST
+	ActionType string `hcl:"action_type,label" json:"action_type"`
+	If         *bool  `hcl:"if" json:"if"`
+	Name       string `hcl:"name,optional" json:"name"`
+	RawInputs  any    `hcl:"inputs,optional"`
+	Inputs     []byte `json:"inputs"` // Inputs field is decoded explicitly from remain
+	Slug       string
 }
 
 type DoneAST struct {
-	Error  error
-	Result []byte
-}
-
-type ConditionalAST struct {
-	IfClause bool
+	Errored   bool `hcl:"errored,optional" json:"errored"`
+	Completed bool `hcl:"completed,optional" json:"completed"`
 }
 
 type TaskAST struct {
-	Description string     `json:"description"`
-	DisplayName string     `json:"display_name"`
-	Emoji       string     `json:"emoji"`
+	Name        string     `hcl:"name,label" json:"name"`
+	Description string     `hcl:"description,optional" json:"description"`
+	DisplayName string     `hcl:"display_name,optional" json:"display_name"`
+	Emoji       string     `hcl:"emoji,optional" json:"emoji"`
+	Params      []ParamAST `hcl:"param,block" json:"params"`
+	Summary     string     `hcl:"summary,optional" json:"summary"`
 	FilePath    string     `json:"file_path"`
-	Name        string     `json:"name"`
-	Params      []ParamAST `json:"params"`
-	Summary     string     `json:"summary"`
 }
 
 const (
@@ -225,7 +164,6 @@ func (c *TaskAST) ValidateInput(input map[string]any) map[string][]string {
 }
 
 type ParamAST struct {
-	// We use HCL tags to auto-decode as params need very little custom decoding logic
 	Name        string `hcl:"name,label" json:"name"`
 	DisplayName string `hcl:"display_name,optional" json:"display_name"`
 	Type        string `hcl:"type,optional" json:"type"`
@@ -239,6 +177,6 @@ type ParamAST struct {
 type ScheduleAST struct {
 	Name   string         `hcl:"name,label" json:"name"`
 	Cron   string         `hcl:"cron,attr" json:"cron"`
-	Inputs []byte         `json:"inputs"` // Inputs is decoded explicitly from remain
+	Inputs []byte         `json:"inputs"` // Inputs field is decoded explicitly from remain
 	Remain hcl.Attributes `hcl:",remain"`
 }

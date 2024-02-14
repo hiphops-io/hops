@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 )
 
@@ -96,8 +97,9 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 		hopsBodies = append(hopsBodies, hopsFile.Body)
 	}
 
+	schema, _ := gohcl.ImpliedBodySchema(&HopAST{})
 	body := hcl.MergeBodies(hopsBodies)
-	content, diags := body.Content(HopSchema)
+	content, diags := body.Content(schema)
 	if diags.HasErrors() {
 		return nil, "", errors.New(diags.Error())
 	}

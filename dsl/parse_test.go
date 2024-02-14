@@ -56,7 +56,7 @@ func TestValidParse(t *testing.T) {
 
 		call := hop.Ons[0].Calls[0]
 		assert.Equal(t, `a_sensor-first_task`, call.Slug)
-		assert.JSONEq(t, `{"a":"b", "from_env": ""}`, string(call.Inputs))
+		assert.JSONEq(t, `{"a":"b", "from_env": "", "source": "GITHUB_COM"}`, string(call.Inputs))
 
 		call = hop.Ons[0].Calls[1]
 		assert.Equal(t, `a_sensor-index_id_call2`, call.Slug)
@@ -143,8 +143,8 @@ func TestValidParseDone(t *testing.T) {
 	require.NotNil(t, hop.Ons[0].Done)
 
 	done := hop.Ons[0].Done
-	assert.NotNil(t, done.Result)
-	assert.NoError(t, done.Error)
+	assert.True(t, done.Completed)
+	assert.False(t, done.Errored)
 }
 
 func TestInvalidParse(t *testing.T) {
