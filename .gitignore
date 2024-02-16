@@ -3,3 +3,5 @@ main
 bin/
 .vscode/
 .DS_Store
+.env.secret
+hiphops.key

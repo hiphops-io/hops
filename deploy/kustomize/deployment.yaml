@@ -15,10 +15,9 @@ spec:
       serviceAccountName: hops-worker
       containers:
       - name: hops
-        image: hiphops/hiphops:v0.16.1
+        image: hiphops/hiphops:v0.16.4
         command: ["./hops"]
         args: ["start", "--address=0.0.0.0:8916", "--keyfile=./hiphops-key/hiphops.key", "--hops=./hops-conf/", "--serve-k8sapp"]
-        imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

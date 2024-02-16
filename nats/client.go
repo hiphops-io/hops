@@ -28,7 +28,7 @@ const (
 
 	// limits for GetEventHistory
 	defaultBatchSize = 160
-	maxWaitTime      = time.Second
+	maxWaitTime      = time.Millisecond * 200
 )
 
 var nameReplacer = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
@@ -180,7 +180,6 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 
 		handled, err := handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
 		if err != nil {
-			c.logger.Errf(err, "Failed to process message")
 			msg.NakWithDelay(3 * time.Second)
 			return
 		}
@@ -225,7 +224,6 @@ func (c *Client) DeleteMsgSequence(ctx context.Context, msgMeta *MsgMeta) error 
 func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (MessageBundle, error) {
 	filter := incomingMsg.SequenceFilter()
 
-	// TODO: Create a deadline for the context
 	consumerConf := jetstream.OrderedConsumerConfig{
 		FilterSubjects:    []string{filter},
 		DeliverPolicy:     jetstream.DeliverAllPolicy,
@@ -238,13 +236,19 @@ func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (
 
 	msgBundle := MessageBundle{}
 
-	msgCtx, err := cons.Messages()
+	msgCtx, err := cons.Messages(
+		jetstream.PullMaxMessages(cons.CachedInfo().NumPending),
+		jetstream.PullExpiry(time.Second),
+	)
 	if msgCtx != nil {
 		defer msgCtx.Stop()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Unable to read back messages: %w", err)
+		return nil, fmt.Errorf("Unable to read sequence history: %w", err)
 	}
+
+	// Being cautious. If everything is operating normally, this shouldn't fire.
+	timer := time.AfterFunc(time.Second*10, msgCtx.Stop)
 
 	for {
 		// Get the next message in the sequence
@@ -259,20 +263,20 @@ func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (
 			return nil, err
 		}
 
-		// Ensure we've not surpassed the nats message sequence we're reading up to
-		if msg.StreamSequence > incomingMsg.StreamSequence {
-			return nil, fmt.Errorf("Unable to find original message with NATS sequence of: %d", incomingMsg.StreamSequence)
-		}
-
 		// Add to the message bundle
 		msgBundle[msg.MessageId] = m.Data()
 
-		// If we're at the newMsg, we can stop
-		if msg.StreamSequence == incomingMsg.StreamSequence {
+		// Stop when there's no more left
+		if msg.NumPending <= 0 {
 			break
 		}
 	}
 
+	if _, ok := msgBundle[incomingMsg.MessageId]; !ok {
+		return nil, fmt.Errorf("Incomplete event history for: %s", incomingMsg.SequenceId)
+	}
+
+	timer.Stop()
 	return msgBundle, nil
 }
 

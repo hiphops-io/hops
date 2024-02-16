@@ -1,0 +1,28 @@
+# Skaffold here is mostly as an example local dev flow.
+# It assumes some items are already in place, such as your keyfile, hops-conf
+# and a hiphops namespace.
+# The easiest way to bootstrap is to apply the k8s_example first
+apiVersion: skaffold/v3alpha1
+kind: Config
+metadata:
+  name: hiphops
+
+build:
+  platforms: ["linux/arm64"]
+  tagPolicy:
+    inputDigest: {}
+  artifacts:
+    - image: hiphops/hiphops
+      context: "../"
+      docker:
+        dockerfile: "deploy/Dockerfile"
+  local:
+    push: false
+    useBuildkit: true
+manifests:
+  kustomize:
+    paths:
+      - ./k8s_example
+deploy:
+  kubeContext: docker-desktop
+  kubectl: {}

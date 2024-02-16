@@ -11,3 +11,12 @@ on task_hello_world {
     }
   }
 }
+
+on ping {
+  call slack_post_message {
+    inputs = {
+      channel = "hiphops-test"
+      text = "Pong"
+    }
+  }
+}
