@@ -28,7 +28,7 @@ type (
 		AppName          string
 		Channel          string
 		ConsumerSequence uint64
-		Done             bool
+		Done             bool // Message is a pipeline 'done' message
 		HandlerName      string
 		InterestTopic    string
 		MessageId        string

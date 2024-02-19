@@ -75,7 +75,6 @@ func (r *Runner) Reload(ctx context.Context) error {
 }
 
 func (r *Runner) Run(ctx context.Context, fromConsumer string) error {
-
 	defer func() {
 		if r.cron != nil {
 			r.cron.Stop()
