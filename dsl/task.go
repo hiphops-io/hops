@@ -59,7 +59,7 @@ func DecodeTaskBlock(ctx context.Context, hop *HopAST, block *hcl.Block, evalctx
 		FilePath: block.DefRange.Filename,
 	}
 
-	content, diag := block.Body.Content(taskSchema)
+	content, diag := block.Body.Content(TaskSchema)
 	if diag.HasErrors() {
 		return errors.New(diag.Error())
 	}

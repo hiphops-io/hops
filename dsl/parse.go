@@ -61,6 +61,7 @@ func DecodeHopsBody(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *
 func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	on := &OnAST{}
 
+	// schema, _ := gohcl.ImpliedBodySchema(&OnAST{})
 	bc, d := block.Body.Content(OnSchema)
 	if d.HasErrors() {
 		return errors.New(d.Error())
@@ -116,7 +117,7 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 		return nil
 	}
 
-	on.IfClause = val
+	on.If = &val
 
 	logger.Info().Msgf("%s matches event", on.Slug)
 
@@ -151,24 +152,24 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	call := &CallAST{}
 
-	bc, d := block.Body.Content(callSchema)
+	bc, d := block.Body.Content(CallSchema)
 	if d.HasErrors() {
 		return errors.New(d.Error())
 	}
 
-	call.TaskType = block.Labels[0]
+	call.ActionType = block.Labels[0]
 	name, err := DecodeNameAttr(bc.Attributes[NameAttr])
 	if err != nil {
 		return err
 	}
 	if name == "" {
-		name = fmt.Sprintf("%s%d", call.TaskType, idx)
+		name = fmt.Sprintf("%s%d", call.ActionType, idx)
 	}
 
 	call.Name = name
 	call.Slug = slugify(on.Slug, call.Name)
 
-	err = ValidateLabels(call.TaskType, call.Name)
+	err = ValidateLabels(call.ActionType, call.Name)
 	if err != nil {
 		return err
 	}
@@ -194,7 +195,7 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 		return nil
 	}
 
-	call.IfClause = val
+	call.If = &val
 
 	logger.Info().Msgf("%s matches event", call.Slug)
 

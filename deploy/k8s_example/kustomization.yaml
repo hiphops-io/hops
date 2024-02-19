@@ -4,11 +4,22 @@ namespace: hiphops
 
 resources:
 - namespace.yaml
-- secret.yaml
-- https://github.com/hiphops-io/hops.git//deploy/kustomize/
+# Uncomment this and comment the line below if not running against a full checkout of this repo
+# - https://github.com/hiphops-io/hops.git//deploy/kustomize/
+- ../kustomize
 
 configMapGenerator:
-  - name: hiphops-conf
+  - name: hops-conf
     namespace: hiphops
+    options:
+      disableNameSuffixHash: true
     files:
      - main.hops=hops_configs/main.hops
+
+# hiphops.key should look like hiphops.key.example, but with a real account key in it
+secretGenerator:
+  - name: hiphops-key
+    options:
+      disableNameSuffixHash: true
+    files:
+    - hiphops.key

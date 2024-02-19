@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -28,10 +30,13 @@ const (
 
 	// limits for GetEventHistory
 	defaultBatchSize = 160
-	maxWaitTime      = time.Second
+	maxWaitTime      = time.Millisecond * 200
 )
 
-var nameReplacer = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
+var (
+	ErrIncompleteMsgBundle = errors.New("Unable to fetch complete sequence history")
+	nameReplacer           = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
+)
 
 type (
 	Client struct {
@@ -153,6 +158,11 @@ func (c *Client) Consume(ctx context.Context, fromConsumer string, callback jets
 // ConsumeSequences is a wrapper around consume that presents the aggregate state of a sequence to the callback
 // instead of individual messages.
 func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, handler SequenceHandler) error {
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(20)
+
+	// TODO: This code has become more involved with the specifics of running workloads that was intended
+	// Much of the logic here should be pushed into Runner, which should be similar in approach to worker.AppWorker
 	wrappedCB := func(msg jetstream.Msg) {
 		hopsMsg, err := Parse(msg)
 		if err != nil {
@@ -171,29 +181,35 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 			return
 		}
 
-		msgBundle, err := c.FetchMessageBundle(ctx, hopsMsg)
-		if err != nil {
-			msg.NakWithDelay(3 * time.Second)
-			c.logger.Errf(err, "Unable to fetch message bundle")
-			return
-		}
+		g.Go(func() (nilErr error) {
+			msgBundle, err := c.FetchMessageBundle(ctx, hopsMsg)
+			if err != nil && err != ErrIncompleteMsgBundle {
+				// Incomplete message bundles are expected occasionally due to
+				// eventual read consistency - so we don't log them.
+				c.logger.Errf(err, "Unable to fetch message bundle")
+			}
+			if err != nil {
+				msg.NakWithDelay(3 * time.Second)
+				return
+			}
 
-		handled, err := handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
-		if err != nil {
-			c.logger.Errf(err, "Failed to process message")
-			msg.NakWithDelay(3 * time.Second)
-			return
-		}
+			handled, err := handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
+			if err != nil {
+				msg.NakWithDelay(3 * time.Second)
+				return
+			}
 
-		// Immediately clean up source events we have no handler for
-		// we check for two events in the bundle as it should have a hops
-		// assignment message too.
-		if !handled && len(msgBundle) <= 2 {
-			go c.DeleteMsgSequence(ctx, hopsMsg)
-			return
-		}
+			// Immediately clean up source events we have no handler for.
+			// We check for two events in the bundle as it should have a hops
+			// assignment message too.
+			if !handled && len(msgBundle) <= 2 {
+				go c.DeleteMsgSequence(ctx, hopsMsg)
+				return
+			}
 
-		DoubleAck(ctx, msg)
+			DoubleAck(ctx, msg)
+			return
+		})
 	}
 
 	return c.Consume(ctx, fromConsumer, wrappedCB)
@@ -213,7 +229,7 @@ func (c *Client) DeleteMsgSequence(ctx context.Context, msgMeta *MsgMeta) error 
 
 	err := c.stream.Purge(ctx, jetstream.WithPurgeSubject(msgMeta.SequenceFilter()))
 	if err != nil {
-		c.logger.Errf(err, "Unable to delete sequence %s", msgMeta.SequenceId)
+		c.logger.Infof("Unable to delete sequence %s: %s", msgMeta.SequenceId, err.Error())
 	}
 
 	return err
@@ -225,7 +241,6 @@ func (c *Client) DeleteMsgSequence(ctx context.Context, msgMeta *MsgMeta) error 
 func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (MessageBundle, error) {
 	filter := incomingMsg.SequenceFilter()
 
-	// TODO: Create a deadline for the context
 	consumerConf := jetstream.OrderedConsumerConfig{
 		FilterSubjects:    []string{filter},
 		DeliverPolicy:     jetstream.DeliverAllPolicy,
@@ -236,15 +251,25 @@ func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (
 		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
 	}
 
+	if cons.CachedInfo().NumPending <= 0 {
+		return nil, ErrIncompleteMsgBundle
+	}
+
 	msgBundle := MessageBundle{}
 
-	msgCtx, err := cons.Messages()
+	msgCtx, err := cons.Messages(
+		jetstream.PullMaxMessages(cons.CachedInfo().NumPending),
+		jetstream.PullExpiry(time.Second),
+	)
 	if msgCtx != nil {
 		defer msgCtx.Stop()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Unable to read back messages: %w", err)
+		return nil, ErrIncompleteMsgBundle
 	}
+
+	// Being cautious. If everything is operating normally, this shouldn't fire.
+	timer := time.AfterFunc(time.Second*10, msgCtx.Stop)
 
 	for {
 		// Get the next message in the sequence
@@ -259,18 +284,19 @@ func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (
 			return nil, err
 		}
 
-		// Ensure we've not surpassed the nats message sequence we're reading up to
-		if msg.StreamSequence > incomingMsg.StreamSequence {
-			return nil, fmt.Errorf("Unable to find original message with NATS sequence of: %d", incomingMsg.StreamSequence)
-		}
-
 		// Add to the message bundle
 		msgBundle[msg.MessageId] = m.Data()
 
-		// If we're at the newMsg, we can stop
-		if msg.StreamSequence == incomingMsg.StreamSequence {
+		// Stop when there's no more left
+		if msg.NumPending <= 0 {
 			break
 		}
+	}
+	// No need to cancel the message context early. Will be cleaned up on return
+	timer.Stop()
+
+	if _, ok := msgBundle[incomingMsg.MessageId]; !ok {
+		return nil, fmt.Errorf("Incomplete event history for: %s", incomingMsg.SequenceId)
 	}
 
 	return msgBundle, nil

@@ -28,10 +28,11 @@ type (
 		AppName          string
 		Channel          string
 		ConsumerSequence uint64
-		Done             bool
+		Done             bool // Message is a pipeline 'done' message
 		HandlerName      string
 		InterestTopic    string
 		MessageId        string
+		NumPending       uint64
 		SequenceId       string
 		StreamSequence   uint64
 		Timestamp        time.Time
@@ -134,6 +135,7 @@ func (m *MsgMeta) initMetadata() error {
 	m.StreamSequence = meta.Sequence.Stream
 	m.ConsumerSequence = meta.Sequence.Consumer
 	m.Timestamp = meta.Timestamp
+	m.NumPending = meta.NumPending
 
 	return nil
 }
