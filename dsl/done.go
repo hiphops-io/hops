@@ -2,52 +2,42 @@ package dsl
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/manterfield/fast-ctyjson/ctyjson"
 	"github.com/rs/zerolog"
 )
 
-func DecodeDoneBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Block, evalctx *hcl.EvalContext, logger zerolog.Logger) (*DoneAST, error) {
+func DecodeDoneBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Block, evalctx *hcl.EvalContext, logger zerolog.Logger) (*DoneAST, hcl.Diagnostics) {
 	done := &DoneAST{}
 
-	bc, d := block.Body.Content(DoneSchema)
-	if d.HasErrors() {
-		return done, errors.New(d.Error())
+	bc, diag := block.Body.Content(DoneSchema)
+	if diag.HasErrors() {
+		return done, diag
 	}
 
-	errored, err := decodeDoneAttr(bc.Attributes[ErroredAttr], evalctx, logger)
-	if err != nil {
-		return nil, err
-	}
-	done.Errored = errored
+	done.Errored = decodeDoneAttr(bc.Attributes[ErroredAttr], evalctx, logger)
+	done.Completed = decodeDoneAttr(bc.Attributes[CompletedAttr], evalctx, logger)
 
-	completed, err := decodeDoneAttr(bc.Attributes[CompletedAttr], evalctx, logger)
-	if err != nil {
-		return nil, err
-	}
-	done.Completed = completed
-
-	if completed || errored {
+	if done.Completed || done.Errored {
 		return done, nil
 	}
 
-	return nil, err
+	return nil, nil
 }
 
-func decodeDoneAttr(attr *hcl.Attribute, evalctx *hcl.EvalContext, logger zerolog.Logger) (bool, error) {
+func decodeDoneAttr(attr *hcl.Attribute, evalctx *hcl.EvalContext, logger zerolog.Logger) bool {
 	if attr == nil {
-		return false, nil
+		return false
 	}
 
 	val, d := attr.Expr.Value(evalctx)
 	if d.HasErrors() {
 		logger.Debug().Msgf("Evaluation skipped on 'done.%s', defaulting to null: %s", attr.Name, d.Error())
-		return false, nil
+		return false
 	}
 
-	return val.True(), nil
+	return val.True()
 }
 
 func decodeResultAttr(attr *hcl.Attribute, evalctx *hcl.EvalContext, logger zerolog.Logger) ([]byte, error) {

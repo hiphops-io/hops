@@ -2,8 +2,6 @@ package dsl
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -403,7 +401,7 @@ task foo {
 			ctx := context.Background()
 
 			// Ditch early if we're expecting invalid parsing
-			hops, err := createTmpHopsFile(tc.hops, t)
+			hops, err := createTmpHopsFile(t, tc.hops)
 			if !tc.validRead {
 				assert.Error(t, err)
 				return
@@ -421,31 +419,4 @@ task foo {
 			assert.ElementsMatch(t, tc.tasks, hop.ListTasks())
 		})
 	}
-}
-
-// createTmpHopsFile creates a temporary hops file in a subdirectory
-// with the given content and returns the parsed HCL body content
-func createTmpHopsFile(content string, t *testing.T) (*HopsFiles, error) {
-	// temporary directory
-	tmpDir, err := os.MkdirTemp("", "testdir")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %s", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	tmpFilename := filepath.Join(tmpDir, "hopsdir/hops.hops")
-	if err := os.MkdirAll(filepath.Dir(tmpFilename), 0755); err != nil {
-		t.Fatalf("Failed to create subdirectory for file %s: %s", tmpFilename, err)
-	}
-	err = os.WriteFile(tmpFilename, []byte(content), 0666)
-	if err != nil {
-		t.Fatalf("Failed to write to temp file %s: %s", tmpFilename, err)
-	}
-
-	hops, err := ReadHopsFilePath(tmpDir)
-	if err != nil {
-		return nil, err
-	}
-
-	return hops, nil
 }

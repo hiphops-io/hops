@@ -93,7 +93,7 @@ func TestScheduleParse(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Ditch early if we're expecting invalid parsing
-			hops, err := createTmpHopsFile(tc.hops, t)
+			hops, err := createTmpHopsFile(t, tc.hops)
 			if !tc.validRead {
 				assert.Error(t, err)
 				return

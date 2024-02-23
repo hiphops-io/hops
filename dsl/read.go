@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -53,15 +55,16 @@ func (h *HopsFiles) LookupFile(filePath string) (*FileContent, bool) {
 //
 // It returns a merged hcl.Body and a sha hash of the contents as well as
 // a slice of FileContent structs containing the file name, content and type.
-func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
+func ReadHopsFilePath(filePath string, logger zerolog.Logger) (*HopsFiles, error) {
 	files, err := readHops(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	content, hash, err := ReadHopsFileContents(files)
-	if err != nil {
-		return nil, err
+	content, hash, diags := ReadHopsFileContents(files)
+	if diags.HasErrors() {
+		logDiagnostics(diags, logger)
+		return nil, errors.Join(diags.Errs()...)
 	}
 
 	hopsFiles := &HopsFiles{
@@ -73,7 +76,7 @@ func ReadHopsFilePath(filePath string) (*HopsFiles, error) {
 	return hopsFiles, nil
 }
 
-func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, string, error) {
+func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, string, hcl.Diagnostics) {
 	hopsBodies := []hcl.Body{}
 	parser := hclparse.NewParser()
 	sha256Hash := sha256.New()
@@ -91,7 +94,7 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 		hopsFile, diags := parser.ParseHCL(file.Content, file.File)
 
 		if diags != nil && diags.HasErrors() {
-			return nil, "", errors.New(diags.Error())
+			return nil, "", diags
 		}
 		hopsBodies = append(hopsBodies, hopsFile.Body)
 	}
@@ -99,11 +102,18 @@ func ReadHopsFileContents(hopsFileContent []FileContent) (*hcl.BodyContent, stri
 	body := hcl.MergeBodies(hopsBodies)
 	content, diags := body.Content(HopSchema)
 	if diags.HasErrors() {
-		return nil, "", errors.New(diags.Error())
+		return nil, "", diags
 	}
 
 	if len(content.Blocks) == 0 {
-		return nil, "", errors.New("Ensure --hops is set to a valid dir containing automations. A valid automation must include at least one non-empty *.hops file")
+		diag := hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagInvalid,
+				Summary:  fmt.Sprintf("Unable to find any config blocks"),
+				Detail:   "Ensure --hops is set to a valid dir containing automations. A valid automation must include at least one non-empty *.hops file",
+			},
+		}
+		return nil, "", diag
 	}
 
 	filesSha := sha256Hash.Sum(nil)

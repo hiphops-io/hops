@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/hiphops-io/hops/logs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -175,7 +176,8 @@ func TestConcatenateHopsFiles(t *testing.T) {
 }
 
 func TestGetOtherFiles(t *testing.T) {
-	hopsFiles, err := ReadHopsFilePath("./testdata/valid")
+	logger := logs.NoOpLogger()
+	hopsFiles, err := ReadHopsFilePath("./testdata/valid", logger)
 	assert.NoError(t, err)
 
 	assert.Equal(t, 2, len(hopsFiles.Files))
@@ -247,18 +249,107 @@ func TestKubernetesHopsStructure(t *testing.T) {
 	assert.Equal(t, "automations/main.hops", resultFileContent[0].File)
 }
 
-// createFile creates a file in the given temp directory with the given content
-// including any required subdirectories
-func createFile(t *testing.T, tmpDir string, filename string, content string) {
-	tmpFilename := filepath.Join(tmpDir, filename)
-
-	// Create subdirs
-	if err := os.MkdirAll(filepath.Dir(tmpFilename), 0755); err != nil {
-		t.Fatalf("Failed to create subdirectory for file %s: %s", tmpFilename, err)
+func TestReadValidationOn(t *testing.T) {
+	type testCase struct {
+		name  string
+		hops  string
+		valid bool
 	}
-	err := os.WriteFile(tmpFilename, []byte(content), 0666)
-	if err != nil {
-		t.Fatalf("Failed to write to temp file %s: %s", tmpFilename, err)
+
+	tests := []testCase{
+		{
+			name:  "Simple valid config",
+			hops:  `on foo {}`,
+			valid: true,
+		},
+		{
+			name: "Expansive valid config",
+			hops: `
+			on anevent_action {}
+
+			on anevent {
+				name = "pipeline"
+			}
+
+			on anevent {
+				name = "pipeline"
+
+				if = true != false
+			}
+
+			on anevent {
+				call app_handler {
+					name = "first_call"
+
+					if = true
+
+					inputs = {
+						foo = "bar"
+					}
+				}
+
+				done {
+					errored = first_call.errored
+					completed = first_call.completed
+				}
+			}
+			`,
+			valid: true,
+		},
+		{
+			name: "Unknown root attribute",
+			hops: `
+			on foo {}
+			an_unknown_attr = "value"
+			`,
+			valid: false,
+		},
+		{
+			name:  "Too many labels",
+			hops:  `on foo bar {}`,
+			valid: false,
+		},
+		// TODO: The below tests do not currently work, as we only read with a basic
+		// schema containing top level attributes/blocks and their expected labels.
+		// Leaving here as they describe the behaviour we want to achieve in future.
+		// {
+		// 	name: "Unknown attribute",
+		// 	hops: `on foo {
+		// 		an_unknown_attr = "value"
+		// 	}`,
+		// 	valid: false,
+		// },
+		// {
+		// 	name: "Unknown block",
+		// 	hops: `on foo {
+		// 		an_unknown_block {
+		// 			val = "val"
+		// 		}
+		// 	}`,
+		// 	valid: false,
+		// },
+		// {
+		// 	name: "Inputs defined as block",
+		// 	hops: `on foo {
+		// 		inputs {
+		// 			value = "hey"
+		// 		}
+		// 	}`,
+		// 	valid: false,
+		// },
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := createTmpHopsFile(t, tc.hops)
+			if !tc.valid {
+				assert.Error(t, err)
+				return
+			}
+			if tc.valid {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
 

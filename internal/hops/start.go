@@ -74,7 +74,7 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		return err
 	}
 
-	hopsLoader, err := NewHopsFileLoader(h.HopsPath, h.Watch)
+	hopsLoader, err := NewHopsFileLoader(h.HopsPath, h.Watch, h.Logger)
 	if err != nil {
 		h.Logger.Error().Err(err).Msg("Start failed")
 		return err

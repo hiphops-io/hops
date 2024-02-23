@@ -30,7 +30,7 @@ func TestValidParse(t *testing.T) {
 			"event": eventData,
 		}
 
-		hopsFiles, err := ReadHopsFilePath(hopsFile)
+		hopsFiles, err := ReadHopsFilePath(hopsFile, logger)
 		assert.NoError(t, err)
 
 		hop, err := ParseHops(ctx, hopsFiles, eventBundle, logger)
@@ -88,7 +88,7 @@ func TestValidParseResponseStep(t *testing.T) {
 		"a_sensor-first_task": responseData,
 	}
 
-	hopsFiles, err := ReadHopsFilePath(hopsFile)
+	hopsFiles, err := ReadHopsFilePath(hopsFile, logger)
 	assert.NoError(t, err)
 
 	hop, err := ParseHops(ctx, hopsFiles, eventBundle, logger)
@@ -127,7 +127,7 @@ func TestValidParseDone(t *testing.T) {
 		"a_sensor-depends":    responseData,
 	}
 
-	hopsFiles, err := ReadHopsFilePath(hopsFile)
+	hopsFiles, err := ReadHopsFilePath(hopsFile, logger)
 	assert.NoError(t, err)
 
 	hop, err := ParseHops(ctx, hopsFiles, eventBundle, logger)
@@ -160,7 +160,7 @@ func TestInvalidParse(t *testing.T) {
 		"event": eventData,
 	}
 
-	hopsFiles, err := ReadHopsFilePath(hopsFile)
+	hopsFiles, err := ReadHopsFilePath(hopsFile, logger)
 	assert.NoError(t, err)
 
 	hop, err := ParseHops(ctx, hopsFiles, eventBundle, logger)

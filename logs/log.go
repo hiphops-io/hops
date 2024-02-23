@@ -26,14 +26,17 @@ func InitLogger(debug bool) zerolog.Logger {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro
 
 	var logWriter io.Writer
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	var minLevel zerolog.Level
+
 	if debug {
 		logWriter = debugWriter()
+		minLevel = zerolog.DebugLevel
 	} else {
 		logWriter = levelWriter()
+		minLevel = zerolog.InfoLevel
 	}
 
-	logger := zerolog.New(logWriter).With().Timestamp().Logger()
+	logger := zerolog.New(logWriter).With().Timestamp().Logger().Level(minLevel)
 	log.SetFlags(0)
 	log.SetOutput(logger)
 

@@ -260,7 +260,6 @@ func (r *Runner) prepareHopsSchedules() error {
 }
 
 func (r *Runner) setCron() {
-
 	if r.cron != nil {
 		r.cron.Stop()
 	}

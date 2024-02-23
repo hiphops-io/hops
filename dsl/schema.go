@@ -36,6 +36,7 @@ type HopAST struct {
 	Tasks        []TaskAST     `hcl:"task,block" json:"tasks"`
 	StartedAt    time.Time     `json:"started_at"`
 	SlugRegister map[string]bool
+	Diagnostics  hcl.Diagnostics
 }
 
 func (h *HopAST) ListSchedules() []ScheduleAST {

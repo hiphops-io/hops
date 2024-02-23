@@ -9,6 +9,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/hiphops-io/hops/dsl"
+	"github.com/rs/zerolog"
 	"github.com/slok/reload"
 )
 
@@ -16,14 +17,15 @@ type (
 	// DirNotifer watches a path and its subdirectories for changes
 	// notifying when one occurs
 	DirNotifier struct {
-		watcher  *fsnotify.Watcher
 		notifier reload.Notifier
+		watcher  *fsnotify.Watcher
 	}
 
 	HopsFileLoader struct {
-		path      string
 		hopsFiles dsl.HopsFiles
+		logger    zerolog.Logger
 		mu        sync.RWMutex
+		path      string
 	}
 )
 
@@ -94,8 +96,8 @@ func (d *DirNotifier) initWatcher(path string) error {
 	return nil
 }
 
-func NewHopsFileLoader(path string, tolerant bool) (*HopsFileLoader, error) {
-	h := &HopsFileLoader{path: path}
+func NewHopsFileLoader(path string, tolerant bool, logger zerolog.Logger) (*HopsFileLoader, error) {
+	h := &HopsFileLoader{path: path, logger: logger}
 	err := h.Reload(context.Background(), tolerant)
 	if err != nil {
 		return h, err
@@ -105,7 +107,7 @@ func NewHopsFileLoader(path string, tolerant bool) (*HopsFileLoader, error) {
 }
 
 func (h *HopsFileLoader) Reload(ctx context.Context, tolerant bool) error {
-	hops, err := dsl.ReadHopsFilePath(h.path)
+	hops, err := dsl.ReadHopsFilePath(h.path, h.logger)
 	if err != nil && !tolerant {
 		return fmt.Errorf("Failed to read hops files: %w", err)
 	}

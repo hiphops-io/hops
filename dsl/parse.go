@@ -33,7 +33,7 @@ func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]by
 
 	err = DecodeHopsBody(ctx, hop, hops, evalctx, logger)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to decode hops file")
+		logger.Error().Err(err).Msg("Failed to parse hops configs")
 
 		logger.Debug().Msg("Parse failed on pipeline, dumping state:")
 		for k, v := range eventBundle {
@@ -49,28 +49,29 @@ func ParseHops(ctx context.Context, hops *HopsFiles, eventBundle map[string][]by
 func DecodeHopsBody(ctx context.Context, hop *HopAST, hops *HopsFiles, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
 	onBlocks := hops.BodyContent.Blocks.OfType(OnID)
 	for idx, onBlock := range onBlocks {
-		err := DecodeOnBlock(ctx, hop, hops, onBlock, idx, evalctx, logger)
-		if err != nil {
-			return err
+		hop.Diagnostics = DecodeOnBlock(ctx, hop, hops, onBlock, idx, evalctx, logger)
+
+		if hop.Diagnostics.HasErrors() {
+			logDiagnostics(hop.Diagnostics, logger)
+			return errors.Join(hop.Diagnostics.Errs()...)
 		}
 	}
 
 	return nil
 }
 
-func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) hcl.Diagnostics {
 	on := &OnAST{}
 
-	// schema, _ := gohcl.ImpliedBodySchema(&OnAST{})
 	bc, d := block.Body.Content(OnSchema)
 	if d.HasErrors() {
-		return errors.New(d.Error())
+		return d
 	}
 
 	on.EventType = block.Labels[0]
-	name, err := DecodeNameAttr(bc.Attributes[NameAttr])
-	if err != nil {
-		return err
+	name, diag := DecodeNameAttr(bc.Attributes[NameAttr])
+	if diag.HasErrors() {
+		return diag
 	}
 	// If no name is given, append stringified index of the block
 	if name == "" {
@@ -80,13 +81,28 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 	on.Name = name
 	on.Slug = slugify(on.Name)
 
-	err = ValidateLabels(on.EventType, on.Name)
+	err := ValidateLabels(on.EventType, on.Name)
 	if err != nil {
-		return err
+		diag := hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagInvalid,
+				Summary:  fmt.Sprintf("Invalid label: %s", err.Error()),
+				Subject:  &block.LabelRanges[0],
+			},
+		}
+		return diag
 	}
 
 	if hop.SlugRegister[on.Slug] {
-		return fmt.Errorf("Duplicate 'on' block found: %s", on.Slug)
+		diag := hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagInvalid,
+				Summary:  fmt.Sprintf("Duplicate named 'on' block found: %s", on.Slug),
+				Detail:   "'on' blocks must have unique names across all automations",
+				Subject:  &bc.Attributes[NameAttr].Range,
+			},
+		}
+		return diag
 	} else {
 		hop.SlugRegister[on.Slug] = true
 	}
@@ -94,11 +110,20 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 	// TODO: This should be done once outside of the on block and passed in as an argument
 	eventType, eventAction, err := parseEventVar(evalctx.Variables)
 	if err != nil {
-		return err
+		// Diagnostic being used here is a bit ropey, since an error here won't
+		// relate to an issue with user's hops syntax.
+		return hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagError,
+				Summary:  fmt.Sprintf("Unable to parse source event: %s", err.Error()),
+				Subject:  &block.DefRange,
+			},
+		}
 	}
 
 	blockEventType, blockAction, hasAction := strings.Cut(on.EventType, "_")
 	if (blockEventType != eventType) || (hasAction && blockAction != eventAction) {
+		// This on block doesn't match the event being processed
 		return nil
 	}
 
@@ -106,13 +131,13 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 	evalctx = scopedEvalContext(evalctx, on.EventType, on.Name)
 
 	ifClause := bc.Attributes[IfAttr]
-	val, err := DecodeConditionalAttr(ifClause, true, evalctx)
-	if err != nil {
-		return err
+	val, diag := DecodeConditionalAttr(ifClause, true, evalctx)
+	if diag.HasErrors() {
+		return diag
 	}
 
-	// If condition is not met. Omit the block and stop parsing.
 	if !val {
+		// If condition is not met. Omit the block and stop parsing.
 		logger.Debug().Msgf("%s 'if' not met", on.Slug)
 		return nil
 	}
@@ -125,12 +150,13 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 	// after a pipeline is marked as done
 	doneBlocks := bc.Blocks.OfType(DoneID)
 	for _, doneBlock := range doneBlocks {
-		done, err := DecodeDoneBlock(ctx, hop, on, doneBlock, evalctx, logger)
-		if err != nil {
-			return err
+		done, diag := DecodeDoneBlock(ctx, hop, on, doneBlock, evalctx, logger)
+		if diag.HasErrors() {
+			return diag
 		}
-		// If any done block is not nil, then finish parsing
+
 		if done != nil {
+			// If any done block is not nil, then finish parsing
 			on.Done = done
 			hop.Ons = append(hop.Ons, *on)
 			return nil
@@ -139,9 +165,9 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 
 	callBlocks := bc.Blocks.OfType(CallID)
 	for idx, callBlock := range callBlocks {
-		err := DecodeCallBlock(ctx, hop, on, callBlock, idx, evalctx, logger)
-		if err != nil {
-			return err
+		diag := DecodeCallBlock(ctx, hop, on, callBlock, idx, evalctx, logger)
+		if diag.HasErrors() {
+			return diag
 		}
 	}
 
@@ -149,18 +175,18 @@ func DecodeOnBlock(ctx context.Context, hop *HopAST, hops *HopsFiles, block *hcl
 	return nil
 }
 
-func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) error {
+func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Block, idx int, evalctx *hcl.EvalContext, logger zerolog.Logger) hcl.Diagnostics {
 	call := &CallAST{}
 
-	bc, d := block.Body.Content(CallSchema)
-	if d.HasErrors() {
-		return errors.New(d.Error())
+	bc, diag := block.Body.Content(CallSchema)
+	if diag.HasErrors() {
+		return diag
 	}
 
 	call.ActionType = block.Labels[0]
-	name, err := DecodeNameAttr(bc.Attributes[NameAttr])
-	if err != nil {
-		return err
+	name, diag := DecodeNameAttr(bc.Attributes[NameAttr])
+	if diag.HasErrors() {
+		return diag
 	}
 	if name == "" {
 		name = fmt.Sprintf("%s%d", call.ActionType, idx)
@@ -169,24 +195,39 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 	call.Name = name
 	call.Slug = slugify(on.Slug, call.Name)
 
-	err = ValidateLabels(call.ActionType, call.Name)
+	err := ValidateLabels(call.ActionType, call.Name)
 	if err != nil {
-		return err
+		diag := hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagInvalid,
+				Summary:  fmt.Sprintf("Invalid label: %s", err.Error()),
+				Subject:  &block.LabelRanges[0],
+			},
+		}
+		return diag
 	}
 
 	if hop.SlugRegister[call.Slug] {
-		return fmt.Errorf("Duplicate call block found: %s", call.Slug)
+		diag := hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagInvalid,
+				Summary:  fmt.Sprintf("Duplicate named 'call' block found: %s", call.Slug),
+				Detail:   "'call' blocks must have unique names within an 'on' block",
+				Subject:  &bc.Attributes[NameAttr].Range,
+			},
+		}
+		return diag
 	} else {
 		hop.SlugRegister[call.Slug] = true
 	}
 
 	ifClause := bc.Attributes[IfAttr]
-	val, err := DecodeConditionalAttr(ifClause, true, evalctx)
-	if err != nil {
+	val, diag := DecodeConditionalAttr(ifClause, true, evalctx)
+	if diag.HasErrors() {
 		logger.Debug().Msgf(
 			"%s 'if' not ready for evaluation, defaulting to false: %s",
 			call.Slug,
-			err.Error(),
+			diag.Error(),
 		)
 	}
 
@@ -201,16 +242,22 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 
 	inputs := bc.Attributes["inputs"]
 	if inputs != nil {
-		val, d := inputs.Expr.Value(evalctx)
-		if d.HasErrors() {
-			return errors.New(d.Error())
+		val, diag := inputs.Expr.Value(evalctx)
+		if diag.HasErrors() {
+			return diag
 		}
 
 		jsonVal := ctyjson.SimpleJSONValue{Value: val}
 		inputs, err := jsonVal.MarshalJSON()
 
 		if err != nil {
-			return err
+			return hcl.Diagnostics{
+				&hcl.Diagnostic{
+					Severity: hcl.DiagInvalid,
+					Summary:  fmt.Sprintf("Unable to encode inputs as JSON: %s", err.Error()),
+					Subject:  &bc.Attributes["inputs"].Range,
+				},
+			}
 		}
 
 		call.Inputs = inputs
@@ -220,7 +267,7 @@ func DecodeCallBlock(ctx context.Context, hop *HopAST, on *OnAST, block *hcl.Blo
 	return nil
 }
 
-func DecodeNameAttr(attr *hcl.Attribute) (string, error) {
+func DecodeNameAttr(attr *hcl.Attribute) (string, hcl.Diagnostics) {
 	if attr == nil {
 		// Not an error, as the attribute is not required
 		return "", nil
@@ -228,34 +275,46 @@ func DecodeNameAttr(attr *hcl.Attribute) (string, error) {
 
 	val, diag := attr.Expr.Value(nil)
 	if diag.HasErrors() {
-		return "", errors.New(diag.Error())
+		return "", diag
 	}
 
 	var value string
 
 	err := gocty.FromCtyValue(val, &value)
 	if err != nil {
-		return "", fmt.Errorf("%s %w", attr.NameRange, err)
+		return "", hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagError,
+				Summary:  err.Error(),
+				Subject:  &attr.NameRange,
+			},
+		}
 	}
 
 	return value, nil
 }
 
-func DecodeConditionalAttr(attr *hcl.Attribute, defaultValue bool, ctx *hcl.EvalContext) (bool, error) {
+func DecodeConditionalAttr(attr *hcl.Attribute, defaultValue bool, ctx *hcl.EvalContext) (bool, hcl.Diagnostics) {
 	if attr == nil {
 		return defaultValue, nil
 	}
 
 	v, diag := attr.Expr.Value(ctx)
 	if diag.HasErrors() {
-		return false, errors.New(diag.Error())
+		return false, diag
 	}
 
 	var value bool
 
 	err := gocty.FromCtyValue(v, &value)
 	if err != nil {
-		return false, fmt.Errorf("%s %w", attr.NameRange, err)
+		return false, hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagError,
+				Summary:  err.Error(),
+				Subject:  &attr.NameRange,
+			},
+		}
 	}
 
 	return value, nil
@@ -281,6 +340,18 @@ func blockEvalContext(evalCtx *hcl.EvalContext, hops *HopsFiles, block *hcl.Bloc
 	blockEvalCtx.Variables = evalCtx.Variables // Not inherited from parent (unlike Functions, which are merged)
 
 	return blockEvalCtx
+}
+
+func logDiagnostics(diags hcl.Diagnostics, logger zerolog.Logger) {
+	for _, diag := range diags {
+		logEvent := logger.Error()
+
+		if diag.Subject.Filename != "" {
+			logEvent = logEvent.Interface("range", diag.Subject)
+		}
+
+		logEvent.Str("detail", diag.Detail).Msg(diag.Summary)
+	}
 }
 
 // scopedEvalContext creates eval contexts that are relative to the current scope

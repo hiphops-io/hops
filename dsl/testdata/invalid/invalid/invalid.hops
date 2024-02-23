@@ -25,7 +25,7 @@ on change_merged {
 
     if = try(event.no_such_field.buzz, false)
 
-    inputs {
+    inputs { // This is intentionally invalid (missing '=')
       script = "echo ${event.no_such_field.buzz}"
     }
   }
