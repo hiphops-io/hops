@@ -3,9 +3,11 @@ package hops
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/hiphops-io/hops/dsl"
@@ -44,20 +46,45 @@ func (d *DirNotifier) Close() error {
 	return d.watcher.Close()
 }
 
-func (d *DirNotifier) Notifier() reload.Notifier {
+func (d *DirNotifier) Notifier(ctx context.Context) reload.Notifier {
+	// Using a timer to debounce file change events, preventing multiple events
+	// triggering hops reload for a single action
+	notifyChan := make(chan string)
+	t := time.AfterFunc(math.MaxInt64, func() { notifyChan <- "file-watch" })
+	t.Stop()
+	waitFor := 150 * time.Millisecond
+
+	go func() {
+		for {
+			select {
+			case event := <-d.watcher.Events:
+				if event.Has(fsnotify.Chmod) {
+					continue
+				}
+
+				if event.Has(fsnotify.Create) {
+					// File created, is it a dir?
+					// We ignore the error from os.Stat as normal use would cause this to
+					// return an error (e.g., when saving files via vim).
+					if fileInfo, err := os.Stat(event.Name); err == nil && fileInfo.IsDir() {
+						_ = d.watcher.Add(event.Name)
+					}
+				}
+
+				// This loop only needs to start/reset the timer. The reload listens
+				// for the timer being activated
+				t.Reset(waitFor)
+
+			case <-ctx.Done():
+				break
+			}
+		}
+	}()
+
 	return reload.NotifierFunc(func(ctx context.Context) (string, error) {
 		select {
-		case event := <-d.watcher.Events:
-			if event.Op&fsnotify.Create == fsnotify.Create {
-				// File created, is it a dir?
-				// We ignore the error from os.Stat as normal use would cause this to
-				// return an error (e.g., when saving files via vim).
-				if fileInfo, err := os.Stat(event.Name); err == nil && fileInfo.IsDir() {
-					_ = d.watcher.Add(event.Name)
-				}
-			}
-
-			return "file-watch", nil
+		case id := <-notifyChan:
+			return id, nil
 		case err := <-d.watcher.Errors:
 			return "", err
 		}
