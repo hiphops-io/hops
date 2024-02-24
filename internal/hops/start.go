@@ -289,7 +289,7 @@ func (h *HopsServer) startReloader(ctx context.Context, hopsLoader *HopsFileLoad
 		}
 
 		// Add file watcher based reload notifier.
-		h.reloadManager.On(dirNotifier.Notifier())
+		h.reloadManager.On(dirNotifier.Notifier(ctx))
 
 		ctx, cancel := context.WithCancel(ctx)
 		h.runGroup.Add(
