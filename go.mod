@@ -1,8 +1,6 @@
 module github.com/hiphops-io/hops
 
-go 1.21
-
-toolchain go1.21.3
+go 1.22
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.6.1
@@ -33,6 +31,8 @@ require (
 	github.com/urfave/cli/v2 v2.27.1
 	github.com/valyala/fasttemplate v1.2.2
 	github.com/zclconf/go-cty v1.14.2
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
+	golang.org/x/sync v0.6.0
 	golang.org/x/text v0.14.0
 	k8s.io/api v0.29.1
 	k8s.io/apimachinery v0.29.1
@@ -56,6 +56,7 @@ require (
 	github.com/go-openapi/swag v0.22.9 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/goccy/go-yaml v1.11.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/btree v1.1.2 // indirect
@@ -88,8 +89,8 @@ require (
 	go.starlark.net v0.0.0-20240123142251-f86470692795 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/oauth2 v0.17.0 // indirect
-	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/term v0.17.0 // indirect
+	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/evanphx/json-patch.v5 v5.9.0 // indirect
@@ -106,7 +107,6 @@ require (
 
 require (
 	github.com/agext/levenshtein v1.2.3 // indirect
-	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect

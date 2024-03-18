@@ -1,4 +1,4 @@
-package dsl
+package ctyutils
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestAnyJSONToCtyValue(t *testing.T) {
-	eventFile := "./testdata/raw_change_event.json"
+	eventFile := "../testdata/raw_change_event.json"
 
 	eventJson, err := os.ReadFile(eventFile)
 	assert.NoError(t, err)
@@ -22,7 +22,7 @@ func TestAnyJSONToCtyValue(t *testing.T) {
 }
 
 func TestEventBundleToCty(t *testing.T) {
-	eventFile := "./testdata/raw_change_event.json"
+	eventFile := "../testdata/raw_change_event.json"
 	aaEvent := []byte(`{"path": "a.a"}`)
 	abEvent := []byte(`{"path": "a.b"}`)
 	acaEvent := []byte(`{"path": "a.c.a"}`)
@@ -41,7 +41,7 @@ func TestEventBundleToCty(t *testing.T) {
 		"b.c.d.e.f.g": deeplyNestedEvent, // and a really deep path
 	}
 
-	bundleCty, err := eventBundleToCty(eventBundle, ".")
+	bundleCty, err := EventBundleToCty(eventBundle, ".")
 	require.NoError(t, err)
 
 	eventCty, ok := bundleCty["event"]

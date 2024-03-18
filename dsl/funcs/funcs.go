@@ -1,4 +1,4 @@
-package dsl
+package funcs
 
 import (
 	"github.com/hashicorp/hcl/v2/ext/tryfunc"
@@ -8,7 +8,6 @@ import (
 )
 
 // StatelessFunctions can be instantiated once
-// TODO: Add encode/decode b64
 var StatelessFunctions = map[string]function.Function{
 	"abs":             stdlib.AbsoluteFunc,
 	"alltrue":         AllTrueFunc,
@@ -79,10 +78,10 @@ var StatelessFunctions = map[string]function.Function{
 // This is a workaround to the fact that cty does not allow passing additional
 // context information beyond the parameters of the function. And specifically
 // does not allow passing the eval context.
-func StatefulFunctions(hops *HopsFiles, hopsDirectory string) map[string]function.Function {
+func StatefulFunctions(files map[string][]byte, hopsDirectory string) map[string]function.Function {
 	statefulFunctions := map[string]function.Function{
-		"file":     FileFunc(hops, hopsDirectory),
-		"template": TemplateFunc(hops, hopsDirectory),
+		"file":     FileFunc(files, hopsDirectory),
+		"template": TemplateFunc(files, hopsDirectory),
 	}
 
 	return statefulFunctions

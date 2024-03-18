@@ -1,183 +1,372 @@
+// Package schema defines the schema, parsing, validation and evaluation logic for .hops files and automations
 package dsl
 
 import (
 	"fmt"
 	"strings"
-	"time"
 
+	"github.com/gosimple/slug"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
-
-var (
-	ErroredAttr   = "errored"
-	CompletedAttr = "completed"
-	IfAttr        = "if"
-	NameAttr      = "name"
-	OnID          = "on"
-	CallID        = "call"
-	DoneID        = "done"
-	TaskID        = "task"
-	ParamID       = "param"
-	ScheduleID    = "schedule"
-)
-
-var (
-	HopSchema, _  = gohcl.ImpliedBodySchema(HopAST{})
-	OnSchema, _   = gohcl.ImpliedBodySchema(OnAST{})
-	CallSchema, _ = gohcl.ImpliedBodySchema(CallAST{})
-	DoneSchema, _ = gohcl.ImpliedBodySchema(DoneAST{})
-	TaskSchema, _ = gohcl.ImpliedBodySchema(TaskAST{})
-)
-
-type HopAST struct {
-	Ons          []OnAST       `hcl:"on,block" json:"ons"`
-	Schedules    []ScheduleAST `hcl:"schedule,block" json:"schedules"`
-	Tasks        []TaskAST     `hcl:"task,block" json:"tasks"`
-	StartedAt    time.Time     `json:"started_at"`
-	SlugRegister map[string]bool
-	Diagnostics  hcl.Diagnostics
-}
-
-func (h *HopAST) ListSchedules() []ScheduleAST {
-	return h.Schedules
-}
-
-func (h *HopAST) ListTasks() []TaskAST {
-	return h.Tasks
-}
-
-func (h *HopAST) ListFileTasks(path string) []TaskAST {
-	fileTasks := []TaskAST{}
-
-	for _, task := range h.Tasks {
-		if !strings.HasPrefix(task.FilePath, path) {
-			continue
-		}
-
-		fileTasks = append(fileTasks, task)
-	}
-	return fileTasks
-}
-
-func (h *HopAST) GetTask(taskName string) (TaskAST, error) {
-	// TODO: This currently searches all tasks rather than map lookup. Improve in future
-	for _, task := range h.Tasks {
-		if task.Name == taskName {
-			return task, nil
-		}
-	}
-
-	return TaskAST{}, fmt.Errorf("Task '%s' not found", taskName)
-}
-
-type OnAST struct {
-	EventType string    `hcl:"event_type,label" json:"event_type"`
-	Calls     []CallAST `hcl:"call,block" json:"calls"`
-	Done      *DoneAST  `hcl:"done,block" json:"done"` // TODO: This probably needs to be swapped to a slice of Done blocks
-	If        *bool     `hcl:"if" json:"if"`
-	Name      string    `hcl:"name,optional" json:"name"`
-	Slug      string
-}
-
-type CallAST struct {
-	ActionType string `hcl:"action_type,label" json:"action_type"`
-	If         *bool  `hcl:"if" json:"if"`
-	Name       string `hcl:"name,optional" json:"name"`
-	RawInputs  any    `hcl:"inputs,optional"`
-	Inputs     []byte `json:"inputs"` // Inputs field is decoded explicitly from remain
-	Slug       string
-}
-
-type DoneAST struct {
-	Errored   bool `hcl:"errored,optional" json:"errored"`
-	Completed bool `hcl:"completed,optional" json:"completed"`
-}
-
-type TaskAST struct {
-	Name        string     `hcl:"name,label" json:"name"`
-	Description string     `hcl:"description,optional" json:"description"`
-	DisplayName string     `hcl:"display_name,optional" json:"display_name"`
-	Emoji       string     `hcl:"emoji,optional" json:"emoji"`
-	Params      []ParamAST `hcl:"param,block" json:"params"`
-	Summary     string     `hcl:"summary,optional" json:"summary"`
-	FilePath    string     `json:"file_path"`
-}
 
 const (
-	InvalidRequired  string = "Required"
-	InvalidNotString string = "Should be a string"
-	InvalidNotText   string = "Should be text"
-	InvalidNotNumber string = "Should be a number"
-	InvalidNotBool   string = "Should be a boolean"
+	BlockIDOn       = "on"
+	BlockIDCall     = "call"
+	BlockIDDone     = "done"
+	BlockIDTask     = "task"
+	BlockIDParam    = "param"
+	BlockIDSchedule = "schedule"
 )
 
-// ValidateInput validates a struct of param inputs against a task
-//
-// Returns a map of parameter names with an array of validation error messages
-// if any. Map will be empty (but not nil) if all input is valid.
-func (c *TaskAST) ValidateInput(input map[string]any) map[string][]string {
-	invalidErrs := map[string][]string{}
+var (
+	SchemaCall, _     = gohcl.ImpliedBodySchema(CallAST{})
+	SchemaDone, _     = gohcl.ImpliedBodySchema(DoneAST{})
+	SchemaHops, _     = gohcl.ImpliedBodySchema(HopsAST{})
+	SchemaOn, _       = gohcl.ImpliedBodySchema(OnAST{})
+	SchemaParam, _    = gohcl.ImpliedBodySchema(ParamAST{})
+	SchemaSchedule, _ = gohcl.ImpliedBodySchema(ScheduleAST{})
+	SchemaTask, _     = gohcl.ImpliedBodySchema(TaskAST{})
+)
 
-	for _, param := range c.Params {
-		paramInput, ok := input[param.Name]
-		paramErrs := []string{}
-
-		if !ok && param.Required {
-			invalidErrs[param.Name] = append(paramErrs, InvalidRequired)
-			continue
-		}
-		// The only validation we can do on a missing param is checking required,
-		// so let's ditch this joint.
-		if !ok {
-			continue
-		}
-
-		switch param.Type {
-		case "string":
-			if _, ok := paramInput.(string); !ok {
-				invalidErrs[param.Name] = append(paramErrs, InvalidNotString)
-			}
-		case "text":
-			if _, ok := paramInput.(string); !ok {
-				invalidErrs[param.Name] = append(paramErrs, InvalidNotText)
-			}
-		case "number":
-			if _, ok := paramInput.(int); ok {
-				continue
-			}
-			if _, ok := paramInput.(float64); ok {
-				continue
-			}
-			invalidErrs[param.Name] = append(paramErrs, InvalidNotNumber)
-		case "bool":
-			if _, ok := paramInput.(bool); !ok {
-				invalidErrs[param.Name] = append(paramErrs, InvalidNotBool)
-			}
-		}
-
-		if len(paramErrs) > 0 {
-			invalidErrs[param.Name] = paramErrs
-		}
+type (
+	CallAST struct {
+		Label      string         `json:"label" hcl:"label,label" validate:"block_label"`
+		IfExpr     hcl.Expression `json:"-" hcl:"if,optional"`
+		InputsExpr hcl.Expression `json:"-" hcl:"inputs,optional"`
+		Name       string         `json:"name,omitempty" hcl:"name,optional"`
+		Slug       string         `json:"-"`
+		hclStore
 	}
 
-	return invalidErrs
+	DoneAST struct {
+		Completed     bool           `json:"completed,omitempty"`
+		CompletedExpr hcl.Expression `json:"-" hcl:"completed,optional"`
+		Errored       bool           `json:"errored,omitempty"`
+		ErroredExpr   hcl.Expression `json:"-" hcl:"errored,optional"`
+	}
+
+	HopsAST struct {
+		Ons           []*OnAST       `json:"ons,omitempty" hcl:"on,block"`
+		Schedules     []*ScheduleAST `json:"schedules,omitempty" hcl:"schedule,block"`
+		Tasks         []*TaskAST     `json:"tasks,omitempty" hcl:"task,block"`
+		Body          hcl.Body       `json:"-" hcl:",body"`
+		eventIndex    map[string][]*OnAST
+		slugRegister  []slugRange
+		evaluationCtx *EvaluationCtx
+	}
+
+	OnAST struct {
+		Calls  []*CallAST     `json:"calls,omitempty" hcl:"call,block"`
+		Done   []*DoneAST     `json:"done,omitempty" hcl:"done,block"`
+		Label  string         `json:"label" hcl:"label,label" validate:"block_label"`
+		IfExpr hcl.Expression `json:"-" hcl:"if,optional"`
+		Name   string         `json:"name,omitempty" hcl:"name,optional"`
+		Slug   string         `json:"-"`
+		hclStore
+	}
+
+	Manifest struct {
+		Description  string         `json:"description" validate:"omitempty,gte=1"`
+		Emoji        string         `json:"emoji"`
+		Name         string         `json:"name" validate:"required,gte=1"`
+		RequiredApps []string       `json:"required_apps"`
+		Steps        []ManifestStep `json:"steps"`
+		Tags         []string       `json:"tags"`
+		Version      string         `json:"version" validate:"required,gte=1"`
+	}
+
+	ManifestStep struct {
+		Title        string `json:"title" validate:"required,gte=1"`
+		Instructions string `json:"instructions"`
+		Emoji        string `json:"emoji"`
+	}
+
+	ParamAST struct {
+		Default     any            `json:"default,omitempty"`
+		DefaultExpr hcl.Expression `json:"-" hcl:"default,optional"`
+		DisplayName string         `json:"display_name,omitempty" hcl:"display_name,optional"`
+		Flag        string         `json:"flag,omitempty" hcl:"flag,optional"`
+		Help        string         `json:"help,omitempty" hcl:"help,optional"`
+		Name        string         `json:"name" hcl:"label,label" validate:"block_label"`
+		Required    bool           `json:"required" hcl:"required,optional"`
+		ShortFlag   string         `json:"shortflag,omitempty" hcl:"shortflag,optional"`
+		Type        string         `json:"type" hcl:"type,optional" validate:"omitempty,oneof=string text number bool"`
+		hclStore
+	}
+
+	ScheduleAST struct {
+		Cron       string         `json:"cron" hcl:"cron,attr" validate:"standard_cron"`
+		Inputs     []byte         `json:"inputs,omitempty"`
+		InputsExpr hcl.Expression `json:"-" hcl:"inputs,optional"`
+		Name       string         `json:"name" hcl:"label,label" validate:"block_label"`
+		hclStore
+	}
+
+	TaskAST struct {
+		Description string      `json:"description,omitempty" hcl:"description,optional"`
+		DisplayName string      `json:"display_name,omitempty" hcl:"display_name,optional"`
+		Emoji       string      `json:"emoji,omitempty" hcl:"emoji,optional"`
+		Name        string      `json:"name" hcl:"label,label" validate:"block_label"`
+		Params      []*ParamAST `json:"params,omitempty" hcl:"param,block"`
+		Summary     string      `json:"summary,omitempty" hcl:"summary,optional"`
+		FilePath    string      `json:"filepath"`
+		hclStore
+	}
+
+	hclReader interface {
+		Block() *hcl.Block
+	}
+
+	hclStore struct {
+		block *hcl.Block
+	}
+
+	slugRange struct {
+		name     string
+		blockID  string
+		hclRange *hcl.Range
+	}
+)
+
+// DecodeToHopsAST takes a parsed hcl.File and partially decodes it into an AST
+//
+// Any diagnostic errors will be gathered and returned rather than causing early
+// exit. This means the returned HopsAST may be partially populated.
+// This function will not evaluate runtime expressions (e.g. 'if' statements).
+func DecodeToHopsAST(body hcl.Body, evaluationCtx *EvaluationCtx) (*HopsAST, hcl.Diagnostics) {
+	h := &HopsAST{
+		eventIndex:    map[string][]*OnAST{},
+		slugRegister:  []slugRange{},
+		evaluationCtx: evaluationCtx,
+	}
+	var d hcl.Diagnostics
+	// We ignore diagnostics from this first pass, as we'll gather them on a per
+	// schema item basis. DecodeBody is used for simplicity here
+	gohcl.DecodeBody(body, evaluationCtx.evalCtx, h)
+
+	if h.Body != nil {
+		d = h.DecodeHopsAST()
+	}
+
+	return h, d
 }
 
-type ParamAST struct {
-	Name        string `hcl:"name,label" json:"name"`
-	DisplayName string `hcl:"display_name,optional" json:"display_name"`
-	Type        string `hcl:"type,optional" json:"type"`
-	Default     any    `hcl:"default,optional" json:"default"`
-	Help        string `hcl:"help,optional" json:"help"`
-	Flag        string `hcl:"flag,optional" json:"flag"`
-	ShortFlag   string `hcl:"shortflag,optional" json:"shortflag"`
-	Required    bool   `hcl:"required,optional" json:"required"`
+func (h *HopsAST) DecodeHopsAST() hcl.Diagnostics {
+	content, d := h.Body.Content(SchemaHops)
+	if content == nil {
+		return d
+	}
+
+	ons := content.Blocks.OfType(BlockIDOn)
+	for i, on := range h.Ons {
+		on.block = ons[i]
+		d = d.Extend(h.DecodeOnAST(on, i))
+	}
+
+	tasks := content.Blocks.OfType(BlockIDTask)
+	for i, task := range h.Tasks {
+		task := task
+		task.block = tasks[i]
+		d = d.Extend(h.DecodeTaskAST(task))
+	}
+
+	schedules := content.Blocks.OfType(BlockIDSchedule)
+	for i, schedule := range h.Schedules {
+		schedule.block = schedules[i]
+		d = d.Extend(h.DecodeScheduleAST(schedule))
+	}
+
+	d = d.Extend(valid.SlugRegister(h.slugRegister))
+
+	return d
 }
 
-type ScheduleAST struct {
-	Name   string         `hcl:"name,label" json:"name"`
-	Cron   string         `hcl:"cron,attr" json:"cron"`
-	Inputs []byte         `json:"inputs"` // Inputs field is decoded explicitly from remain
-	Remain hcl.Attributes `hcl:",remain"`
+func (h *HopsAST) DecodeOnAST(on *OnAST, idx int) hcl.Diagnostics {
+	content, d := on.block.Body.Content(SchemaOn)
+	if content == nil {
+		return d
+	}
+
+	h.indexOn(on)
+
+	nameAttr, ok := content.Attributes["name"]
+	if ok {
+		on.Slug = slugify(on.Name)
+		h.slugRegister = append(h.slugRegister, slugRange{on.Slug, BlockIDOn, &nameAttr.Range})
+	} else {
+		on.Slug = slugify(fmt.Sprintf("%s%d", on.Label, idx))
+	}
+
+	d = d.Extend(valid.BlockStruct(on))
+
+	calls := content.Blocks.OfType(BlockIDCall)
+	for i, call := range on.Calls {
+		call.block = calls[i]
+		d = d.Extend(h.DecodeCallAST(call, on.Slug, i))
+	}
+
+	return d
+}
+
+func (h *HopsAST) DecodeCallAST(call *CallAST, slugPrefix string, idx int) hcl.Diagnostics {
+	content, d := call.block.Body.Content(SchemaCall)
+	if content == nil {
+		return d
+	}
+
+	nameAttr, ok := content.Attributes["name"]
+	if ok {
+		call.Slug = slugify(slugPrefix, call.Name)
+		h.slugRegister = append(h.slugRegister, slugRange{call.Slug, BlockIDCall, &nameAttr.Range})
+	} else {
+		call.Slug = slugify(slugPrefix, fmt.Sprintf("%s%d", call.Label, idx))
+	}
+
+	d = d.Extend(valid.BlockStruct(call))
+
+	return d
+}
+
+func (h *HopsAST) DecodeTaskAST(task *TaskAST) hcl.Diagnostics {
+	content, d := task.block.Body.Content(SchemaTask)
+	if content == nil {
+		return d
+	}
+
+	if task.DisplayName == "" {
+		task.DisplayName = titleCase(task.Name)
+	}
+
+	task.FilePath = task.block.DefRange.Filename
+
+	d = d.Extend(valid.BlockStruct(task))
+
+	h.slugRegister = append(h.slugRegister, slugRange{task.Name, BlockIDTask, &task.block.LabelRanges[0]})
+
+	params := content.Blocks.OfType(BlockIDParam)
+	for i, param := range task.Params {
+		param.block = params[i]
+		d = d.Extend(h.DecodeParamAST(param, task.Name))
+	}
+
+	return d
+}
+
+func (h *HopsAST) DecodeScheduleAST(schedule *ScheduleAST) hcl.Diagnostics {
+	content, d := schedule.block.Body.Content(SchemaSchedule)
+	if content == nil {
+		return d
+	}
+
+	h.slugRegister = append(h.slugRegister, slugRange{schedule.Name, BlockIDSchedule, &schedule.block.LabelRanges[0]})
+
+	d = d.Extend(valid.BlockStruct(schedule))
+
+	if schedule.InputsExpr == nil || d.HasErrors() {
+		return d
+	}
+
+	// Evaluate the inputs block as an expression
+	blockEval := h.evaluationCtx.BlockScopedEvalContext(schedule.block, schedule.Name)
+	inputs, diags := EvaluateInputsExpression(schedule.InputsExpr, blockEval)
+	if !diags.HasErrors() {
+		schedule.Inputs = inputs
+	}
+
+	d = d.Extend(diags)
+
+	return d
+}
+
+func (h *HopsAST) DecodeParamAST(param *ParamAST, namePrefix string) hcl.Diagnostics {
+	content, d := param.block.Body.Content(SchemaParam)
+	if content == nil {
+		return d
+	}
+
+	if param.Type == "" {
+		param.Type = "string"
+	}
+
+	if param.DisplayName == "" {
+		param.DisplayName = titleCase(param.Name)
+	}
+
+	if param.Flag == "" {
+		param.Flag = fmt.Sprintf("--%s", param.Name)
+	}
+
+	name := fmt.Sprintf("%s-%s", namePrefix, param.Name)
+	h.slugRegister = append(h.slugRegister, slugRange{name, BlockIDParam, &param.block.LabelRanges[0]})
+
+	d = d.Extend(valid.BlockStruct(param))
+
+	if param.DefaultExpr == nil || d.HasErrors() {
+		return d
+	}
+
+	// Now evaluate the dynamically typed 'default' attribute
+	evalCtx := h.evaluationCtx.BlockScopedEvalContext(param.block, name)
+	var (
+		defaultSet  bool
+		defaultDiag hcl.Diagnostics
+		defaultVal  any
+	)
+
+	switch param.Type {
+	case "string", "text":
+		defaultVal, defaultSet, defaultDiag = EvaluateGenericExpression[string](param.DefaultExpr, evalCtx)
+	case "number":
+		defaultVal, defaultSet, defaultDiag = EvaluateGenericExpression[float64](param.DefaultExpr, evalCtx)
+	case "bool":
+		defaultVal, defaultSet, defaultDiag = EvaluateGenericExpression[bool](param.DefaultExpr, evalCtx)
+	default:
+		defaultDiag = hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagError,
+				Summary:  "Invalid default for param",
+				Detail:   fmt.Sprintf("Unable to evaluate param %s, unknown param type %s", param.Name, param.Type),
+				Subject:  param.DefaultExpr.Range().Ptr(),
+			},
+		}
+		defaultVal, defaultSet = nil, false
+	}
+
+	d = d.Extend(defaultDiag)
+
+	if !defaultSet {
+		param.Default = nil
+	} else {
+		param.Default = defaultVal
+	}
+
+	return d
+}
+
+func (h *HopsAST) indexOn(on *OnAST) {
+	eventOns, ok := h.eventIndex[on.Label]
+	if !ok {
+		h.eventIndex[on.Label] = []*OnAST{on}
+		return
+	}
+
+	h.eventIndex[on.Label] = append(eventOns, on)
+}
+
+func (h *hclStore) Block() *hcl.Block {
+	return h.block
+}
+
+func slugify(parts ...string) string {
+	joined := strings.Join(parts, "-")
+	return slug.Make(joined)
+}
+
+func titleCase(label string) string {
+	caser := cases.Title(language.BritishEnglish)
+	label = strings.ReplaceAll(label, "_", " ")
+	return caser.String(label)
 }

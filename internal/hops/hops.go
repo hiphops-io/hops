@@ -1,3 +1,4 @@
+// Package hops contains the logic for running the hops server components and handling workloads
 package hops
 
 import (
@@ -74,18 +75,18 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		return err
 	}
 
-	hopsLoader, err := NewHopsFileLoader(h.HopsPath, h.Watch, h.Logger)
+	automationsLoader, err := NewAutomationsLoader(h.HopsPath, h.Watch, natsClient, h.Logger)
 	if err != nil {
 		h.Logger.Error().Err(err).Msg("Start failed")
 		return err
 	}
 
-	err = h.startRunner(ctx, hopsLoader, natsClient)
+	err = h.startRunner(ctx, automationsLoader, natsClient)
 	if err != nil {
 		return err
 	}
 
-	err = h.startHTTPServer(hopsLoader, natsClient)
+	err = h.startHTTPServer(automationsLoader, natsClient)
 	if err != nil {
 		return err
 	}
@@ -100,7 +101,7 @@ func (h *HopsServer) Start(ctx context.Context) error {
 		return err
 	}
 
-	err = h.startReloader(ctx, hopsLoader)
+	err = h.startReloader(ctx, automationsLoader)
 	if err != nil {
 		return err
 	}
@@ -141,12 +142,12 @@ func (h *HopsServer) startHTTPApp(ctx context.Context, natsClient *nats.Client) 
 	return nil
 }
 
-func (h *HopsServer) startHTTPServer(hopsLoader *HopsFileLoader, natsClient *nats.Client) error {
+func (h *HopsServer) startHTTPServer(automationsLoader *AutomationsLoader, natsClient *nats.Client) error {
 	if !h.HTTPServerConf.Serve {
 		return nil
 	}
 
-	httpServer, err := NewHTTPServer(h.Address, hopsLoader, h.Watch, natsClient, h.Logger)
+	httpServer, err := NewHTTPServer(h.Address, automationsLoader, natsClient, h.Logger)
 	if err != nil {
 		return err
 	}
@@ -266,13 +267,13 @@ func (h *HopsServer) startNATSClient() (*nats.Client, error) {
 	return natsClient, nil
 }
 
-func (h *HopsServer) startReloader(ctx context.Context, hopsLoader *HopsFileLoader) error {
+func (h *HopsServer) startReloader(ctx context.Context, automationsLoader *AutomationsLoader) error {
 	if !h.Watch {
 		return nil
 	}
 
 	h.reloadManager.Add(0, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-		err := hopsLoader.Reload(ctx, true)
+		err := automationsLoader.Reload(ctx, true)
 		if err != nil {
 			h.Logger.Warn().Msgf("Hops files could not be reloaded: %s", err.Error())
 			return nil
@@ -289,7 +290,7 @@ func (h *HopsServer) startReloader(ctx context.Context, hopsLoader *HopsFileLoad
 		}
 
 		// Add file watcher based reload notifier.
-		h.reloadManager.On(dirNotifier.Notifier())
+		h.reloadManager.On(dirNotifier.Notifier(ctx))
 
 		ctx, cancel := context.WithCancel(ctx)
 		h.runGroup.Add(
@@ -324,12 +325,12 @@ func (h *HopsServer) startReloader(ctx context.Context, hopsLoader *HopsFileLoad
 	return nil
 }
 
-func (h *HopsServer) startRunner(ctx context.Context, hopsLoader *HopsFileLoader, natsClient *nats.Client) error {
+func (h *HopsServer) startRunner(ctx context.Context, automationsLoader *AutomationsLoader, natsClient *nats.Client) error {
 	if !h.RunnerConf.Serve {
 		return nil
 	}
 
-	runner, err := NewRunner(natsClient, hopsLoader, h.Logger)
+	runner, err := NewRunner(natsClient, automationsLoader, h.Logger)
 	if err != nil {
 		return err
 	}

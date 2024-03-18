@@ -21,15 +21,13 @@ import (
 
 type (
 	HTTPServer struct {
-		hopsFiles      *dsl.HopsFiles
-		hopsFileLoader *HopsFileLoader
-		logger         zerolog.Logger
-		mu             sync.RWMutex
-		natsClient     *nats.Client
-		server         *http.Server
-		taskHops       *dsl.HopAST
-		tolerantParse  bool // tolerantParse makes failed hops parsing non-fatal (useful in --watch mode)
-		updatedAt      int64
+		automations       *dsl.Automations
+		automationsLoader *AutomationsLoader
+		logger            zerolog.Logger
+		mu                sync.RWMutex
+		natsClient        *nats.Client
+		server            *http.Server
+		updatedAt         int64
 	}
 
 	taskRunResponse struct {
@@ -40,13 +38,11 @@ type (
 	}
 )
 
-func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, tolerantParse bool, natsClient *nats.Client, logger zerolog.Logger) (*HTTPServer, error) {
+func NewHTTPServer(addr string, automationsLoader *AutomationsLoader, natsClient *nats.Client, logger zerolog.Logger) (*HTTPServer, error) {
 	h := &HTTPServer{
-		hopsFileLoader: hopsFileLoader,
-		logger:         logger,
-		natsClient:     natsClient,
-		tolerantParse:  tolerantParse,
-		taskHops:       &dsl.HopAST{},
+		automationsLoader: automationsLoader,
+		logger:            logger,
+		natsClient:        natsClient,
 	}
 
 	err := h.Reload(context.Background())
@@ -93,21 +89,13 @@ func NewHTTPServer(addr string, hopsFileLoader *HopsFileLoader, tolerantParse bo
 }
 
 func (h *HTTPServer) Reload(ctx context.Context) error {
-	hopsFiles, err := h.hopsFileLoader.Get()
+	automations, err := h.automationsLoader.Get("")
 	if err != nil {
 		return err
 	}
-	// Serve the tasks API
-	taskHops, err := dsl.ParseHopsTasks(ctx, hopsFiles)
-	if err != nil && h.tolerantParse {
-		return nil
-	} else if err != nil {
-		return ErrFailedHopsParse{err.Error()}
-	}
 
 	h.mu.Lock()
-	h.hopsFiles = hopsFiles
-	h.taskHops = taskHops
+	h.automations = automations
 	h.updatedAt = time.Now().UnixMicro()
 	h.mu.Unlock()
 
@@ -133,13 +121,13 @@ func (h *HTTPServer) getUpdatedAt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPServer) listTasks(w http.ResponseWriter, r *http.Request) {
-	var tasks []dsl.TaskAST
+	var tasks []*dsl.TaskAST
 
 	filePathParam := r.URL.Query().Get("filepath")
 
 	if filePathParam == "" {
 		h.mu.RLock()
-		tasks = h.taskHops.ListTasks()
+		tasks = h.automations.GetTasks()
 		h.mu.RUnlock()
 	} else {
 		filePath, err := url.QueryUnescape(filePathParam)
@@ -151,7 +139,7 @@ func (h *HTTPServer) listTasks(w http.ResponseWriter, r *http.Request) {
 		}
 
 		h.mu.RLock()
-		tasks = h.taskHops.ListFileTasks(filePath)
+		tasks = h.automations.GetTasksInPath(filePath)
 		h.mu.RUnlock()
 	}
 
@@ -180,7 +168,7 @@ func (h *HTTPServer) runTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mu.RLock()
-	task, err := h.taskHops.GetTask(taskName)
+	task, err := h.automations.GetTask(taskName)
 	h.mu.RUnlock()
 
 	if err != nil {
@@ -191,7 +179,7 @@ func (h *HTTPServer) runTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate the input
-	validationMessages := task.ValidateInput(taskInput)
+	validationMessages := dsl.ValidateTaskInput(task, taskInput)
 	if len(validationMessages) > 0 {
 		runResponse.statusCode = http.StatusBadRequest
 		runResponse.Message = fmt.Sprintf("Invalid inputs for %s", task.Name)

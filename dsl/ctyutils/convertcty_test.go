@@ -1,4 +1,4 @@
-package dsl
+package ctyutils
 
 import (
 	"reflect"
@@ -148,7 +148,7 @@ func TestConvertCtyValueToInterface(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := convertCtyValueToInterface(tc.input)
+			result, err := ConvertCtyValueToInterface(tc.input)
 
 			if assert.NoError(t, err) {
 				assert.Equal(t, tc.expected, result)
@@ -168,7 +168,7 @@ func TestConvertCtyValueToInterface_CapsuleTypes(t *testing.T) {
 	capsuleVal2 := cty.CapsuleVal(capsulatedType2Capsule, &customValue2)
 
 	t.Run("capsule Type 1", func(t *testing.T) {
-		result, err := convertCtyValueToInterface(capsuleVal1)
+		result, err := ConvertCtyValueToInterface(capsuleVal1)
 		if assert.NoError(t, err) {
 			assert.IsType(t, &capsulatedType1{}, result)
 			assert.Equal(t, &customValue1, result)
@@ -176,7 +176,7 @@ func TestConvertCtyValueToInterface_CapsuleTypes(t *testing.T) {
 	})
 
 	t.Run("capsule Type 2", func(t *testing.T) {
-		result, err := convertCtyValueToInterface(capsuleVal2)
+		result, err := ConvertCtyValueToInterface(capsuleVal2)
 		if assert.NoError(t, err) {
 			assert.IsType(t, &capsulatedType2{}, result)
 			assert.Equal(t, &customValue2, result)

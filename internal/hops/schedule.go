@@ -13,13 +13,13 @@ import (
 )
 
 type Schedule struct {
-	Config       dsl.ScheduleAST
+	Config       *dsl.ScheduleAST
 	CronSchedule cron.Schedule
 	logger       zerolog.Logger
 	natsClient   *nats.Client
 }
 
-func NewSchedule(config dsl.ScheduleAST, natsClient *nats.Client, logger zerolog.Logger) (*Schedule, error) {
+func NewSchedule(config *dsl.ScheduleAST, natsClient *nats.Client, logger zerolog.Logger) (*Schedule, error) {
 	cronSchedule, err := cron.ParseStandard(config.Cron)
 	if err != nil {
 		return nil, err

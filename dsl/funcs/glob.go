@@ -21,7 +21,7 @@
 // c           matches character c (c != '\\', '-', ']')
 // '\\' c      matches character c
 // lo '-' hi   matches character c for lo <= c <= hi
-package dsl
+package funcs
 
 import (
 	"github.com/bmatcuk/doublestar/v4"

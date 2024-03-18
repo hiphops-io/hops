@@ -1,4 +1,4 @@
-package dsl
+package funcs
 
 import (
 	"fmt"
@@ -6,6 +6,8 @@ import (
 	"github.com/flosch/pongo2/v6"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
+
+	"github.com/hiphops-io/hops/dsl/ctyutils"
 )
 
 // TemplateFunc is a stateful cty function that evaluates a file and variables
@@ -15,7 +17,7 @@ import (
 //
 // It is stateful because it requires the HopsFiles struct and the hopsDirectory
 // to be passed in.
-func TemplateFunc(hops *HopsFiles, hopsDirectory string) function.Function {
+func TemplateFunc(files map[string][]byte, hopsDirectory string) function.Function {
 	return function.New(&function.Spec{
 		Params: []function.Parameter{
 			{
@@ -34,7 +36,7 @@ func TemplateFunc(hops *HopsFiles, hopsDirectory string) function.Function {
 			filename := filenameVal.AsString()
 			variablesVal := args[1]
 
-			ctyVariables, err := convertCtyValueToInterface(variablesVal)
+			ctyVariables, err := ctyutils.ConvertCtyValueToInterface(variablesVal)
 			if err != nil {
 				return cty.Value{}, err
 			}
@@ -44,7 +46,7 @@ func TemplateFunc(hops *HopsFiles, hopsDirectory string) function.Function {
 				return cty.Value{}, fmt.Errorf("Variables must be key value pairs")
 			}
 
-			file, err := Template(hopsDirectory, filename, hops, variables)
+			file, err := Template(hopsDirectory, filename, files, variables)
 			return cty.StringVal(file), err
 		},
 	})
@@ -57,12 +59,12 @@ func TemplateFunc(hops *HopsFiles, hopsDirectory string) function.Function {
 // Default file path is the directory that is passed in.
 // If "autoescape" is true, then the template is wrapped in autoescape tags
 // which protects against dangerous HTML inputs in variables.
-func Template(directory, filename string, hops *HopsFiles, variables map[string]any) (string, error) {
+func Template(directory, filename string, files map[string][]byte, variables map[string]any) (string, error) {
 	if filename == "" {
 		return "", fmt.Errorf("Filename must be provided")
 	}
 
-	fileContent, err := File(directory, filename, hops)
+	fileContent, err := File(directory, filename, files)
 	if err != nil {
 		return "", err
 	}
