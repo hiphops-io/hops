@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"github.com/hiphops-io/hops/internal/hops"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
+
+	"github.com/hiphops-io/hops/dsl"
 )
 
 const validateDescription = `Validate automations in a given directory, returning
@@ -27,7 +28,7 @@ func initValidateCommand(commonFlags []cli.Flag) *cli.Command {
 		Before:      before,
 		Flags:       validateFlags,
 		Action: func(c *cli.Context) error {
-			return hops.ValidateDir(c.String("hops"), c.Bool("pretty"))
+			return dsl.ValidateDir(c.String("hops"), c.Bool("pretty"))
 		},
 	}
 }
@@ -36,8 +37,9 @@ func initValidateFlags(commonFlags []cli.Flag) []cli.Flag {
 	validateFlags := []cli.Flag{
 		altsrc.NewBoolFlag(
 			&cli.BoolFlag{
-				Name:  "pretty",
-				Usage: "Whether to pretty print (indent and colorize) the JSON validation output",
+				Name:    "pretty",
+				Aliases: []string{"validate.pretty"},
+				Usage:   "Whether to pretty print (indent and colorize) the JSON validation output",
 			},
 		),
 	}

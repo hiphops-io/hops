@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/goccy/go-json"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/robfig/cron"
 )
@@ -27,10 +28,33 @@ var (
 	valid      = NewHopsValidator()
 )
 
-type HopsValidator struct {
-	validate     *validator.Validate
-	slugRegister map[string]bool
-}
+type (
+	// DiagnosticResult mirrors hcl.Diagnostic + json tags to control marshalling
+	// We keep uppercase field names as this matches the runtime logged diagnostics
+	DiagnosticResult struct {
+		Severity    hcl.DiagnosticSeverity
+		Summary     string
+		Detail      string
+		Subject     *hcl.Range
+		Context     *hcl.Range
+		Expression  hcl.Expression   `json:"-"`
+		EvalContext *hcl.EvalContext `json:"-"`
+		Extra       interface{}      `json:"Extra,omitempty"`
+	}
+
+	HopsValidator struct {
+		validate     *validator.Validate
+		slugRegister map[string]bool
+	}
+
+	ValidationResult struct {
+		Diagnostics []DiagnosticResult `json:"diagnostics"`
+		FileCount   int                `json:"file_count"`
+		IsValid     bool               `json:"is_valid"`
+		NumIssues   int                `json:"num_issues"`
+		ReadError   string             `json:"read_error,omitempty"`
+	}
+)
 
 func NewHopsValidator() *HopsValidator {
 	h := &HopsValidator{
@@ -99,6 +123,56 @@ func (h *HopsValidator) BlockStruct(ast hclReader) hcl.Diagnostics {
 	return d
 }
 
+// BlockErrsToDiagnostics converts validation errors into hcl.Diagnostics
+//
+// Note that this _only_ works for hcl attributes and labels, not block fields.
+// Labels must have a name starting with `label` e.g. `hcl:"label,label" or hcl:"label_1,label"`
+func BlockErrsToDiagnostics(ast hclReader, errs validator.ValidationErrors) hcl.Diagnostics {
+	block := ast.Block()
+	d := hcl.Diagnostics{}
+
+	for _, v := range errs {
+		fieldName := v.Field()
+		switch {
+		case strings.HasPrefix(fieldName, "label"):
+			d = d.Append(
+				&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  fmt.Sprintf("Invalid label for `%s` block", block.Type),
+					Detail:   prettyMsg(v),
+					Subject:  &block.LabelRanges[0],
+					Context:  &block.DefRange,
+				},
+			)
+		default:
+			attributes, diags := block.Body.JustAttributes()
+			if diags.HasErrors() {
+				d.Extend(diags)
+				continue
+			}
+
+			var subject hcl.Range
+			attr, ok := attributes[fieldName]
+			if !ok {
+				subject = block.Body.MissingItemRange()
+			} else {
+				subject = attr.Range
+			}
+
+			d = d.Append(
+				&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  fmt.Sprintf("Invalid `%s` for `%s` block", fieldName, block.Type),
+					Detail:   prettyMsg(v),
+					Subject:  &subject,
+				},
+			)
+		}
+	}
+
+	return d
+}
+
 func HCLTagName(fl reflect.StructField) string {
 	hclTag, found := fl.Tag.Lookup("hcl")
 	if !found {
@@ -130,6 +204,54 @@ func ValidateLabel(fl validator.FieldLevel) bool {
 	}
 
 	return labelRegex.MatchString(label)
+}
+
+// ValidateDir validates a given automation dir and prints the result to the console
+//
+// This is intended for end users to validate their automations are syntactically correct
+func ValidateDir(automationDir string, pretty bool) error {
+	a, d, err := NewAutomationsFromDir(automationDir)
+
+	diagResults := []DiagnosticResult{}
+
+	for _, diag := range d {
+		diagResults = append(diagResults, DiagnosticResult(*diag))
+	}
+
+	vr := ValidationResult{
+		Diagnostics: diagResults,
+		FileCount:   len(a.Files),
+		NumIssues:   len(d),
+		IsValid:     !d.HasErrors() && err == nil,
+	}
+
+	if err != nil {
+		vr.ReadError = err.Error()
+	}
+
+	if err == nil && vr.FileCount == 0 {
+		vr.ReadError = "No automation directories found (or they're all empty)"
+		vr.IsValid = false
+	}
+
+	var output []byte
+
+	if !pretty {
+		output, err = json.Marshal(vr)
+	} else {
+		output, err = json.MarshalIndentWithOption(
+			vr, "", "  ",
+			json.Colorize(json.DefaultColorScheme),
+		)
+	}
+
+	if err != nil {
+		return fmt.Errorf("Failed to compile validation results: %w", err)
+	}
+
+	fmt.Println(string(output))
+
+	return nil
 }
 
 // ValidateInput validates a struct of param inputs against a task
@@ -182,56 +304,6 @@ func ValidateTaskInput(t *TaskAST, input map[string]any) map[string][]string {
 	}
 
 	return invalidErrs
-}
-
-// BlockErrsToDiagnostics converts validation errors into hcl.Diagnostics
-//
-// Note that this _only_ works for hcl attributes and labels, not block fields.
-// Labels must have a name starting with `label` e.g. `hcl:"label,label" or hcl:"label_1,label"`
-func BlockErrsToDiagnostics(ast hclReader, errs validator.ValidationErrors) hcl.Diagnostics {
-	block := ast.Block()
-	d := hcl.Diagnostics{}
-
-	for _, v := range errs {
-		fieldName := v.Field()
-		switch {
-		case strings.HasPrefix(fieldName, "label"):
-			d = d.Append(
-				&hcl.Diagnostic{
-					Severity: hcl.DiagError,
-					Summary:  fmt.Sprintf("Invalid label for `%s` block", block.Type),
-					Detail:   prettyMsg(v),
-					Subject:  &block.LabelRanges[0],
-					Context:  &block.DefRange,
-				},
-			)
-		default:
-			attributes, diags := block.Body.JustAttributes()
-			if diags.HasErrors() {
-				d.Extend(diags)
-				continue
-			}
-
-			var subject hcl.Range
-			attr, ok := attributes[fieldName]
-			if !ok {
-				subject = block.Body.MissingItemRange()
-			} else {
-				subject = attr.Range
-			}
-
-			d = d.Append(
-				&hcl.Diagnostic{
-					Severity: hcl.DiagError,
-					Summary:  fmt.Sprintf("Invalid `%s` for `%s` block", fieldName, block.Type),
-					Detail:   prettyMsg(v),
-					Subject:  &subject,
-				},
-			)
-		}
-	}
-
-	return d
 }
 
 func prettyMsg(fe validator.FieldError) string {
