@@ -1,4 +1,4 @@
-package dsl
+package ctyutils
 
 import (
 	"fmt"
@@ -10,7 +10,9 @@ import (
 	"github.com/zclconf/go-cty/cty/gocty"
 )
 
-// TODO: This method effectively parses the JSON string twice. Once via unmarshal
+// AnyJSONToCtyValue converts an aribitrary json byte slice and converts to a corresponding cty.Value
+//
+// NOTE: This method effectively parses the JSON string twice. Once via unmarshal
 // called directly, then again via ctyjson.ImpliedType which runs a decoder.
 // It is likely worth the time to write a decoder that directly takes the unmarshalled
 // json and manually maps to cty values.
@@ -37,7 +39,7 @@ func AnyJSONToCtyValue(jsonStr []byte) (cty.Value, error) {
 	return event, nil
 }
 
-func eventBundleToCty(eventBundle map[string][]byte, pathDelim string) (map[string]cty.Value, error) {
+func EventBundleToCty(eventBundle map[string][]byte, pathDelim string) (map[string]cty.Value, error) {
 	ctxVariables := make(map[string]cty.Value)
 	for k, v := range eventBundle {
 		ctyVal, err := AnyJSONToCtyValue(v)
@@ -72,13 +74,13 @@ func nestedPathToCty(ctxVal map[string]cty.Value, path []string, eventVal cty.Va
 	return ctxVal
 }
 
-func parseEventVar(evalVars map[string]cty.Value) (string, string, error) {
+func ParseEventVar(evalVars map[string]cty.Value, metaKey string) (string, string, error) {
 	event, ok := evalVars["event"]
 	if !ok {
 		return "", "", fmt.Errorf("Source event not found")
 	}
 
-	metadata, ok := event.AsValueMap()[hopsMetadataKey]
+	metadata, ok := event.AsValueMap()[metaKey]
 	if !ok {
 		return "", "", fmt.Errorf("Source event does not contain required metadata")
 	}

@@ -12,9 +12,7 @@ import (
 const (
 	appUsage = "Hops CLI for creating and running automations"
 
-	appDescription = `Hops is a tool for creating, sharing and running automations.
-	
-Create awesome DevEx, automate common ops tasks, or allow cross-functional teams to self-serve.`
+	appDescription = `Hops is a tool for creating, sharing and running automations.`
 
 	commonFlagCategory = "Global"
 
@@ -60,6 +58,7 @@ func initCliApp() (*cli.App, error) {
 		Commands: []*cli.Command{
 			initStartCommand(commonFlags),
 			initConfigCommand(commonFlags),
+			initValidateCommand(commonFlags),
 		},
 	}
 

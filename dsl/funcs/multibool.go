@@ -1,4 +1,4 @@
-package dsl
+package funcs
 
 import (
 	"github.com/zclconf/go-cty/cty"

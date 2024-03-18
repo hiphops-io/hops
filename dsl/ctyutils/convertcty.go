@@ -1,4 +1,4 @@
-package dsl
+package ctyutils
 
 import (
 	"fmt"
@@ -7,12 +7,12 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-// convertCtyValueToInterface converts a cty.Value to an interface{}.
+// ConvertCtyValueToInterface converts a cty.Value to an interface{}.
 //
 // Calls itself recursively to convert nested values.
 // Does not cover all possible cty types, such as unknown, capsule, empty object,
 // and empty tuple.
-func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
+func ConvertCtyValueToInterface(val cty.Value) (interface{}, error) {
 	if val.IsNull() || !val.IsKnown() {
 		return nil, nil
 	}
@@ -33,7 +33,7 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 	case valType.IsMapType(), valType.IsObjectType():
 		resultMap := make(map[string]interface{})
 		for key, value := range val.AsValueMap() {
-			convertedVal, err := convertCtyValueToInterface(value)
+			convertedVal, err := ConvertCtyValueToInterface(value)
 			if err != nil {
 				return nil, err
 			}
@@ -44,7 +44,7 @@ func convertCtyValueToInterface(val cty.Value) (interface{}, error) {
 	case valType.IsListType(), valType.IsSetType(), valType.IsTupleType():
 		resultList := []interface{}{}
 		for _, item := range val.AsValueSlice() {
-			convertedItem, err := convertCtyValueToInterface(item)
+			convertedItem, err := ConvertCtyValueToInterface(item)
 			if err != nil {
 				return nil, err
 			}

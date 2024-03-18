@@ -1,4 +1,4 @@
-package dsl
+package funcs
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 //
 // It is stateful because it requires the HopsFiles struct and the hopsDirectory
 // to be passed in.
-func FileFunc(hops *HopsFiles, hopsDirectory string) function.Function {
+func FileFunc(files map[string][]byte, hopsDirectory string) function.Function {
 	return function.New(&function.Spec{
 		Params: []function.Parameter{
 			{
@@ -28,7 +28,7 @@ func FileFunc(hops *HopsFiles, hopsDirectory string) function.Function {
 			filenameVal := args[0]
 			filename := filenameVal.AsString()
 
-			file, err := File(hopsDirectory, filename, hops)
+			file, err := File(hopsDirectory, filename, files)
 
 			return cty.StringVal(file), err
 		},
@@ -38,15 +38,15 @@ func FileFunc(hops *HopsFiles, hopsDirectory string) function.Function {
 // File returns the content of a file from the HopsFiles struct.
 //
 // Default file path is the directory that is passed in.
-func File(directory, filename string, hops *HopsFiles) (string, error) {
+func File(directory, filename string, files map[string][]byte) (string, error) {
 	if filename == "" {
 		return "", nil
 	}
 
 	filePath := path.Join(directory, filename)
 
-	if file, ok := hops.LookupFile(filePath); ok {
-		return string(file.Content), nil
+	if content, ok := files[filePath]; ok {
+		return string(content), nil
 	}
 
 	return "", fmt.Errorf("File %s not found", filePath)

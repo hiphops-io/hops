@@ -36,6 +36,7 @@ on change_merged {
 
     inputs = {
       script = "ls -al ./workspace/"
+      bad_expression = event.not_a_thing
     }
   }
 }

@@ -184,8 +184,6 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 		g.Go(func() (nilErr error) {
 			msgBundle, err := c.FetchMessageBundle(ctx, hopsMsg)
 			if err != nil && err != ErrIncompleteMsgBundle {
-				// Incomplete message bundles are expected occasionally due to
-				// eventual read consistency - so we don't log them.
 				c.logger.Errf(err, "Unable to fetch message bundle")
 			}
 			if err != nil {
