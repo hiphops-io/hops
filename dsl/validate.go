@@ -48,11 +48,11 @@ type (
 	}
 
 	ValidationResult struct {
-		Diagnostics []DiagnosticResult `json:"diagnostics"`
-		FileCount   int                `json:"file_count"`
-		IsValid     bool               `json:"is_valid"`
-		NumIssues   int                `json:"num_issues"`
-		ReadError   string             `json:"read_error,omitempty"`
+		Diagnostics map[string][]DiagnosticResult `json:"diagnostics"`
+		FileCount   int                           `json:"file_count"`
+		IsValid     bool                          `json:"is_valid"`
+		NumIssues   int                           `json:"num_issues"`
+		ReadError   string                        `json:"read_error,omitempty"`
 	}
 )
 
@@ -212,10 +212,19 @@ func ValidateLabel(fl validator.FieldLevel) bool {
 func ValidateDir(automationDir string, pretty bool) error {
 	a, d, err := NewAutomationsFromDir(automationDir)
 
-	diagResults := []DiagnosticResult{}
+	diagResults := map[string][]DiagnosticResult{}
 
 	for _, diag := range d {
-		diagResults = append(diagResults, DiagnosticResult(*diag))
+		var key string
+
+		if diag.Subject == nil {
+			key = ""
+		} else {
+			key = diag.Subject.Filename
+		}
+
+		fileDiags := diagResults[key]
+		diagResults[key] = append(fileDiags, DiagnosticResult(*diag))
 	}
 
 	vr := ValidationResult{
@@ -254,7 +263,7 @@ func ValidateDir(automationDir string, pretty bool) error {
 	return nil
 }
 
-// ValidateInput validates a struct of param inputs against a task
+// ValidateTaskInput validates a struct of param inputs against a task
 //
 // Returns a map of parameter names with an array of validation error messages
 // if any. Map will be empty (but not nil) if all input is valid.
