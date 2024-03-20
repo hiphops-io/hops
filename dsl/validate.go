@@ -32,14 +32,14 @@ type (
 	// DiagnosticResult mirrors hcl.Diagnostic + json tags to control marshalling
 	// We keep uppercase field names as this matches the runtime logged diagnostics
 	DiagnosticResult struct {
-		Severity    hcl.DiagnosticSeverity
-		Summary     string
-		Detail      string
-		Subject     *hcl.Range
-		Context     *hcl.Range
-		Expression  hcl.Expression   `json:"-"`
-		EvalContext *hcl.EvalContext `json:"-"`
-		Extra       interface{}      `json:"Extra,omitempty"`
+		Severity    hcl.DiagnosticSeverity `json:"Severity"`
+		Summary     string                 `json:"Summary"`
+		Detail      string                 `json:"Detail,omitempty"`
+		Subject     *hcl.Range             `json:"Subject,omitempty"`
+		Context     *hcl.Range             `json:"Context,omitempty"`
+		Expression  hcl.Expression         `json:"-"`
+		EvalContext *hcl.EvalContext       `json:"-"`
+		Extra       interface{}            `json:"Extra,omitempty"`
 	}
 
 	HopsValidator struct {

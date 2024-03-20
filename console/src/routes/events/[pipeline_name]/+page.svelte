@@ -19,7 +19,6 @@
 			activeDetail = '';
 		} else {
 			activeDetail = id;
-			console.log(id);
 		}
 	}
 </script>

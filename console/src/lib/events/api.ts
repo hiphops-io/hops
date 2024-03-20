@@ -75,6 +75,5 @@ const timeAgo = new TimeAgo('en');
 
 export function ago(startTimestamp: string): string {
 	const then = new Date(startTimestamp);
-	console.log(timeAgo.format(then));
 	return timeAgo.format(then);
 }

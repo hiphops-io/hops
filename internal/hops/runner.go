@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -90,7 +91,7 @@ func (r *Runner) SequenceCallback(
 
 	ons, d := automations.EventOns(msgBundle)
 	if d.HasErrors() {
-		logDiagnostics(d, logger)
+		r.logDiagnostics(d, logger)
 		return false, fmt.Errorf("Error evaluating automations: %s", d.Error())
 	}
 
@@ -233,14 +234,23 @@ func (r *Runner) setCron() {
 	r.cron.Start()
 }
 
-func logDiagnostics(diags hcl.Diagnostics, logger zerolog.Logger) {
+func (r *Runner) logDiagnostics(diags hcl.Diagnostics, logger zerolog.Logger) {
 	for _, diag := range diags {
-		logEvent := logger.Error()
+		errLog := logger.Error()
 
-		if diag.Subject.Filename != "" {
-			logEvent = logEvent.Interface("range", diag.Subject)
+		var manifest *dsl.Manifest
+
+		if diag.Subject != nil {
+			automationDir := filepath.Dir(diag.Subject.Filename)
+			manifest = r.automations.Manifests[automationDir]
 		}
 
-		logEvent.Str("detail", diag.Detail).Msg(diag.Summary)
+		if manifest != nil {
+			errLog = errLog.Str("automation", manifest.Name)
+		}
+
+		errLog = errLog.Interface("diagnostic", diag)
+
+		errLog.Msg(diag.Summary)
 	}
 }

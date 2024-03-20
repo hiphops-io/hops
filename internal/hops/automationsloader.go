@@ -66,15 +66,17 @@ func (al *AutomationsLoader) Reload(ctx context.Context, tolerant bool) error {
 
 	// Only reached when in tolerant mode or there's no errors
 	failedLoad := err != nil || d.HasErrors()
-	if failedLoad && al.automations.Hash != "" {
+	if failedLoad && al.automations != nil && al.automations.Hash != "empty" {
 		// If an automation is already loaded, then don't replace with the broken one
 		return nil
 	}
 
 	if failedLoad {
 		a = &dsl.Automations{
-			Hash:  "empty",
-			Files: map[string][]byte{},
+			Files:     map[string][]byte{},
+			Hash:      "empty",
+			Hops:      &dsl.HopsAST{},
+			Manifests: map[string]*dsl.Manifest{},
 		}
 	}
 
