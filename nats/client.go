@@ -34,6 +34,7 @@ const (
 )
 
 var (
+	ErrEventFatal          = errors.New("This event cannot be processed")
 	ErrIncompleteMsgBundle = errors.New("Unable to fetch complete sequence history")
 	nameReplacer           = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
 )
@@ -192,6 +193,10 @@ func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, hand
 			}
 
 			handled, err := handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
+			if errors.Is(err, ErrEventFatal) {
+				msg.Term()
+				return
+			}
 			if err != nil {
 				msg.NakWithDelay(3 * time.Second)
 				return

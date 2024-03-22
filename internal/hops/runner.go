@@ -92,14 +92,14 @@ func (r *Runner) SequenceCallback(
 	ons, d := automations.EventOns(msgBundle)
 	if d.HasErrors() {
 		r.logDiagnostics(d, logger)
-		return false, fmt.Errorf("Error evaluating automations: %s", d.Error())
+		return false, fmt.Errorf("%w: %s", nats.ErrEventFatal, d.Error())
 	}
 
 	if len(ons) == 0 {
 		return false, nil
 	}
 
-	logger.Debug().Msg("Successfully evaluated event's automations")
+	logger.Debug().Msg("Successfully evaluated automations")
 
 	var mergedErrors error
 	// NOTE: We could potentially get a speed boost by dispatching/handling each
