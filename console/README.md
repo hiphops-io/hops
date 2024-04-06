@@ -26,13 +26,13 @@ pnpm install
 You'll need to start the backend so the UI can fetch data, first create a hops config:
 
 ```bash
-mkdir -p ~/.hops && cp dsl/testdata/valid.hops ~/.hops/main.hops
+mkdir -p ~/.hops && cp dsl/testdata/valid/valid/valid.hops ~/.hops/main.hops
 ```
 
 Then start hops
 
 ```bash
-mkdir -p ~/.hops && cp dsl/testdata/valid/valid/valid.hops ~/.hops/main.hops
+go run main.go start -d --address=0.0.0.0:8916
 ```
 
 Once you've installed dependencies with `pnpm install`, start a development server:
