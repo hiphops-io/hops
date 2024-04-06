@@ -32,7 +32,7 @@ mkdir -p ~/.hops && cp dsl/testdata/valid.hops ~/.hops/main.hops
 Then start hops
 
 ```bash
-go run main.go start -d --address=0.0.0.0:8916
+mkdir -p ~/.hops && cp dsl/testdata/valid/valid/valid.hops ~/.hops/main.hops
 ```
 
 Once you've installed dependencies with `pnpm install`, start a development server:
