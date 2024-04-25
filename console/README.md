@@ -26,7 +26,7 @@ pnpm install
 You'll need to start the backend so the UI can fetch data, first create a hops config:
 
 ```bash
-mkdir -p ~/.hops && cp dsl/testdata/valid.hops ~/.hops/main.hops
+mkdir -p ~/.hops && cp dsl/testdata/valid/valid/valid.hops ~/.hops/main.hops
 ```
 
 Then start hops

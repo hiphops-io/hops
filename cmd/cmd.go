@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path"
 
@@ -124,16 +126,18 @@ func optionalYamlSrc(flags []cli.Flag) func(*cli.Context) error {
 		}
 
 		// Succeed if no config file
-		if _, err := os.Stat(configFilePath); err == nil {
-			inputSource, err := altsrc.NewYamlSourceFromFile(configFilePath)
-			if err != nil {
-				return err
+		_, err = os.Stat(configFilePath)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
 			}
-			return altsrc.ApplyInputSourceValues(c, inputSource, flags)
-		} else if os.IsNotExist(err) {
-			return nil
-		} else {
 			return err
 		}
+
+		inputSource, err := altsrc.NewYamlSourceFromFile(configFilePath)
+		if err != nil {
+			return err
+		}
+		return altsrc.ApplyInputSourceValues(c, inputSource, flags)
 	}
 }
