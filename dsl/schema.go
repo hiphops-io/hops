@@ -1,4 +1,4 @@
-// Package schema defines the schema, parsing, validation and evaluation logic for .hops files and automations
+// Package dsl defines the schema, parsing, validation and evaluation logic for .hops files and automations
 package dsl
 
 import (
@@ -14,16 +14,12 @@ import (
 
 const (
 	BlockIDOn       = "on"
-	BlockIDCall     = "call"
-	BlockIDDone     = "done"
 	BlockIDTask     = "task"
 	BlockIDParam    = "param"
 	BlockIDSchedule = "schedule"
 )
 
 var (
-	SchemaCall, _     = gohcl.ImpliedBodySchema(CallAST{})
-	SchemaDone, _     = gohcl.ImpliedBodySchema(DoneAST{})
 	SchemaHops, _     = gohcl.ImpliedBodySchema(HopsAST{})
 	SchemaOn, _       = gohcl.ImpliedBodySchema(OnAST{})
 	SchemaParam, _    = gohcl.ImpliedBodySchema(ParamAST{})
@@ -32,22 +28,6 @@ var (
 )
 
 type (
-	CallAST struct {
-		Label      string         `json:"label" hcl:"label,label" validate:"block_label"`
-		IfExpr     hcl.Expression `json:"-" hcl:"if,optional"`
-		InputsExpr hcl.Expression `json:"-" hcl:"inputs,optional"`
-		Name       string         `json:"name,omitempty" hcl:"name,optional"`
-		Slug       string         `json:"-"`
-		hclStore
-	}
-
-	DoneAST struct {
-		Completed     bool           `json:"completed,omitempty"`
-		CompletedExpr hcl.Expression `json:"-" hcl:"completed,optional"`
-		Errored       bool           `json:"errored,omitempty"`
-		ErroredExpr   hcl.Expression `json:"-" hcl:"errored,optional"`
-	}
-
 	HopsAST struct {
 		Ons           []*OnAST       `json:"ons,omitempty" hcl:"on,block"`
 		Schedules     []*ScheduleAST `json:"schedules,omitempty" hcl:"schedule,block"`
@@ -59,12 +39,12 @@ type (
 	}
 
 	OnAST struct {
-		Calls  []*CallAST     `json:"calls,omitempty" hcl:"call,block"`
-		Done   []*DoneAST     `json:"done,omitempty" hcl:"done,block"`
-		Label  string         `json:"label" hcl:"label,label" validate:"block_label"`
-		IfExpr hcl.Expression `json:"-" hcl:"if,optional"`
-		Name   string         `json:"name,omitempty" hcl:"name,optional"`
-		Slug   string         `json:"-"`
+		Label   string         `json:"label" hcl:"label,label" validate:"block_label"`
+		Handler string         `json:"handler,omitempty" hcl:"handler,optional" validate:"required_without=Script,excluded_with=Script"`
+		Script  string         `json:"script,omitempty" hcl:"script,optional" validate:"required_without=Handler,excluded_with=Handler"`
+		IfExpr  hcl.Expression `json:"-" hcl:"if,optional"`
+		Name    string         `json:"name,omitempty" hcl:"name,optional"`
+		Slug    string         `json:"-"`
 		hclStore
 	}
 
@@ -200,32 +180,12 @@ func (h *HopsAST) DecodeOnAST(on *OnAST, idx int) hcl.Diagnostics {
 		on.Slug = slugify(fmt.Sprintf("%s%d", on.Label, idx))
 	}
 
+	// Add a default handler, if none found
+	if on.Handler == "" && on.Script == "" {
+		on.Handler = "handle"
+	}
+
 	d = d.Extend(valid.BlockStruct(on))
-
-	calls := content.Blocks.OfType(BlockIDCall)
-	for i, call := range on.Calls {
-		call.block = calls[i]
-		d = d.Extend(h.DecodeCallAST(call, on.Slug, i))
-	}
-
-	return d
-}
-
-func (h *HopsAST) DecodeCallAST(call *CallAST, slugPrefix string, idx int) hcl.Diagnostics {
-	content, d := call.block.Body.Content(SchemaCall)
-	if content == nil {
-		return d
-	}
-
-	nameAttr, ok := content.Attributes["name"]
-	if ok {
-		call.Slug = slugify(slugPrefix, call.Name)
-		h.slugRegister = append(h.slugRegister, slugRange{call.Slug, BlockIDCall, &nameAttr.Range})
-	} else {
-		call.Slug = slugify(slugPrefix, fmt.Sprintf("%s%d", call.Label, idx))
-	}
-
-	d = d.Extend(valid.BlockStruct(call))
 
 	return d
 }

@@ -85,8 +85,6 @@ func (h *HopsValidator) SlugRegister(slugRegister []slugRange) hcl.Diagnostics {
 			switch nr.blockID {
 			case BlockIDOn:
 				detail = "If 'name' is set, it must be unique for all 'on' config blocks across all .hops files in all automations"
-			case BlockIDCall:
-				detail = `Call names must be unique in an 'on' config block`
 			case BlockIDTask:
 				detail = "Tasks must have unique names across all .hops files in all automations."
 			case BlockIDParam:

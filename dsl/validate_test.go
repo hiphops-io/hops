@@ -23,32 +23,14 @@ func TestSchemaValidation(t *testing.T) {
 			hops: `
 			on anevent_action {
 				name = "anevent"
-
-				call app_handler {
-					name = "first_call"
-			
-					if = lower("FOO") == "foo"
-			
-					inputs = {
-						foo = "bar"
-					}
-				}
-			
-				call app_handler {}
-			
-				call app_handler {
-					if = first_call.completed
-				}
-			
-				done {
-					errored = first_call.errored
-					completed = first_call.completed
-				}
+				handler = "handler"
 			}
 
 			on bar {}
 
-			on bar {}
+			on bar {
+				script = "console.log('Hello, World!')"
+			}
 			
 			schedule hourly {
 				cron = "@hourly"
@@ -121,18 +103,6 @@ func TestSchemaValidation(t *testing.T) {
 			}`,
 			numDiags: 1,
 		},
-		{
-			name: "Call inputs defined as block",
-			hops: `
-			on foo {
-				call app_handler {
-					inputs {
-						value = "hey"
-					}
-				}
-			}`,
-			numDiags: 1,
-		},
 		// Check lots of different ways labels can be invalid across blocks
 		{
 			name: "Invalid labels",
@@ -144,14 +114,6 @@ func TestSchemaValidation(t *testing.T) {
 			on foo__bar {}
 			on areallylonglabelisnotallowed_the_max_is_fifty_chars {}
 
-			on bar {
-				call FOO {}
-				call _foo {}
-				call foo_ {}
-				call fo-o {}
-				call foo__bar {}
-				call areallylonglabelisnotallowed_the_max_is_fifty_chars {}
-			}
 			
 			task FOO {}
 
@@ -163,7 +125,7 @@ func TestSchemaValidation(t *testing.T) {
 				cron = "@daily"
 			}
 			`,
-			numDiags: 15,
+			numDiags: 9,
 		},
 		{
 			name: "Invalid schedule cron",
@@ -256,37 +218,6 @@ func TestSchemaValidation(t *testing.T) {
 			task duplicate_name {}
 
 			task duplicate_name {}
-			`,
-			numDiags: 1,
-		},
-		{
-			name: "Shared call names different on",
-			hops: `
-			on foo {
-				call app_handler {
-					name = "same"
-				}
-			}
-
-			on foo {
-				call app_handler {
-					name = "same"
-				}
-			}
-			`,
-		},
-		{
-			name: "Duplicate call names",
-			hops: `
-			on foo {
-				call app_handler {
-					name = "same"
-				}
-
-				call otherapp_handler {
-					name = "same"
-				}
-			}
 			`,
 			numDiags: 1,
 		},

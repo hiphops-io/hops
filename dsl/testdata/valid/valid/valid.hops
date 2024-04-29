@@ -7,43 +7,8 @@ schedule foo {
 
 on change_merged {
   name = "a_sensor"
-
   if = true == true && glob("foo", "fo*")
-
-  call integration_action {
-    name = "first_task"
-    if = alltrue(true, "foo" == "foo")
-
-    inputs = {
-      a = "b"
-      source = event.source
-      from_env = env("HIPHOPS_TEST_ENV", "")
-    }
-  }
-
-  call integration_other_action {
-    name = "second_task"
-    if = glob(event.branch, "fix/*") // This if does not match the event.
-
-    inputs = {
-      is_true = true
-    }
-  }
-
-  // This done block should never match, since the call is never made
-  done {errored = second_task.errored}
-
-  call index_id_call {}
-
-  call depends_call {
-    name = "depends"
-    if = first_task.done
-  }
-
-  done {
-    errored = depends.errored
-    completed = depends.completed
-  }
+  handler = "handler"
 }
 
 on change {
@@ -51,10 +16,17 @@ on change {
 }
 
 // An on block with index based name, due to omitted name field
-on change {}
+on change {
+  script = <<-EOT
+  console.log("Hello world!")
+  EOT
+}
 
 on change_no_such_action {
   name = "non_matching_sensor"
+  script = <<-EOT
+  console.log("Hello world!")
+  EOT
 }
 
 task foo {}

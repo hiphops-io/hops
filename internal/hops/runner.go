@@ -2,10 +2,8 @@ package hops
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -108,16 +106,7 @@ func (r *Runner) SequenceCallback(
 		on := ons[i]
 		onLogger := logger.With().Str("on", on.Slug).Logger()
 
-		if on.Done != nil {
-			err := r.dispatchDone(ctx, on.Slug, on.Done, sequenceId, onLogger)
-			if err != nil {
-				onLogger.Error().Err(err).Msg("Unable to send pipeline 'done' message")
-			}
-
-			continue
-		}
-
-		err = r.dispatchCalls(ctx, on, sequenceId, logger)
+		err = r.executeFunction(on, sequenceId, onLogger)
 		if err != nil {
 			mergedErrors = multierror.Append(mergedErrors, err)
 		}
@@ -126,78 +115,10 @@ func (r *Runner) SequenceCallback(
 	return true, mergedErrors
 }
 
-func (r *Runner) dispatchDone(ctx context.Context, onSlug string, done *dsl.Done, sequenceId string, logger zerolog.Logger) error {
-	var err error
-	if done.Errored {
-		err = errors.New("Pipeline errored")
-	}
-
-	err, sent := r.natsClient.PublishResult(
-		ctx,
-		time.Now(),
-		done.Completed,
-		err,
-		nats.ChannelNotify,
-		sequenceId,
-		onSlug,
-		nats.DoneMessageId,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	if sent {
-		logger.Info().Msg("Pipeline is done")
-	}
-
+func (r *Runner) executeFunction(on *dsl.On, sequenceId string, logger zerolog.Logger) error {
+	// TODO: Implement
+	logger.Debug().Msgf("Running function for on: %s, sequence: %s", on.Name, sequenceId)
 	return nil
-}
-
-func (r *Runner) dispatchCalls(ctx context.Context, on *dsl.On, sequenceId string, logger zerolog.Logger) error {
-	var wg sync.WaitGroup
-	var errs error
-
-	logger = logger.With().Str("on", on.Slug).Logger()
-	logger.Info().Msg("Running on calls")
-
-	numTasks := len(on.Calls)
-	errorchan := make(chan error, numTasks)
-
-	for _, call := range on.Calls {
-		call := call
-		wg.Add(1)
-		go r.dispatchCall(ctx, &wg, call, sequenceId, errorchan, logger)
-	}
-
-	wg.Wait()
-	close(errorchan)
-
-	for err := range errorchan {
-		errs = errors.Join(errs, err)
-	}
-
-	return errs
-}
-
-func (r *Runner) dispatchCall(ctx context.Context, wg *sync.WaitGroup, call *dsl.Call, sequenceId string, errorchan chan<- error, logger zerolog.Logger) {
-	defer wg.Done()
-
-	app, handler, found := strings.Cut(call.Label, "_")
-	if !found {
-		errorchan <- fmt.Errorf("Unable to parse app/handler from call %s", call.Name)
-		return
-	}
-
-	_, _, err := r.natsClient.Publish(ctx, call.Inputs, nats.ChannelRequest, sequenceId, call.Slug, app, handler)
-	if err != nil {
-		errorchan <- err
-		return
-	}
-
-	logger.Info().Msgf("Dispatched call: %s", call.Slug)
-
-	errorchan <- nil
 }
 
 // prepareHopsSchedules parses the schedule blocks in a hops config and inits

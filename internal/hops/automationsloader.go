@@ -26,8 +26,7 @@ type (
 	// DirNotifier watches a path and its subdirectories for changes
 	// notifying when one occurs
 	DirNotifier struct {
-		notifier reload.Notifier
-		watcher  *fsnotify.Watcher
+		watcher *fsnotify.Watcher
 	}
 
 	AutomationsLoader struct {
@@ -165,7 +164,7 @@ func (al *AutomationsLoader) GetForSequence(ctx context.Context, sequenceID stri
 	}
 
 	// If our hash isn't the same as our local, then we need to make sure to populate
-	// our local cache with this automations config to avoid store lookups in future.
+	// our local cache with this automation's config to avoid store lookups in future.
 	al.mu.RLock()
 	localHash := al.automations.Hash
 	al.mu.RUnlock()
@@ -291,7 +290,7 @@ func (d *DirNotifier) Notifier(ctx context.Context) reload.Notifier {
 				t.Reset(waitFor)
 
 			case <-ctx.Done():
-				break
+				return
 			}
 		}
 	}()

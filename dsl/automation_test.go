@@ -128,14 +128,14 @@ func TestAutomationHopsDecoding(t *testing.T) {
 			},
 			expectedHops: `{
 				"ons": [
-					{"label": "foo"},
-					{"label": "foo"},
-					{"label": "bar"}
+					{"label": "foo", "handler": "handle"},
+					{"label": "foo", "handler": "handle"},
+					{"label": "bar", "handler": "handle"}
 				]
 			}`,
 		},
 		{
-			name: "On and call blocks",
+			name: "On blocks",
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
@@ -143,25 +143,6 @@ func TestAutomationHopsDecoding(t *testing.T) {
 						on event_action {
 							name = "pipeline"
 							if = true != false
-
-							call app_handler {
-								name = "a_call"
-
-								if = event.value == "something"
-
-								inputs = {
-									a = "b"
-								}
-							}
-
-							call otherapp_handler {
-								if = a_call.completed
-							}
-
-							done {
-								completed = false
-								errored = false
-							}
 						}
 					`),
 				},
@@ -171,16 +152,7 @@ func TestAutomationHopsDecoding(t *testing.T) {
 					{
 						"label": "event_action",
 						"name": "pipeline",
-						"calls": [
-							{
-								"label": "app_handler",
-								"name": "a_call"
-							},
-							{
-								"label": "otherapp_handler"
-							}
-						],
-						"done": [{}]
+						"handler": "handle"
 					}
 				]
 			}`,
