@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ inputs.ref }}
-      
+
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
@@ -119,15 +119,15 @@ jobs:
           echo "EXT=$EXT" >> "$GITHUB_ENV"
 
           if [ ${{ matrix.goos }} == 'darwin' ]; then
-            CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=arm64 go build -o bin/hops-arm64 &
-            CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=amd64 go build -o bin/hops-amd64 &
+            CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=arm64 go build -C cmd/hops -o bin/hops-arm64 &
+            CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=amd64 go build -C cmd/hops -o bin/hops-amd64 &
             # wait for parallel builds to finish
             wait
             # create universal binary
             lipo -create -output bin/hops${EXT} bin/hops-arm64 bin/hops-amd64
             rm bin/hops-arm64 bin/hops-amd64
           else
-            CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o bin/hops${EXT}
+            CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -C cmd/hops -o bin/hops${EXT}
           fi
 
       - name: Import Code-Signing Certificates for macOS

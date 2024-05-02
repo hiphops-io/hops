@@ -1,355 +1,355 @@
 // Package hops contains the logic for running the hops server components and handling workloads
 package hops
 
-import (
-	"context"
-	"errors"
-	"time"
+// import (
+// 	"context"
+// 	"errors"
+// 	"time"
 
-	"github.com/oklog/run"
-	"github.com/rs/zerolog"
-	"github.com/slok/reload"
+// 	"github.com/oklog/run"
+// 	"github.com/rs/zerolog"
+// 	"github.com/slok/reload"
 
-	"github.com/hiphops-io/hops/internal/httpapp"
-	"github.com/hiphops-io/hops/internal/k8sapp"
-	"github.com/hiphops-io/hops/logs"
-	"github.com/hiphops-io/hops/nats"
-	"github.com/hiphops-io/hops/worker"
-)
+// 	"github.com/hiphops-io/hops/internal/httpapp"
+// 	"github.com/hiphops-io/hops/internal/k8sapp"
+// 	"github.com/hiphops-io/hops/logs"
+// 	"github.com/hiphops-io/hops/nats"
+// 	"github.com/hiphops-io/hops/worker"
+// )
 
-type (
-	HTTPServerConf struct {
-		Address string
-		Serve   bool
-	}
+// type (
+// 	HTTPServerConf struct {
+// 		Address string
+// 		Serve   bool
+// 	}
 
-	HopsServer struct {
-		HopsPath      string
-		KeyFilePath   string
-		Logger        zerolog.Logger
-		ReplayEvent   string
-		Watch         bool
-		reloadManager reload.Manager
-		runGroup      run.Group
+// 	HopsServer struct {
+// 		HopsPath      string
+// 		KeyFilePath   string
+// 		Logger        zerolog.Logger
+// 		ReplayEvent   string
+// 		Watch         bool
+// 		reloadManager reload.Manager
+// 		runGroup      run.Group
 
-		HTTPServerConf
-		HTTPAppConf
-		K8sAppConf
-		RunnerConf
-	}
+// 		HTTPServerConf
+// 		HTTPAppConf
+// 		K8sAppConf
+// 		RunnerConf
+// 	}
 
-	HTTPAppConf struct {
-		Serve bool
-	}
+// 	HTTPAppConf struct {
+// 		Serve bool
+// 	}
 
-	K8sAppConf struct {
-		KubeConfig  string
-		PortForward bool
-		Serve       bool
-	}
+// 	K8sAppConf struct {
+// 		KubeConfig  string
+// 		PortForward bool
+// 		Serve       bool
+// 	}
 
-	RunnerConf struct {
-		Serve bool
-		Local bool
-	}
-)
+// 	RunnerConf struct {
+// 		Serve bool
+// 		Local bool
+// 	}
+// )
 
-func (h *HopsServer) Start(ctx context.Context) error {
-	ctx, rootCancel := context.WithCancel(ctx)
-	defer rootCancel()
+// func (h *HopsServer) Start(ctx context.Context) error {
+// 	ctx, rootCancel := context.WithCancel(ctx)
+// 	defer rootCancel()
 
-	if !(h.RunnerConf.Serve || h.HTTPServerConf.Serve || h.K8sAppConf.Serve || h.HTTPAppConf.Serve) {
-		return errors.New("No components are enabled. Nothing to do.")
-	}
+// 	if !(h.RunnerConf.Serve || h.HTTPServerConf.Serve || h.K8sAppConf.Serve || h.HTTPAppConf.Serve) {
+// 		return errors.New("No components are enabled. Nothing to do.")
+// 	}
 
-	if h.Watch {
-		h.reloadManager = reload.NewManager()
-	}
+// 	if h.Watch {
+// 		h.reloadManager = reload.NewManager()
+// 	}
 
-	natsClient, err := h.startNATSClient()
-	if natsClient != nil {
-		defer natsClient.Close()
-	}
-	if err != nil {
-		h.Logger.Error().Err(err).Msg("Failed to start NATS client")
-		return err
-	}
+// 	natsClient, err := h.startNATSClient()
+// 	if natsClient != nil {
+// 		defer natsClient.Close()
+// 	}
+// 	if err != nil {
+// 		h.Logger.Error().Err(err).Msg("Failed to start NATS client")
+// 		return err
+// 	}
 
-	automationsLoader, err := NewAutomationsLoader(h.HopsPath, h.Watch, natsClient, h.Logger)
-	if err != nil {
-		h.Logger.Error().Err(err).Msg("Start failed")
-		return err
-	}
+// 	automationsLoader, err := NewAutomationsLoader(h.HopsPath, h.Watch, natsClient, h.Logger)
+// 	if err != nil {
+// 		h.Logger.Error().Err(err).Msg("Start failed")
+// 		return err
+// 	}
 
-	err = h.startRunner(ctx, automationsLoader, natsClient)
-	if err != nil {
-		return err
-	}
+// 	err = h.startRunner(ctx, automationsLoader, natsClient)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = h.startHTTPServer(automationsLoader, natsClient)
-	if err != nil {
-		return err
-	}
+// 	err = h.startHTTPServer(automationsLoader, natsClient)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = h.startHTTPApp(ctx, natsClient)
-	if err != nil {
-		return err
-	}
+// 	err = h.startHTTPApp(ctx, natsClient)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = h.startK8sApp(ctx, natsClient)
-	if err != nil {
-		return err
-	}
+// 	err = h.startK8sApp(ctx, natsClient)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = h.startReloader(ctx, automationsLoader)
-	if err != nil {
-		return err
-	}
+// 	err = h.startReloader(ctx, automationsLoader)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return h.runGroup.Run()
-}
+// 	return h.runGroup.Run()
+// }
 
-func (h *HopsServer) startHTTPApp(ctx context.Context, natsClient *nats.Client) error {
-	if !h.HTTPAppConf.Serve {
-		return nil
-	}
+// func (h *HopsServer) startHTTPApp(ctx context.Context, natsClient *nats.Client) error {
+// 	if !h.HTTPAppConf.Serve {
+// 		return nil
+// 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	start := func() error {
-		logger := h.Logger.With().Str("from", "httpapp").Logger()
+// 	ctx, cancel := context.WithCancel(ctx)
+// 	start := func() error {
+// 		logger := h.Logger.With().Str("from", "httpapp").Logger()
 
-		httpApp, err := httpapp.NewHTTPHandler(ctx, natsClient, logger)
-		if err != nil {
-			return err
-		}
+// 		httpApp, err := httpapp.NewHTTPHandler(ctx, natsClient, logger)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		zlogger := logs.NewNatsZeroLogger(logger)
-		worker := worker.NewWorker(natsClient, httpApp, &zlogger)
+// 		zlogger := logs.NewNatsZeroLogger(logger)
+// 		worker := worker.NewWorker(natsClient, httpApp, &zlogger)
 
-		// Blocks until complete or errored
-		return worker.Run(ctx)
-	}
+// 		// Blocks until complete or errored
+// 		return worker.Run(ctx)
+// 	}
 
-	h.runGroup.Add(
-		func() error {
-			return start()
-		},
-		func(_ error) {
-			cancel()
-		},
-	)
+// 	h.runGroup.Add(
+// 		func() error {
+// 			return start()
+// 		},
+// 		func(_ error) {
+// 			cancel()
+// 		},
+// 	)
 
-	return nil
-}
+// 	return nil
+// }
 
-func (h *HopsServer) startHTTPServer(automationsLoader *AutomationsLoader, natsClient *nats.Client) error {
-	if !h.HTTPServerConf.Serve {
-		return nil
-	}
+// func (h *HopsServer) startHTTPServer(automationsLoader *AutomationsLoader, natsClient *nats.Client) error {
+// 	if !h.HTTPServerConf.Serve {
+// 		return nil
+// 	}
 
-	httpServer, err := NewHTTPServer(h.Address, automationsLoader, natsClient, h.Logger)
-	if err != nil {
-		return err
-	}
+// 	httpServer, err := NewHTTPServer(h.Address, automationsLoader, natsClient, h.Logger)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	if h.Watch {
-		h.reloadManager.Add(10, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-			err := httpServer.Reload(ctx)
-			if errors.As(err, &ErrFailedHopsParse{}) {
-				h.Logger.Debug().Msgf("(Ignored in watch mode) %s", err.Error())
-			} else if err != nil {
-				return err
-			}
+// 	if h.Watch {
+// 		h.reloadManager.Add(10, reload.ReloaderFunc(func(ctx context.Context, id string) error {
+// 			err := httpServer.Reload(ctx)
+// 			if errors.As(err, &ErrFailedHopsParse{}) {
+// 				h.Logger.Debug().Msgf("(Ignored in watch mode) %s", err.Error())
+// 			} else if err != nil {
+// 				return err
+// 			}
 
-			return nil
-		}))
-	}
+// 			return nil
+// 		}))
+// 	}
 
-	h.runGroup.Add(
-		func() error {
-			return httpServer.Serve()
-		},
-		func(_ error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+// 	h.runGroup.Add(
+// 		func() error {
+// 			return httpServer.Serve()
+// 		},
+// 		func(_ error) {
+// 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 			defer cancel()
 
-			err := httpServer.Shutdown(ctx)
-			if err != nil {
-				h.Logger.Error().Err(err).Msg("Unable to shut down http server")
-			}
-		},
-	)
+// 			err := httpServer.Shutdown(ctx)
+// 			if err != nil {
+// 				h.Logger.Error().Err(err).Msg("Unable to shut down http server")
+// 			}
+// 		},
+// 	)
 
-	return nil
-}
+// 	return nil
+// }
 
-func (h *HopsServer) startK8sApp(ctx context.Context, natsClient *nats.Client) error {
-	if !h.K8sAppConf.Serve {
-		return nil
-	}
+// func (h *HopsServer) startK8sApp(ctx context.Context, natsClient *nats.Client) error {
+// 	if !h.K8sAppConf.Serve {
+// 		return nil
+// 	}
 
-	ctx, cancel := context.WithCancel(ctx)
+// 	ctx, cancel := context.WithCancel(ctx)
 
-	start := func() error {
-		logger := h.Logger.With().Str("from", "k8sapp").Logger()
+// 	start := func() error {
+// 		logger := h.Logger.With().Str("from", "k8sapp").Logger()
 
-		k8s, err := k8sapp.NewK8sHandler(ctx, natsClient, h.K8sAppConf.KubeConfig, h.K8sAppConf.PortForward, logger)
-		if err != nil {
-			return err
-		}
+// 		k8s, err := k8sapp.NewK8sHandler(ctx, natsClient, h.K8sAppConf.KubeConfig, h.K8sAppConf.PortForward, logger)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		// Due to automated config loading, this worker may naturally decide to not work.
-		// This will interrupt all other components
-		if k8s == nil {
-			logger.Warn().Msg("Unable to load kubeconfig, exiting")
-			return nil
-		}
+// 		// Due to automated config loading, this worker may naturally decide to not work.
+// 		// This will interrupt all other components
+// 		if k8s == nil {
+// 			logger.Warn().Msg("Unable to load kubeconfig, exiting")
+// 			return nil
+// 		}
 
-		zlogger := logs.NewNatsZeroLogger(logger)
-		worker := worker.NewWorker(natsClient, k8s, &zlogger)
+// 		zlogger := logs.NewNatsZeroLogger(logger)
+// 		worker := worker.NewWorker(natsClient, k8s, &zlogger)
 
-		// Blocks until complete or errored
-		return worker.Run(ctx)
-	}
+// 		// Blocks until complete or errored
+// 		return worker.Run(ctx)
+// 	}
 
-	h.runGroup.Add(
-		func() error {
-			return start()
-		},
-		func(_ error) {
-			cancel()
-		},
-	)
+// 	h.runGroup.Add(
+// 		func() error {
+// 			return start()
+// 		},
+// 		func(_ error) {
+// 			cancel()
+// 		},
+// 	)
 
-	return nil
-}
+// 	return nil
+// }
 
-func (h *HopsServer) startNATSClient() (*nats.Client, error) {
-	zlog := logs.NewNatsZeroLogger(h.Logger)
+// func (h *HopsServer) startNATSClient() (*nats.Client, error) {
+// 	zlog := logs.NewNatsZeroLogger(h.Logger)
 
-	keyFile, err := nats.NewKeyFile(h.KeyFilePath)
-	if err != nil {
-		h.Logger.Error().Err(err).Msg("Failed to load keyfile")
-		return nil, err
-	}
+// 	keyFile, err := nats.NewKeyFile(h.KeyFilePath)
+// 	if err != nil {
+// 		h.Logger.Error().Err(err).Msg("Failed to load keyfile")
+// 		return nil, err
+// 	}
 
-	clientOpts := []nats.ClientOpt{}
-	if h.ReplayEvent != "" {
-		clientOpts = append(clientOpts, nats.WithReplay(nats.DefaultConsumerName, h.ReplayEvent))
-		h.Logger.Info().Msgf("Replaying source event: %s", h.ReplayEvent)
-	} else if h.RunnerConf.Local && h.RunnerConf.Serve {
-		clientOpts = append(clientOpts, nats.WithLocalRunner(nats.DefaultConsumerName))
-		h.Logger.Info().Msgf("Running in local mode")
-	} else if h.RunnerConf.Serve {
-		clientOpts = append(clientOpts, nats.WithRunner(nats.DefaultConsumerName))
-	}
+// 	clientOpts := []nats.ClientOpt{}
+// 	if h.ReplayEvent != "" {
+// 		clientOpts = append(clientOpts, nats.WithReplay(nats.DefaultConsumerName, h.ReplayEvent))
+// 		h.Logger.Info().Msgf("Replaying source event: %s", h.ReplayEvent)
+// 	} else if h.RunnerConf.Local && h.RunnerConf.Serve {
+// 		clientOpts = append(clientOpts, nats.WithLocalRunner(nats.DefaultConsumerName))
+// 		h.Logger.Info().Msgf("Running in local mode")
+// 	} else if h.RunnerConf.Serve {
+// 		clientOpts = append(clientOpts, nats.WithRunner(nats.DefaultConsumerName))
+// 	}
 
-	if h.HTTPAppConf.Serve {
-		clientOpts = append(clientOpts, nats.WithWorker("http"))
-	}
+// 	if h.HTTPAppConf.Serve {
+// 		clientOpts = append(clientOpts, nats.WithWorker("http"))
+// 	}
 
-	if h.K8sAppConf.Serve {
-		clientOpts = append(clientOpts, nats.WithWorker("k8s"))
-	}
+// 	if h.K8sAppConf.Serve {
+// 		clientOpts = append(clientOpts, nats.WithWorker("k8s"))
+// 	}
 
-	natsClient, err := nats.NewClient(
-		keyFile.NatsUrl(),
-		keyFile.AccountId,
-		nats.DefaultInterestTopic,
-		&zlog,
-		clientOpts...,
-	)
-	if err != nil {
-		h.Logger.Error().Err(err).Msg("Failed to start NATS client")
-		return nil, err
-	}
+// 	natsClient, err := nats.NewClient(
+// 		keyFile.NatsUrl(),
+// 		keyFile.AccountId,
+// 		nats.DefaultInterestTopic,
+// 		&zlog,
+// 		clientOpts...,
+// 	)
+// 	if err != nil {
+// 		h.Logger.Error().Err(err).Msg("Failed to start NATS client")
+// 		return nil, err
+// 	}
 
-	return natsClient, nil
-}
+// 	return natsClient, nil
+// }
 
-func (h *HopsServer) startReloader(ctx context.Context, automationsLoader *AutomationsLoader) error {
-	if !h.Watch {
-		return nil
-	}
+// func (h *HopsServer) startReloader(ctx context.Context, automationsLoader *AutomationsLoader) error {
+// 	if !h.Watch {
+// 		return nil
+// 	}
 
-	h.reloadManager.Add(0, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-		err := automationsLoader.Reload(ctx, true)
-		if err != nil {
-			h.Logger.Warn().Msgf("Hops files could not be reloaded: %s", err.Error())
-			return nil
-		}
+// 	h.reloadManager.Add(0, reload.ReloaderFunc(func(ctx context.Context, id string) error {
+// 		err := automationsLoader.Reload(ctx, true)
+// 		if err != nil {
+// 			h.Logger.Warn().Msgf("Hops files could not be reloaded: %s", err.Error())
+// 			return nil
+// 		}
 
-		h.Logger.Info().Msg("Hops files reloaded")
-		return nil
-	}))
+// 		h.Logger.Info().Msg("Hops files reloaded")
+// 		return nil
+// 	}))
 
-	{
-		dirNotifier, err := NewDirNotifier(h.HopsPath)
-		if err != nil {
-			return err
-		}
+// 	{
+// 		dirNotifier, err := NewDirNotifier(h.HopsPath)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		// Add file watcher based reload notifier.
-		h.reloadManager.On(dirNotifier.Notifier(ctx))
+// 		// Add file watcher based reload notifier.
+// 		h.reloadManager.On(dirNotifier.Notifier(ctx))
 
-		ctx, cancel := context.WithCancel(ctx)
-		h.runGroup.Add(
-			func() error {
-				// Block forever until the watcher stops.
-				h.Logger.Info().Msgf("Watching %s for changes", h.HopsPath)
-				<-ctx.Done()
-				return nil
-			},
-			func(_ error) {
-				h.Logger.Info().Msg("Stopping hops file watcher")
-				dirNotifier.Close()
-				cancel()
-			},
-		)
-	}
+// 		ctx, cancel := context.WithCancel(ctx)
+// 		h.runGroup.Add(
+// 			func() error {
+// 				// Block forever until the watcher stops.
+// 				h.Logger.Info().Msgf("Watching %s for changes", h.HopsPath)
+// 				<-ctx.Done()
+// 				return nil
+// 			},
+// 			func(_ error) {
+// 				h.Logger.Info().Msg("Stopping hops file watcher")
+// 				dirNotifier.Close()
+// 				cancel()
+// 			},
+// 		)
+// 	}
 
-	{
-		ctx, cancel := context.WithCancel(ctx)
-		h.runGroup.Add(
-			func() error {
-				return h.reloadManager.Run(ctx)
-			},
-			func(_ error) {
-				// TODO: Avoid all reloader logic if watch not true
-				h.Logger.Info().Msg("Auto-reloading cancelled")
-				cancel()
-			},
-		)
-	}
+// 	{
+// 		ctx, cancel := context.WithCancel(ctx)
+// 		h.runGroup.Add(
+// 			func() error {
+// 				return h.reloadManager.Run(ctx)
+// 			},
+// 			func(_ error) {
+// 				// TODO: Avoid all reloader logic if watch not true
+// 				h.Logger.Info().Msg("Auto-reloading cancelled")
+// 				cancel()
+// 			},
+// 		)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
-func (h *HopsServer) startRunner(ctx context.Context, automationsLoader *AutomationsLoader, natsClient *nats.Client) error {
-	if !h.RunnerConf.Serve {
-		return nil
-	}
+// func (h *HopsServer) startRunner(ctx context.Context, automationsLoader *AutomationsLoader, natsClient *nats.Client) error {
+// 	if !h.RunnerConf.Serve {
+// 		return nil
+// 	}
 
-	runner, err := NewRunner(natsClient, automationsLoader, h.Logger)
-	if err != nil {
-		return err
-	}
+// 	runner, err := NewRunner(natsClient, automationsLoader, h.Logger)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	if h.Watch {
-		h.reloadManager.Add(10, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-			return runner.Reload(ctx)
-		}))
-	}
+// 	if h.Watch {
+// 		h.reloadManager.Add(10, reload.ReloaderFunc(func(ctx context.Context, id string) error {
+// 			return runner.Reload(ctx)
+// 		}))
+// 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	h.runGroup.Add(
-		func() error {
-			return runner.Run(ctx, nats.DefaultConsumerName)
-		},
-		func(_ error) {
-			cancel()
-		},
-	)
+// 	ctx, cancel := context.WithCancel(ctx)
+// 	h.runGroup.Add(
+// 		func() error {
+// 			return runner.Run(ctx, nats.DefaultConsumerName)
+// 		},
+// 		func(_ error) {
+// 			cancel()
+// 		},
+// 	)
 
-	return nil
-}
+// 	return nil
+// }

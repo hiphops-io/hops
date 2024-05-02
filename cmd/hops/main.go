@@ -15,16 +15,14 @@ limitations under the License.
 */
 package main
 
-import (
-	"log"
+// import (
+// 	"log"
+// )
 
-	"github.com/hiphops-io/hops/cmd"
-)
-
-func main() {
-	if err := cmd.Run(); err != nil {
-		// NOTE: Ideally we'd find a tidy way to use our internal logger for this
-		// so we have consistent log formats
-		log.Fatal(err)
-	}
-}
+// func main() {
+// 	if err := Run(); err != nil {
+// 		// NOTE: Ideally we'd find a tidy way to use our internal logger for this
+// 		// so we have consistent log formats
+// 		log.Fatal(err)
+// 	}
+// }

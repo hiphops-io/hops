@@ -2,29 +2,39 @@ package nats
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
+	"time"
 
-	"github.com/hiphops-io/hops/logs"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+type receivedMsg struct {
+	meta *MsgMeta
+	data []byte
+}
+
 func TestNewClient(t *testing.T) {
-	ctx := context.Background()
-	hopsNats, cleanup := setupClient(ctx, t)
+	client, cleanup := setupClient(t)
 	defer cleanup()
 
-	if assert.NotNil(t, hopsNats) {
-		defer hopsNats.Close()
-	}
+	assert.NotNil(t, client.JetStream, "Client should initialise JetStream")
+	assert.NotNil(t, client.NatsConn, "Client should initialise a NATS connection")
+	assert.True(t, client.CheckConnection(), "Client should correctly report connection status")
+}
 
-	if assert.NotNil(t, hopsNats.NatsConn) {
-		assert.True(t, hopsNats.NatsConn.IsConnected(), "HopsNats should be connected to NATS server")
-	}
+func TestClientClose(t *testing.T) {
+	client, cleanup := setupClient(t)
+	defer cleanup()
 
-	assert.NotNil(t, hopsNats.JetStream, "HopsNats should initialise JetStream")
-	assert.NotNil(t, hopsNats.Consumers[DefaultConsumerName], "HopsNats should initialise the Consumer")
+	require.True(t, client.CheckConnection(), "Client should be connected")
+
+	client.Close()
+
+	assert.False(t, client.CheckConnection(), "Client should not be connected after calling Close()")
 }
 
 func TestClientConsume(t *testing.T) {
@@ -32,110 +42,116 @@ func TestClientConsume(t *testing.T) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	hopsNats, cleanup := setupClient(ctx, t)
+	client, cleanup := setupClient(t)
 	defer cleanup()
 
-	type testMsg struct {
-		subject string
-		data    []byte
-	}
+	consumer, err := client.RunnerConsumer(ctx, DefaultInterestTopic, true)
+	require.NoError(t, err, "Consumer must be created without error")
 
-	receivedChan := make(chan testMsg)
+	msgData := []byte("Hello world")
+	sequenceID := "SEQ_ID"
+	subject := SourceEventSubject(DefaultInterestTopic, sequenceID)
 
-	go func() {
-		hopsNats.Consume(ctx, DefaultConsumerName, func(m jetstream.Msg) {
-			m.DoubleAck(ctx) // Ack before logging to avoid race condition in tests
-			receivedChan <- testMsg{
-				subject: m.Subject(),
-				data:    m.Data(),
-			}
-		})
-	}()
+	msg, err := publishAndConsumeMessage(t, client, consumer, msgData, subject)
+	require.NoError(t, err, "Publishing and consuming a message should not return an error")
 
-	_, _, err := hopsNats.Publish(ctx, []byte("Hello world"), ChannelNotify, "SEQ_ID", "MSG_ID")
-	if assert.NoError(t, err, "Message should be published without errror") {
-		receivedMsg := <-receivedChan
-		assert.Contains(t, receivedMsg.subject, "SEQ_ID.MSG_ID")
-		assert.Equal(t, []byte("Hello world"), receivedMsg.data)
-	}
+	assert.Equal(t, msg.meta.Subject, fmt.Sprintf("notify.%s.%s.event", DefaultInterestTopic, sequenceID))
+	assert.Equal(t, msgData, msg.data)
 }
 
-type testSequenceHandler struct {
-	receivedChan chan MessageBundle
-}
-
-func (t *testSequenceHandler) SequenceCallback(ctx context.Context, sequenceId string, msgBundle MessageBundle) (bool, error) {
-	t.receivedChan <- msgBundle
-	return true, nil
-}
-
-func TestClientConsumeSequences(t *testing.T) {
+func TestClientPublish(t *testing.T) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	hopsNats, cleanup := setupClient(ctx, t)
+	client, cleanup := setupClient(t)
 	defer cleanup()
 
-	receivedChan := make(chan MessageBundle)
-	expectedBundleOne := MessageBundle{
-		"event": []byte("One"),
-	}
-	expectedBundleTwo := MessageBundle{
-		"event":     []byte("One"),
-		"event-two": []byte("Two"),
-	}
-	expectedBundleThree := MessageBundle{
-		"event":       []byte("One"),
-		"event-two":   []byte("Two"),
-		"event-three": []byte("Three"),
-	}
+	subject := SourceEventSubject(DefaultInterestTopic, "SEQ_ID")
+	_, sent, err := client.Publish(ctx, []byte("a"), subject)
+	assert.NoError(t, err, "Message should be published without error")
+	assert.True(t, sent, "Message should be sent")
 
-	sqncHandler := &testSequenceHandler{receivedChan: receivedChan}
+	_, sent, err = client.Publish(ctx, []byte("a"), subject)
+	assert.NoError(t, err, "Duplicate message should be ignored without error")
+	assert.False(t, sent, "Duplicate message should not be sent")
+}
+
+// TODO: Test that a deleted message is still protect for idempotency by using expected sequence
+func TestClientWorkerPublish(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	client, cleanup := setupClient(t)
+	defer cleanup()
+
+	consumer, err := client.WorkerConsumer(ctx, "app", DefaultInterestTopic, true)
+	require.NoError(t, err, "Consumer must be created without error")
+
+	msgData := []byte("Hello world")
+	subject := RequestSubject(DefaultInterestTopic, "SEQ_ID", "MSG_ID", "app", "handler")
+
+	_, err = publishAndConsumeMessage(t, client, consumer, msgData, subject)
+	require.NoError(t, err)
+
+	// Check pending messages in the consumer is now zero
+	info, err := consumer.Info(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, info.NumAckPending, "All messages should have been acked")
+
+	// Now we send another message on the same subject.
+	// This should be rejected even though the worker consumer has caused the message to be deleted
+	_, sent, err := client.Publish(ctx, []byte("a"), subject)
+	assert.NoError(t, err, "Duplicate message should be ignored without error")
+	assert.False(t, sent, "Duplicate message should not be sent")
+}
+
+// publishAndConsumeMessage is a helper method to send a message and consume it,
+// returning the message as it was received by the handler
+func publishAndConsumeMessage(t *testing.T, client *Client, consumer jetstream.Consumer, msgData []byte, subject string) (receivedMsg, error) {
+	ctx := context.Background()
+	msgChan := make(chan receivedMsg)
 
 	go func() {
-		hopsNats.ConsumeSequences(ctx, DefaultConsumerName, sqncHandler)
+		client.Consume(ctx, consumer, func(ctx context.Context, msgData []byte, msgMeta *MsgMeta, ackDeadline time.Duration) error {
+			// We double ack here as otherwise there's a race condition where we could
+			// return the received message back before client.Consume finished everything up.
+			msgMeta.msg.DoubleAck(ctx)
+
+			msgChan <- receivedMsg{
+				meta: msgMeta,
+				data: msgData,
+			}
+
+			return nil
+		})
 	}()
 
-	_, _, err := hopsNats.Publish(ctx, []byte("One"), ChannelNotify, "SEQ_ID", "event")
-	if assert.NoError(t, err, "Message should be published without error") {
-		receivedMsgBundle := <-receivedChan
-		assert.Equal(t, receivedMsgBundle, expectedBundleOne)
+	_, _, err := client.Publish(ctx, msgData, subject)
+	require.NoError(t, err, "Message should be published without error")
+
+	select {
+	case msg := <-msgChan:
+		return msg, nil
+	case <-time.After(2 * time.Second):
+		t.Error("Message not received within time limit")
 	}
 
-	_, _, err = hopsNats.Publish(ctx, []byte("Two"), ChannelNotify, "SEQ_ID", "event-two")
-	if assert.NoError(t, err, "Second message in sequence should be published without error") {
-		receivedMsgBundle := <-receivedChan
-		assert.Equal(t, receivedMsgBundle, expectedBundleTwo)
-	}
-
-	_, _, err = hopsNats.Publish(ctx, []byte("Three"), ChannelNotify, "SEQ_ID", "event-three")
-	if assert.NoError(t, err, "Third message in sequence should be published without error") {
-		receivedMsgBundle := <-receivedChan
-		assert.Equal(t, receivedMsgBundle, expectedBundleThree)
-	}
+	return receivedMsg{}, errors.New("Unknown failure - expected message not consumed")
 }
 
 // setupClient is a test helper to create an instance of HopsNats with a local NATS server
-func setupClient(ctx context.Context, t *testing.T) (*Client, func()) {
-	localNats := setupLocalNatsServer(t)
+func setupClient(t *testing.T) (*Client, func()) {
+	server := setupNatsServer(t)
 
-	logger := logs.NoOpLogger()
-	natsLogger := logs.NewNatsZeroLogger(logger)
-
-	authUrl, err := localNats.AuthUrl("")
-	require.NoError(t, err, "Test setup: Should have valid auth URL for NATS")
-
-	user, err := localNats.User("")
-	require.NoError(t, err, "Test setup: Should have valid NATS user")
-
-	hopsNats, err := NewClient(authUrl, user.Account.Name, DefaultInterestTopic, &natsLogger)
+	client, err := NewClient(server.Server.ClientURL())
 	require.NoError(t, err, "Test setup: HopsNats should initialise without error")
 
 	cleanup := func() {
-		hopsNats.Close()
-		localNats.Close()
+		client.Close()
+		server.Close()
 	}
 
-	return hopsNats, cleanup
+	return client, cleanup
 }

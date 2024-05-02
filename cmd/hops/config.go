@@ -13,24 +13,24 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package cmd
+package main
 
-import (
-	"github.com/urfave/cli/v2"
-)
+// import (
+// 	"github.com/urfave/cli/v2"
+// )
 
-const (
-	configShortDesc = "Configure hiphops"
-	configLongDesc  = "Helper commands to configure hiphops"
-)
+// const (
+// 	configShortDesc = "Configure hiphops"
+// 	configLongDesc  = "Helper commands to configure hiphops"
+// )
 
-func initConfigCommand(commonFlags []cli.Flag) *cli.Command {
-	return &cli.Command{
-		Name:        "config",
-		Usage:       configShortDesc,
-		Description: configLongDesc,
-		Subcommands: []*cli.Command{
-			initAddKeyCommand(commonFlags),
-		},
-	}
-}
+// func initConfigCommand(commonFlags []cli.Flag) *cli.Command {
+// 	return &cli.Command{
+// 		Name:        "config",
+// 		Usage:       configShortDesc,
+// 		Description: configLongDesc,
+// 		Subcommands: []*cli.Command{
+// 			initAddKeyCommand(commonFlags),
+// 		},
+// 	}
+// }

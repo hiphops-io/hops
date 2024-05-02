@@ -12,6 +12,5 @@ func HealthChecker(natsClient *Client) func(w http.ResponseWriter, r *http.Reque
 		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
-		return
 	}
 }

@@ -41,7 +41,7 @@ func TestEvaluateValid(t *testing.T) {
 
 		// Test the first on block had the proper values
 		assert.Equal(t, "change_merged", ons[0].Label)
-		assert.Equal(t, "a_sensor", ons[0].Slug)
+		assert.Equal(t, "change_merged-a_sensor", ons[0].Slug)
 		assert.Equal(t, "handler", ons[0].Handler)
 
 		// Test the second on block had the proper values
@@ -50,7 +50,7 @@ func TestEvaluateValid(t *testing.T) {
 		// assert.Len(t, ons[1].Calls, 0)
 
 		// Test the index named on block had the proper values
-		assert.Equal(t, "", ons[2].Name)
-		assert.Equal(t, "change2", ons[2].Slug)
+		assert.Equal(t, "do_change", ons[2].Name)
+		assert.Equal(t, "change-do_change", ons[2].Slug)
 	}
 }

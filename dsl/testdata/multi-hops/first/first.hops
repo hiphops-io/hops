@@ -1,5 +1,4 @@
-on change_merged {
-  name = "a_sensor"
+on change_merged a_sensor {
   if = true == true && glob("foo", "fo*")
   handler = "handler"
 }

@@ -16,19 +16,18 @@ func TestSchemaValidation(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "Simple valid config",
-			hops: `on foo {}`,
+			hops: `on foo handle_foo {}`,
 		},
 		{
 			name: "Full valid config",
 			hops: `
-			on anevent_action {
-				name = "anevent"
+			on anevent_action handle_event {
 				handler = "handler"
 			}
 
-			on bar {}
+			on bar handle_bar {}
 
-			on bar {
+			on bar handle_bar_two {
 				script = "console.log('Hello, World!')"
 			}
 			
@@ -71,32 +70,32 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Unknown root attribute",
 			hops: `
-			on foo {}
+			on foo my_foo {}
 			bar = ""`,
 			numDiags: 1,
 		},
 		{
 			name: "Unknown root block",
 			hops: `
-			on foo {}
+			on foo do_thing {}
 			bar {}`,
 			numDiags: 1,
 		},
 		{
-			name:     "On too many labels",
-			hops:     `on foo bar {}`,
+			name:     "On too few labels",
+			hops:     `on foo {}`,
 			numDiags: 1,
 		},
 		{
 			name: "On unknown attribute",
-			hops: `on foo {
+			hops: `on foo handle_foo {
 				an_unknown_attr = "value"
 			}`,
 			numDiags: 1,
 		},
 		{
 			name: "On unknown block",
-			hops: `on foo {
+			hops: `on foo do_thing {
 				an_unknown_block {
 					val = "val"
 				}
@@ -107,14 +106,15 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Invalid labels",
 			hops: `
-			on FOO {}
-			on _foo {}
-			on foo_ {}
-			on fo-o {}
-			on foo__bar {}
-			on areallylonglabelisnotallowed_the_max_is_fifty_chars {}
+			on FOO bar {}
+			on foo BAR1 {}
+			on foo areallylonglabelisnotallowed_the_max_is_fifty_chars {}
+			on _foo bar2 {}
+			on foo_ bar3 {}
+			on fo-o bar4 {}
+			on foo__bar buzz {}
+			on areallylonglabelisnotallowed_the_max_is_fifty_chars foo {}
 
-			
 			task FOO {}
 
 			task foo {
@@ -125,7 +125,7 @@ func TestSchemaValidation(t *testing.T) {
 				cron = "@daily"
 			}
 			`,
-			numDiags: 9,
+			numDiags: 11,
 		},
 		{
 			name: "Invalid schedule cron",
@@ -135,7 +135,7 @@ func TestSchemaValidation(t *testing.T) {
 			}
 			
 			schedule gibberish {
-				cron = "ekekekeh! 12 12"
+				cron = "Ekekekeh! Ni! Ni! Ni!"
 			}
 
 			schedule wrong_cron_format {
@@ -175,9 +175,7 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Shared names different types",
 			hops: `
-			on app_event {
-				name = "same"
-			}
+			on app_event same {}
 
 			schedule same {
 				cron = "@daily"
@@ -189,13 +187,8 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Duplicate on names",
 			hops: `
-			on app_event {
-				name = "same"
-			}
-
-			on app_event {
-				name = "same"
-			}
+			on app_event same {}
+			on app_event same {}
 			`,
 			numDiags: 1,
 		},
@@ -270,7 +263,7 @@ func TestAutomationValidation(t *testing.T) {
 		{
 			name: "Valid",
 			files: []*AutomationFile{
-				{"one/main.hops", []byte(`on foo {}`)},
+				{"one/main.hops", []byte(`on foo ensure_foo_is_good {}`)},
 				{"one/other.txt", []byte(``)},
 			},
 			numDiags: 0,
@@ -281,16 +274,12 @@ func TestAutomationValidation(t *testing.T) {
 				{
 					"one/invalid.hops",
 					[]byte(`
-						on foo {
-							call app_handler {
-								inputs {
-									inputs_should_not = "be_a_block"
-								}
-							}
+						on foo bar {
+							no_such_attribute = "anything"
 						}
 					`),
 				},
-				{"two/invalid.hops", []byte(`on foo extra_label {}`)},
+				{"two/invalid.hops", []byte(`on only_one_label {}`)},
 			},
 			numDiags: 2,
 		},
@@ -300,13 +289,8 @@ func TestAutomationValidation(t *testing.T) {
 				{
 					"one/invalid.hops",
 					[]byte(`
-						on foo {
-							name = "the_same"
-						}
-
-						on foo {
-							name = "the_same"
-						}
+						on foo do_good_foo {}
+						on foo do_good_foo {}
 					`),
 				},
 			},
@@ -317,19 +301,11 @@ func TestAutomationValidation(t *testing.T) {
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
-					[]byte(`
-						on foo {
-							name = "the_same"
-						}
-					`),
+					[]byte(`on foo do_good_foo {}`),
 				},
 				{
 					"one/copy.hops",
-					[]byte(`
-						on foo {
-							name = "the_same"
-						}
-					`),
+					[]byte(`on foo do_good_foo {}`),
 				},
 			},
 			numDiags: 1,
@@ -339,18 +315,12 @@ func TestAutomationValidation(t *testing.T) {
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
-					[]byte(`
-						on foo {
-							name = "the_same"
-						}
-					`),
+					[]byte(`on foo do_good_foo {}`),
 				},
 				{
 					"two/main.hops",
 					[]byte(`
-						on foo {
-							name = "the_same"
-						}
+						on foo do_good_foo {}
 					`),
 				},
 			},

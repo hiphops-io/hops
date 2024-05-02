@@ -124,25 +124,31 @@ func (h *HopsValidator) BlockStruct(ast hclReader) hcl.Diagnostics {
 // BlockErrsToDiagnostics converts validation errors into hcl.Diagnostics
 //
 // Note that this _only_ works for hcl attributes and labels, not block fields.
-// Labels must have a name starting with `label` e.g. `hcl:"label,label" or hcl:"label_1,label"`
 func BlockErrsToDiagnostics(ast hclReader, errs validator.ValidationErrors) hcl.Diagnostics {
 	block := ast.Block()
 	d := hcl.Diagnostics{}
 
 	for _, v := range errs {
-		fieldName := v.Field()
-		switch {
-		case strings.HasPrefix(fieldName, "label"):
+		switch v.ActualTag() {
+		case "block_label":
+			// We use the entire range of all labels for this diagnostic
+			labelRange := block.LabelRanges[0]
+			if numLabels := len(block.LabelRanges); numLabels > 1 {
+				labelRange = hcl.RangeOver(block.LabelRanges[0], block.LabelRanges[numLabels-1])
+			}
+
 			d = d.Append(
 				&hcl.Diagnostic{
 					Severity: hcl.DiagError,
-					Summary:  fmt.Sprintf("Invalid label for `%s` block", block.Type),
+					Summary:  fmt.Sprintf("Invalid label(s) for `%s` block", block.Type),
 					Detail:   prettyMsg(v),
-					Subject:  &block.LabelRanges[0],
+					Subject:  &labelRange,
 					Context:  &block.DefRange,
 				},
 			)
 		default:
+			fieldName := v.Field()
+
 			attributes, diags := block.Body.JustAttributes()
 			if diags.HasErrors() {
 				d.Extend(diags)
