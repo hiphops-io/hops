@@ -21,7 +21,6 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nats-io/nats.go v1.33.0
 	github.com/oklog/run v1.1.0
-	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/robfig/cron v1.2.0
 	github.com/rs/zerolog v1.32.0
 	github.com/slok/reload v0.1.0
