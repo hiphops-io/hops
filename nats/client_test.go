@@ -45,17 +45,17 @@ func TestClientConsume(t *testing.T) {
 	client, cleanup := setupClient(t)
 	defer cleanup()
 
-	consumer, err := client.RunnerConsumer(ctx, DefaultInterestTopic, true)
+	consumer, err := client.RunnerConsumer(ctx)
 	require.NoError(t, err, "Consumer must be created without error")
 
 	msgData := []byte("Hello world")
 	sequenceID := "SEQ_ID"
-	subject := SourceEventSubject(DefaultInterestTopic, sequenceID)
+	subject := SourceEventSubject(sequenceID)
 
 	msg, err := publishAndConsumeMessage(t, client, consumer, msgData, subject)
 	require.NoError(t, err, "Publishing and consuming a message should not return an error")
 
-	assert.Equal(t, msg.meta.Subject, fmt.Sprintf("notify.%s.%s.event", DefaultInterestTopic, sequenceID))
+	assert.Equal(t, msg.meta.Subject, fmt.Sprintf("notify.%s.event", sequenceID))
 	assert.Equal(t, msgData, msg.data)
 }
 
@@ -67,7 +67,7 @@ func TestClientPublish(t *testing.T) {
 	client, cleanup := setupClient(t)
 	defer cleanup()
 
-	subject := SourceEventSubject(DefaultInterestTopic, "SEQ_ID")
+	subject := SourceEventSubject("SEQ_ID")
 	_, sent, err := client.Publish(ctx, []byte("a"), subject)
 	assert.NoError(t, err, "Message should be published without error")
 	assert.True(t, sent, "Message should be sent")
@@ -86,11 +86,11 @@ func TestClientWorkerPublish(t *testing.T) {
 	client, cleanup := setupClient(t)
 	defer cleanup()
 
-	consumer, err := client.WorkerConsumer(ctx, "app", DefaultInterestTopic, true)
+	consumer, err := client.WorkerConsumer(ctx, "app", true)
 	require.NoError(t, err, "Consumer must be created without error")
 
 	msgData := []byte("Hello world")
-	subject := RequestSubject(DefaultInterestTopic, "SEQ_ID", "MSG_ID", "app", "handler")
+	subject := RequestSubject("SEQ_ID", "MSG_ID", "app", "handler")
 
 	_, err = publishAndConsumeMessage(t, client, consumer, msgData, subject)
 	require.NoError(t, err)
@@ -145,7 +145,7 @@ func publishAndConsumeMessage(t *testing.T, client *Client, consumer jetstream.C
 func setupClient(t *testing.T) (*Client, func()) {
 	server := setupNatsServer(t)
 
-	client, err := NewClient(server.Server.ClientURL())
+	client, err := NewClient(server.URL())
 	require.NoError(t, err, "Test setup: HopsNats should initialise without error")
 
 	cleanup := func() {

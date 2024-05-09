@@ -17,33 +17,40 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-type NatsServer struct {
-	Server  *server.Server
-	Options *server.Options
-}
+type (
+	NatsServer struct {
+		Server  *server.Server
+		Options *server.Options
+	}
+
+	ServerOpt func(*server.Options)
+)
 
 // NewNatsServer starts an in-process nats server from a config file
 //
 // This will create the NATS server and ensure the streams required for hops to
 // function exist.
 // NatsServer.Close() should be called when finished with the server
-func NewNatsServer(natsConfigPath string, dataDir string, debug bool, logger server.Logger) (*NatsServer, error) {
+func NewNatsServer(configPath string, debug bool, logger server.Logger, serverOpts ...ServerOpt) (*NatsServer, error) {
 	ctx := context.Background()
-
-	n := &NatsServer{}
-
-	err := n.initServerOpts(natsConfigPath, dataDir)
+	opts, err := server.ProcessConfigFile(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	err = n.initServer(debug, logger)
-	if err != nil {
+	for _, opt := range serverOpts {
+		opt(opts)
+	}
+
+	n := &NatsServer{
+		Options: opts,
+	}
+
+	if err := n.initServer(debug, logger); err != nil {
 		return nil, err
 	}
 
-	err = n.initStreams(ctx)
-	if err != nil {
+	if err = n.initStreams(ctx); err != nil {
 		return nil, err
 	}
 
@@ -63,6 +70,10 @@ func (n *NatsServer) Connect() (*nats.Conn, error) {
 	return nats.Connect(url)
 }
 
+func (n *NatsServer) URL() string {
+	return n.Server.ClientURL()
+}
+
 func (n *NatsServer) initServer(debug bool, logger server.Logger) error {
 	server, err := server.NewServer(n.Options)
 	if err != nil {
@@ -78,20 +89,6 @@ func (n *NatsServer) initServer(debug bool, logger server.Logger) error {
 	}
 
 	n.Server = server
-	return nil
-}
-
-func (n *NatsServer) initServerOpts(natsConfigPath string, dataDir string) error {
-	opts, err := server.ProcessConfigFile(natsConfigPath)
-	if err != nil {
-		return err
-	}
-
-	if opts.StoreDir == "" {
-		opts.StoreDir = dataDir
-	}
-
-	n.Options = opts
 	return nil
 }
 

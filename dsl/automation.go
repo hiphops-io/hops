@@ -14,8 +14,9 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/zclconf/go-cty/cty"
 
-	"github.com/hiphops-io/hops/dsl/ctyutils"
+	"github.com/hiphops-io/hops/dsl/ctyconv"
 )
 
 const (
@@ -134,7 +135,7 @@ func NewAutomationsFromDir(dirPath string) (*Automations, hcl.Diagnostics, error
 	return a, d, nil
 }
 
-func (a *Automations) EventOns(eventBundle map[string][]byte) ([]*On, hcl.Diagnostics) {
+func (a *Automations) EventOns(eventData []byte) ([]*On, hcl.Diagnostics) {
 	d := hcl.Diagnostics{}
 	ons := []*On{}
 
@@ -142,20 +143,21 @@ func (a *Automations) EventOns(eventBundle map[string][]byte) ([]*On, hcl.Diagno
 		return nil, d
 	}
 
-	variables, err := ctyutils.EventBundleToCty(eventBundle, "-")
+	eventVal, err := ctyconv.JSONToCtyValue(eventData)
 	if err != nil {
 		d = d.Append(&hcl.Diagnostic{
 			Severity: hcl.DiagError,
-			Summary:  "Unable to parse pipeline event data",
-			Detail:   fmt.Sprintf("An error occurred parsing the event bundle: %s", err.Error()),
+			Summary:  "Unable to parse source event",
+			Detail:   fmt.Sprintf("An error occurred parsing the event: %s", err.Error()),
 		})
 		return nil, d
 	}
 
-	evaluationCtx := NewEvaluationCtx(a, variables)
+	ctxVars := map[string]cty.Value{"event": eventVal}
+	evaluationCtx := NewEvaluationCtx(a, ctxVars)
 
 	// Get the event name/action from the bundle
-	event, action, err := ctyutils.ParseEventVar(evaluationCtx.evalCtx.Variables, HopsMetaKey)
+	event, action, err := ctyconv.CtyToEventAction(eventVal, HopsMetaKey)
 	if err != nil {
 		return nil, hcl.Diagnostics{
 			&hcl.Diagnostic{

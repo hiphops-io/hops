@@ -7,7 +7,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 
-	"github.com/hiphops-io/hops/dsl/ctyutils"
+	"github.com/hiphops-io/hops/dsl/ctyconv"
 )
 
 // TemplateFunc is a stateful cty function that evaluates a file and variables
@@ -36,7 +36,7 @@ func TemplateFunc(files map[string][]byte, hopsDirectory string) function.Functi
 			filename := filenameVal.AsString()
 			variablesVal := args[1]
 
-			ctyVariables, err := ctyutils.ConvertCtyValueToInterface(variablesVal)
+			ctyVariables, err := ctyconv.CtyValueToInterface(variablesVal)
 			if err != nil {
 				return cty.Value{}, err
 			}

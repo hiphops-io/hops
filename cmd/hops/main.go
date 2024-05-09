@@ -1,28 +1,42 @@
-/*
-Copyright © 2023 Tom Manterfield <tom@hiphops.io>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-	http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package main
 
-// import (
-// 	"log"
-// )
+import (
+	"os"
 
-// func main() {
-// 	if err := Run(); err != nil {
-// 		// NOTE: Ideally we'd find a tidy way to use our internal logger for this
-// 		// so we have consistent log formats
-// 		log.Fatal(err)
-// 	}
-// }
+	"github.com/alexflint/go-arg"
+	"github.com/hiphops-io/hops/config"
+	"github.com/mitchellh/go-homedir"
+)
+
+type CLIArgs struct {
+	Directory string `arg:"-d,--dir,env:HIPHOPS_DIR" default:"." help:"path to Hiphops dir" placeholder:"HIPHOPS_DIR"`
+	Tag       string `arg:"-t,--tag,env:HIPHOPS_TAG" help:"config overlay to apply e.g. 'dev'"`
+}
+
+func (CLIArgs) Description() string {
+	return "Hops provides core orchestration, event handling, and messaging for Hiphops"
+}
+
+func Run() error {
+	cli := CLIArgs{}
+	arg.MustParse(&cli)
+
+	if expanded, err := homedir.Expand(cli.Directory); err != nil {
+		return err
+	} else {
+		cli.Directory = expanded
+	}
+
+	config, err := config.LoadConfig(cli.Directory, cli.Tag)
+	if err != nil {
+		return err
+	}
+
+	return Start(config)
+}
+
+func main() {
+	if err := Run(); err != nil {
+		os.Exit(1)
+	}
+}

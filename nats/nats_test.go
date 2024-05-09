@@ -3,9 +3,11 @@ package nats
 import (
 	"testing"
 
-	"github.com/hiphops-io/hops/logs"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/hiphops-io/hops/logs"
 )
 
 func TestNewNatsServer(t *testing.T) {
@@ -34,12 +36,13 @@ func TestNatsServerClose(t *testing.T) {
 
 // setupNatsServer is a test helper to create a local NATS server with a silent logger
 func setupNatsServer(t *testing.T) *NatsServer {
-	natsDir := t.TempDir()
 	// Create no-op logger
 	logger := logs.NoOpLogger()
 	natsLogger := logs.NewNatsZeroLogger(logger)
 
-	natsServer, err := NewNatsServer("./testdata/embedded-nats.conf", natsDir, false, &natsLogger)
+	natsServer, err := NewNatsServer("./testdata/embedded-nats.conf", false, &natsLogger, func(opts *server.Options) {
+		opts.StoreDir = t.TempDir()
+	})
 	require.NoError(t, err, "Test setup: Embedded NATS server should start without errors")
 
 	return natsServer

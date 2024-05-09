@@ -13,10 +13,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const DefaultInterestTopic = "default"
-
 var (
-	ErrEventFatal          = errors.New("unprocessable event, terminating message retries")
+	ErrEventFatal          = errors.New("unrecoverable error handling event")
 	nameReplacer           = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
 	wrongSequenceErrString = fmt.Sprintf("err_code=%d", jetstream.JSErrCodeStreamWrongLastSequence)
 )
@@ -55,9 +53,14 @@ func (c *Client) CheckConnection() bool {
 	return c.NatsConn.IsConnected()
 }
 
-func (c *Client) Close() {
+// Close closes the nats connection
+//
+// Note: An error will only be returned if closing doesn't complete within 1m.
+// It is possible for the client to close after erroring, so it should
+// never be re-used after calling Close.
+func (c *Client) Close() error {
 	if c.NatsConn.IsClosed() {
-		return
+		return nil
 	}
 
 	closedChan := make(chan struct{})
@@ -69,9 +72,9 @@ func (c *Client) Close() {
 
 	select {
 	case <-closedChan:
-	case <-time.After(30 * time.Second):
-		// TODO: We likely want to communicate that this hasn't yet closed properly within
-		// the expected time.
+		return nil
+	case <-time.After(1 * time.Minute):
+		return errors.New("client connection did not close within timeout")
 	}
 }
 
@@ -79,7 +82,11 @@ func (c *Client) Close() {
 //
 // TODO: Investigate if this is the best place to handle automatically extending the ack deadline.
 // If so then do that and potentially remove deadline from handler signature. If not then remove this note
-func (c *Client) Consume(ctx context.Context, consumer jetstream.Consumer, handler MessageHandler) error {
+func (c *Client) Consume(
+	ctx context.Context,
+	consumer jetstream.Consumer,
+	handler MessageHandler,
+) error {
 	g, ctx := errgroup.WithContext(ctx)
 	// Note: In future we should make the active goroutine limit configurable
 	g.SetLimit(20)
@@ -89,16 +96,15 @@ func (c *Client) Consume(ctx context.Context, consumer jetstream.Consumer, handl
 	callback := func(msg jetstream.Msg) {
 		msgMeta, err := Parse(msg)
 		if err != nil {
-			// Terminate any messages that are unparsable as there's no way to recover.
-			msg.Term()
-			// TODO: Add logging
+			// There's no way to recover an unparseable event
+			msg.TermWithReason(fmt.Sprintf("unable to parse event: %s", err.Error()))
 			return
 		}
 
 		g.Go(func() error {
 			err := handler(ctx, msg.Data(), msgMeta, deadline)
 			if errors.Is(err, ErrEventFatal) {
-				msg.Term()
+				msg.TermWithReason(err.Error())
 				return nil
 			}
 			if err != nil {
@@ -106,14 +112,10 @@ func (c *Client) Consume(ctx context.Context, consumer jetstream.Consumer, handl
 				return nil
 			}
 
-			err = DoubleAck(ctx, msg)
-			if err != nil {
-				// TODO: Log this
-			}
+			DoubleAck(ctx, msg)
 
 			return nil
 		})
-
 	}
 
 	consumerCtx, err := consumer.Consume(callback)
@@ -161,7 +163,7 @@ func (c *Client) PublishResult(
 }
 
 // ReplayConsumer returns a consumer for replaying events
-func (c *Client) ReplayConsumer(ctx context.Context, interestTopic string, sequenceId string) (jetstream.Consumer, error) {
+func (c *Client) ReplayConsumer(ctx context.Context, sequenceId string) (jetstream.Consumer, error) {
 	// Create a new, random replay sequence ID
 	replaySequenceId := fmt.Sprintf("replay-%s", uuid.NewString()[:20])
 
@@ -171,7 +173,7 @@ func (c *Client) ReplayConsumer(ctx context.Context, interestTopic string, seque
 	}
 
 	// Get the source message to be replayed from the stream
-	rawMsg, err := stream.GetLastMsgForSubject(ctx, SourceEventSubject(interestTopic, sequenceId))
+	rawMsg, err := stream.GetLastMsgForSubject(ctx, SourceEventSubject(sequenceId))
 	if err != nil || rawMsg == nil {
 		return nil, fmt.Errorf("Failed to fetch source event for '%s': %w", sequenceId, err)
 	}
@@ -180,7 +182,7 @@ func (c *Client) ReplayConsumer(ctx context.Context, interestTopic string, seque
 	consumerCfg := jetstream.ConsumerConfig{
 		Name:          replaySequenceId,
 		Description:   fmt.Sprintf("Replaying event: '%s'", sequenceId),
-		FilterSubject: ReplayFilterSubject(interestTopic, replaySequenceId),
+		FilterSubject: ReplayFilterSubject(replaySequenceId),
 		DeliverPolicy: jetstream.DeliverAllPolicy,
 	}
 	consumer, err := c.JetStream.CreateConsumer(ctx, ChannelNotify, consumerCfg)
@@ -190,22 +192,17 @@ func (c *Client) ReplayConsumer(ctx context.Context, interestTopic string, seque
 
 	// Publish the source message with replayed sequence ID so it's picked up by
 	// ephemeral consumer
-	c.Publish(ctx, rawMsg.Data, SourceEventSubject(interestTopic, replaySequenceId))
+	c.Publish(ctx, rawMsg.Data, SourceEventSubject(replaySequenceId))
 
 	return consumer, nil
 }
 
 // RunnerConsumer returns a consumer for the `notify` stream
-//
-// The consumer will filter by the given interestTopic
-// If durable is true, then the consumer created will be a durable one, otherwise it will be ephemeral.
-func (c *Client) RunnerConsumer(ctx context.Context, interestTopic string, durable bool) (jetstream.Consumer, error) {
-	consumerName := fmt.Sprintf("%s-%s", ChannelNotify, interestTopic)
-	consumerName = nameReplacer.Replace(consumerName)
-
+func (c *Client) RunnerConsumer(ctx context.Context) (jetstream.Consumer, error) {
 	cfg := jetstream.ConsumerConfig{
-		Name:          consumerName,
-		FilterSubject: NotifyFilterSubject(interestTopic),
+		Name:          ChannelNotify,
+		Durable:       ChannelNotify,
+		FilterSubject: NotifyFilterSubject(),
 		DeliverPolicy: jetstream.DeliverNewPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		AckWait:       time.Minute * 1,
@@ -213,24 +210,20 @@ func (c *Client) RunnerConsumer(ctx context.Context, interestTopic string, durab
 		ReplayPolicy:  jetstream.ReplayInstantPolicy,
 	}
 
-	if durable {
-		cfg.Durable = consumerName
-	}
-
 	return c.JetStream.CreateOrUpdateConsumer(ctx, ChannelNotify, cfg)
 }
 
 // WorkerConsumer returns a consumer for the `request` stream
 //
-// The consumer will filter by the given interestTopic and appName
+// The consumer will filter requests by the given appName
 // If durable is true, then the consumer created will be a durable one, otherwise it will be ephemeral.
-func (c *Client) WorkerConsumer(ctx context.Context, appName string, interestTopic string, durable bool) (jetstream.Consumer, error) {
-	name := fmt.Sprintf("%s-%s-%s", ChannelRequest, interestTopic, appName)
+func (c *Client) WorkerConsumer(ctx context.Context, appName string, durable bool) (jetstream.Consumer, error) {
+	name := fmt.Sprintf("%s-%s", ChannelRequest, appName)
 	name = nameReplacer.Replace(name)
 
 	cfg := jetstream.ConsumerConfig{
 		Name:          name,
-		FilterSubject: WorkerRequestFilterSubject(interestTopic, appName, "*"),
+		FilterSubject: WorkerRequestFilterSubject(appName, "*"),
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		AckWait:       1 * time.Minute,
 		MaxDeliver:    120, // Two hours of redelivery attempts

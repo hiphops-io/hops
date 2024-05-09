@@ -30,7 +30,7 @@ func TestSchemaValidation(t *testing.T) {
 			on bar handle_bar_two {
 				script = "console.log('Hello, World!')"
 			}
-			
+
 			schedule hourly {
 				cron = "@hourly"
 			}
@@ -38,21 +38,21 @@ func TestSchemaValidation(t *testing.T) {
 			schedule daily_midnight {
 				cron = "0 0 * * *"
 			}
-			
+
 			task goodbye {}
-			
+
 			task say_hello {
 				display_name = "Send Greeting"
 				summary = "Send a greeting"
 				description = "Send a greeting to someone of your choosing"
 				emoji = "👋"
-			
+
 				param greeting {
 					required=true
 					type="text"
 					default="Hello there"
 				}
-			
+
 				param greetee {
 					type = "string"
 				}
@@ -133,7 +133,7 @@ func TestSchemaValidation(t *testing.T) {
 			schedule empty {
 				cron = ""
 			}
-			
+
 			schedule gibberish {
 				cron = "Ekekekeh! Ni! Ni! Ni!"
 			}
@@ -150,7 +150,7 @@ func TestSchemaValidation(t *testing.T) {
 			schedule empty {
 				cron = ""
 			}
-			
+
 			schedule gibberish {
 				cron = "ekekekeh! 12 12"
 			}

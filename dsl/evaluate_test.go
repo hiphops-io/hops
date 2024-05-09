@@ -25,15 +25,11 @@ func TestEvaluateValid(t *testing.T) {
 		eventData, err := os.ReadFile(eventFile)
 		require.NoError(t, err)
 
-		eventBundle := map[string][]byte{
-			"event": eventData,
-		}
-
 		a, d, err := NewAutomationsFromDir(hopsFile)
 		require.NoError(t, err)
 		require.Falsef(t, d.HasErrors(), "Hops decoding should have no diagnostic errors, got: %s", d.Error())
 
-		ons, d := a.EventOns(eventBundle)
+		ons, d := a.EventOns(eventData)
 		require.Falsef(t, d.HasErrors(), "On evaluation should have no diagnostic errors, got: %s", d.Error())
 
 		// Test we parsed the correct number of matching on blocks.
