@@ -11,7 +11,7 @@ import (
 const ConfigDirName = ".hiphops"
 
 type (
-	HopsConf struct {
+	Config struct {
 		Dev        bool       `yaml:"dev" env:"HIPHOPS_DEV"`
 		Runner     RunnerConf `yaml:"runner" env-prefix:"HIPHOPS_RUNNER_"`
 		hiphopsDir string
@@ -19,52 +19,60 @@ type (
 	}
 
 	RunnerConf struct {
-		Serve    bool   `yaml:"serve" env:"SERVE"`
+		Serve    bool   `yaml:"serve" env:"SERVE"` // TODO: I think this can now be removed?
 		NATSConf string `yaml:"nats_config" env:"NATS_CONFIG"`
 		Local    bool   `yaml:"local" env:"LOCAL"` // TODO: Check we actually use/need this
 		// TODO: Add LogLevel as separate config
 	}
 )
 
-func LoadConfig(hiphopsDir string, tag string) (*HopsConf, error) {
-	h := &HopsConf{
+func LoadConfig(hiphopsDir string, tag string) (*Config, error) {
+	c := &Config{
 		hiphopsDir: hiphopsDir,
 		tag:        tag,
 	}
 
-	h.Runner = RunnerConf{
-		NATSConf: h.NATSConfigPath(),
+	c.Runner = RunnerConf{
+		NATSConf: c.NATSConfigPath(),
 	}
 
-	if err := cleanenv.ReadConfig(h.BaseConfigPath(), h); err != nil {
+	if err := cleanenv.ReadConfig(c.BaseConfigPath(), c); err != nil {
 		return nil, err
 	}
 
 	if tag == "" {
-		return h, nil
+		return c, nil
 	}
 
-	err := cleanenv.ReadConfig(h.ConfigPath(), h)
+	err := cleanenv.ReadConfig(c.ConfigPath(), c)
 
-	return h, err
+	return c, err
 }
 
-func (h *HopsConf) BaseConfigPath() string {
-	return filepath.Join(h.ConfigDir(), "config.yaml")
+func (c *Config) BaseConfigPath() string {
+	return filepath.Join(c.ConfigDirPath(), "config.yaml")
 }
 
-func (h *HopsConf) ConfigDir() string {
-	return filepath.Join(h.hiphopsDir, ".hiphops")
+func (c *Config) ConfigDirPath() string {
+	return filepath.Join(c.hiphopsDir, "hiphops")
 }
 
-func (h *HopsConf) ConfigPath() string {
-	return filepath.Join(h.ConfigDir(), fmt.Sprintf("config.%s.yaml", h.tag))
+func (c *Config) ConfigPath() string {
+	if c.tag == "" {
+		return ""
+	}
+
+	return filepath.Join(c.ConfigDirPath(), fmt.Sprintf("config.%s.yaml", c.tag))
 }
 
-func (h *HopsConf) NATSConfigPath() string {
-	return filepath.Join(h.ConfigDir(), "nats.conf")
+func (c *Config) FlowsPath() string {
+	return filepath.Join(c.hiphopsDir, "flows")
 }
 
-func (h *HopsConf) FlowsPath() string {
-	return filepath.Join(h.hiphopsDir, "flows")
+func (c *Config) LocalDirPath() string {
+	return filepath.Join(c.hiphopsDir, ".hiphops")
+}
+
+func (c *Config) NATSConfigPath() string {
+	return filepath.Join(c.ConfigDirPath(), "nats.conf")
 }

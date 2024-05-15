@@ -21,7 +21,7 @@ type HopsServer struct {
 	runGroup      run.Group
 }
 
-func Start(cfg *config.HopsConf) error {
+func Start(cfg *config.Config) error {
 	// TODO: Ensure errors are gathered and logged at the top level
 
 	ctx, rootCancel := context.WithCancel(context.Background())
@@ -55,7 +55,7 @@ func Start(cfg *config.HopsConf) error {
 	return h.runGroup.Run()
 }
 
-func (h *HopsServer) startNATS(cfg *config.HopsConf) (func(), error) {
+func (h *HopsServer) startNATS(cfg *config.Config) (func(), error) {
 	logger := h.logger.Level(zerolog.WarnLevel)
 	zlog := logs.NewNatsZeroLogger(logger)
 
@@ -81,7 +81,7 @@ func (h *HopsServer) startNATS(cfg *config.HopsConf) (func(), error) {
 	return close, nil
 }
 
-func (h *HopsServer) startAutomationsLoader(ctx context.Context, cfg *config.HopsConf) (*dsl.AutomationsLoader, error) {
+func (h *HopsServer) startAutomationsLoader(ctx context.Context, cfg *config.Config) (*dsl.AutomationsLoader, error) {
 	automationsLoader, err := dsl.NewAutomationsLoader(cfg.FlowsPath(), cfg.Dev)
 	if !cfg.Dev {
 		return automationsLoader, err
@@ -139,7 +139,7 @@ func (h *HopsServer) startAutomationsLoader(ctx context.Context, cfg *config.Hop
 	return automationsLoader, nil
 }
 
-func (h *HopsServer) startRunner(ctx context.Context, cfg *config.HopsConf, automationsLoader *dsl.AutomationsLoader) error {
+func (h *HopsServer) startRunner(ctx context.Context, cfg *config.Config, automationsLoader *dsl.AutomationsLoader) error {
 	if !cfg.Runner.Serve {
 		return nil
 	}

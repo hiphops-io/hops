@@ -17,7 +17,7 @@ func TestLoadConfig(t *testing.T) {
 		configFiles      map[string][]byte
 		envVars          map[string]string
 		wantError        bool
-		expectedHopsConf HopsConf
+		expectedHopsConf Config
 	}
 
 	tests := []testCase{
@@ -30,7 +30,7 @@ runner:
   serve: true
 `),
 			},
-			expectedHopsConf: HopsConf{
+			expectedHopsConf: Config{
 				Dev: true,
 				Runner: RunnerConf{
 					Serve: true,
@@ -50,7 +50,7 @@ runner:
 				"HIPHOPS_DEV":          "false",
 				"HIPHOPS_RUNNER_SERVE": "false",
 			},
-			expectedHopsConf: HopsConf{
+			expectedHopsConf: Config{
 				Dev: false,
 				Runner: RunnerConf{
 					Serve: false,
@@ -73,7 +73,7 @@ runner:
   local: true
 `),
 			},
-			expectedHopsConf: HopsConf{
+			expectedHopsConf: Config{
 				Dev: true,
 				Runner: RunnerConf{
 					Serve: false,
@@ -111,7 +111,7 @@ runner:
 			tc.expectedHopsConf.tag = tc.tag
 			tc.expectedHopsConf.hiphopsDir = hopsDir
 			if tc.expectedHopsConf.Runner.NATSConf == "" {
-				tc.expectedHopsConf.Runner.NATSConf = filepath.Join(hopsDir, ".hiphops", "nats.conf")
+				tc.expectedHopsConf.Runner.NATSConf = filepath.Join(hopsDir, "hiphops", "nats.conf")
 			}
 
 			assert.NoError(t, err, "Config should load without error")
@@ -124,7 +124,7 @@ runner:
 // populated config files. Configs are given as a map of tags and their contents
 func setupHopsDir(t *testing.T, configs map[string][]byte) string {
 	hopsDir := t.TempDir()
-	configDir := filepath.Join(hopsDir, ".hiphops")
+	configDir := filepath.Join(hopsDir, "hiphops")
 	err := os.Mkdir(configDir, 0744)
 	require.NoError(t, err) // Abort the test if setup fails
 

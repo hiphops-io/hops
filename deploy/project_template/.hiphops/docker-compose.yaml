@@ -1,0 +1,36 @@
+version: "3.8"
+services:
+  hops:
+    image: ko.local/hops-c37ae648861240e86430fc7296dbed6d
+    platform: "linux/arm64"
+    depends_on:
+      fix-vol-ownership:
+        condition: service_completed_successfully
+    ports:
+      - 4222:4222
+    environment:
+      HIPHOPS_TAG: "dev"
+      HIPHOPS_DIR: "/hops/config"
+    volumes:
+      - type: bind
+        source: .
+        target: /hops/config
+      - type: volume
+        source: hops_data
+        target: /hops/data
+        read_only: false
+
+  user-app:
+    image: user-app:v1
+    # depends_on:
+    #   hops:
+    #     condition: service_started
+
+  fix-vol-ownership:
+    image: alpine
+    user: "root"
+    volumes:
+      - hops_data:/tmp/change-ownership
+    command: chmod 777 /tmp/change-ownership
+volumes:
+  hops_data: {}
