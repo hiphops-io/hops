@@ -3,7 +3,6 @@ package nats
 import (
 	"testing"
 
-	"github.com/nats-io/nats-server/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -40,9 +39,7 @@ func setupNatsServer(t *testing.T) *NatsServer {
 	logger := logs.NoOpLogger()
 	natsLogger := logs.NewNatsZeroLogger(logger)
 
-	natsServer, err := NewNatsServer("./testdata/embedded-nats.conf", false, &natsLogger, func(opts *server.Options) {
-		opts.StoreDir = t.TempDir()
-	})
+	natsServer, err := NewNatsServer("./testdata/embedded-nats.conf", false, &natsLogger, WithDataDirOpt(t.TempDir()))
 	require.NoError(t, err, "Test setup: Embedded NATS server should start without errors")
 
 	return natsServer

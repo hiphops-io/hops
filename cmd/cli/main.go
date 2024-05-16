@@ -10,7 +10,7 @@ import (
 type (
 	Cmd struct {
 		Initialise *InitCmd `arg:"subcommand:init" help:"initialise a new Hiphops project"`
-		// Up - command to start hops
+		Up         *UpCmd   `arg:"subcommand:up" help:"start Hiphops"`
 		// Down - command to stop hops
 		// Create flow (add empty flow or add from template, default to blank)
 
@@ -28,14 +28,15 @@ func main() {
 
 func runCmd() error {
 	cmd := &Cmd{}
-	arg.MustParse(cmd)
+	p := arg.MustParse(cmd)
 
 	switch {
 	case cmd.Initialise != nil:
 		return cmd.Initialise.Run()
+	case cmd.Up != nil:
+		return cmd.Up.Run()
 	default:
-		fmt.Println("No command")
+		p.WriteHelp(os.Stdout)
+		return nil
 	}
-
-	return nil
 }

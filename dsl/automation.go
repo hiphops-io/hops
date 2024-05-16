@@ -3,6 +3,7 @@ package dsl
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -280,6 +281,10 @@ func readAutomationDir(dirPath string) ([]*AutomationFile, error) {
 			Path:    relativePath,
 			Content: content,
 		})
+	}
+
+	if len(files) == 0 {
+		return nil, errors.New("No flows have been defined")
 	}
 
 	return files, nil

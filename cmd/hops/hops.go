@@ -23,7 +23,6 @@ type HopsServer struct {
 
 func Start(cfg *config.Config) error {
 	// TODO: Ensure errors are gathered and logged at the top level
-
 	ctx, rootCancel := context.WithCancel(context.Background())
 	defer rootCancel()
 
@@ -59,7 +58,12 @@ func (h *HopsServer) startNATS(cfg *config.Config) (func(), error) {
 	logger := h.logger.Level(zerolog.WarnLevel)
 	zlog := logs.NewNatsZeroLogger(logger)
 
-	server, err := nats.NewNatsServer(cfg.NATSConfigPath(), cfg.Dev, &zlog)
+	server, err := nats.NewNatsServer(
+		cfg.NATSConfigPath(),
+		cfg.Dev,
+		&zlog,
+		nats.WithDataDirOpt(cfg.Runner.DataDir),
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -83,15 +83,11 @@ func copyFile(src, dest string) error {
 
 	r, err := os.Open(src)
 	if err != nil {
-		fmt.Println("OPEN READ error", err.Error())
 		return err
 	}
 	defer r.Close()
 
 	_, err = io.Copy(w, r)
-	if err != nil {
-		fmt.Println("COPY FILE ERR", err.Error())
-	}
 	return err
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/alexflint/go-arg"
@@ -37,6 +38,7 @@ func Run() error {
 
 func main() {
 	if err := Run(); err != nil {
+		fmt.Println("ERROR", err.Error())
 		os.Exit(1)
 	}
 }

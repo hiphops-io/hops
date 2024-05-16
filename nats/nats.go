@@ -149,3 +149,13 @@ func UpsertRequestStream(ctx context.Context, js jetstream.JetStream, maxGB floa
 
 	return js.CreateOrUpdateStream(ctx, cfg)
 }
+
+func WithDataDirOpt(dataDir string) ServerOpt {
+	return func(opts *server.Options) {
+		if dataDir == "" {
+			return
+		}
+
+		opts.StoreDir = dataDir
+	}
+}
