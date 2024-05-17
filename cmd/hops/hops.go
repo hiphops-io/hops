@@ -9,6 +9,7 @@ import (
 
 	"github.com/hiphops-io/hops/config"
 	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/internal/httpserver"
 	"github.com/hiphops-io/hops/internal/runner"
 	"github.com/hiphops-io/hops/logs"
 	"github.com/hiphops-io/hops/nats"
@@ -51,38 +52,9 @@ func Start(cfg *config.Config) error {
 		return err
 	}
 
+	h.startHTTPServer(ctx, h.natsClient)
+
 	return h.runGroup.Run()
-}
-
-func (h *HopsServer) startNATS(cfg *config.Config) (func(), error) {
-	logger := h.logger.Level(zerolog.WarnLevel)
-	zlog := logs.NewNatsZeroLogger(logger)
-
-	server, err := nats.NewNatsServer(
-		cfg.NATSConfigPath(),
-		cfg.Dev,
-		&zlog,
-		nats.WithDataDirOpt(cfg.Runner.DataDir),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	natsClient, err := nats.NewClient(server.URL())
-	if err != nil {
-		defer server.Close()
-		h.logger.Error().Err(err).Msg("Failed to start NATS client")
-		return nil, err
-	}
-
-	close := func() {
-		defer server.Close()
-		defer natsClient.Close()
-	}
-
-	h.natsClient = natsClient
-
-	return close, nil
 }
 
 func (h *HopsServer) startAutomationsLoader(ctx context.Context, cfg *config.Config) (*dsl.AutomationsLoader, error) {
@@ -141,6 +113,50 @@ func (h *HopsServer) startAutomationsLoader(ctx context.Context, cfg *config.Con
 	}
 
 	return automationsLoader, nil
+}
+
+func (h *HopsServer) startHTTPServer(ctx context.Context, natsClient *nats.Client) {
+	server := httpserver.NewHTTPServer(":8080", h.natsClient)
+
+	h.runGroup.Add(
+		func() error {
+			return server.Serve()
+		},
+		func(_ error) {
+			server.Shutdown(ctx)
+		},
+	)
+}
+
+func (h *HopsServer) startNATS(cfg *config.Config) (func(), error) {
+	logger := h.logger.Level(zerolog.WarnLevel)
+	zlog := logs.NewNatsZeroLogger(logger)
+
+	server, err := nats.NewNatsServer(
+		cfg.NATSConfigPath(),
+		cfg.Dev,
+		&zlog,
+		nats.WithDataDirOpt(cfg.Runner.DataDir),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	natsClient, err := nats.NewClient(server.URL())
+	if err != nil {
+		defer server.Close()
+		h.logger.Error().Err(err).Msg("Failed to start NATS client")
+		return nil, err
+	}
+
+	close := func() {
+		defer server.Close()
+		defer natsClient.Close()
+	}
+
+	h.natsClient = natsClient
+
+	return close, nil
 }
 
 func (h *HopsServer) startRunner(ctx context.Context, cfg *config.Config, automationsLoader *dsl.AutomationsLoader) error {

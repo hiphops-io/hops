@@ -5,6 +5,12 @@ services:
     platform: "linux/arm64"
     ports:
       - 4222:4222
+    healthcheck:
+      test: ["CMD", "hops", "health"]
+      interval: 5s
+      retries: 5
+      start_period: 1s
+      timeout: 5s
     environment:
       HIPHOPS_TAG: "dev"
       HIPHOPS_DIR: "/hiphops/"
@@ -15,4 +21,7 @@ services:
         target: /hiphops/
 
   user-app:
-    image: user-app:v1
+    image: user-backend:wip
+    depends_on:
+      hops:
+        condition: service_healthy
