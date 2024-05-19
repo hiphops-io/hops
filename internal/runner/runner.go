@@ -3,12 +3,12 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/robfig/cron"
@@ -96,25 +96,38 @@ func (r *Runner) MessageHandler(
 		return nil
 	}
 
-	var mergedErrors error
-	// NOTE: We could improve performance by dispatching each function in a go routine
-	for i := range ons {
-		on := ons[i]
+	// Now we've collected the matching on blocks, dispatch their work.
+
+	var errs error
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(ons))
+
+	for _, on := range ons {
+		on := on
+		wg.Add(1)
 		onLogger := logger.With().Str("on", on.Slug).Logger()
 
-		err := r.executeFunction(on, msgMeta.SequenceId, onLogger)
-		if err != nil {
-			mergedErrors = multierror.Append(mergedErrors, err)
-		}
+		go r.dispatchWork(ctx, on, msgData, msgMeta, errChan, onLogger)
 	}
 
-	return mergedErrors
+	wg.Wait()
+	for err := range errChan {
+		errs = errors.Join(errs, err)
+	}
+
+	return errs
 }
 
-func (r *Runner) executeFunction(on *dsl.On, sequenceId string, logger zerolog.Logger) error {
-	// TODO: Implement
-	logger.Debug().Msgf("Running function for on: %s, sequence: %s", on.Name, sequenceId)
-	return nil
+func (r *Runner) dispatchWork(ctx context.Context, on *dsl.On, data []byte, meta *nats.MsgMeta, errChan chan<- error, logger zerolog.Logger) {
+	subject := nats.WorkSubject(meta.SequenceId, on.Worker)
+	if _, _, err := r.natsClient.Publish(ctx, data, subject); err != nil {
+		errChan <- err
+		return
+	}
+
+	logger.Info().Msgf("Dispatched work: %s", on.Slug)
+
+	errChan <- nil
 }
 
 // prepareHopsSchedules parses the schedule blocks in a hops config and inits

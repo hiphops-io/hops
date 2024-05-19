@@ -116,21 +116,21 @@ func TestAutomationHopsDecoding(t *testing.T) {
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
-					[]byte(`on foo handle {}`),
+					[]byte(`on foo handle {worker = "worker"}`),
 				},
 				{
 					"two/main.hops",
 					[]byte(`
-						on foo reject_bad {}
-						on bar handle_good {}
+						on foo reject_bad {worker = "worker"}
+						on bar handle_good {worker = "worker"}
 					`),
 				},
 			},
 			expectedHops: `{
 				"ons": [
-					{"label": "foo", "name": "handle", "handler": "handle"},
-					{"label": "foo", "name": "reject_bad", "handler": "handle"},
-					{"label": "bar", "name": "handle_good", "handler": "handle"}
+					{"label": "foo", "name": "handle", "worker": "one.worker"},
+					{"label": "foo", "name": "reject_bad", "worker": "two.worker"},
+					{"label": "bar", "name": "handle_good", "worker": "two.worker"}
 				]
 			}`,
 		},
@@ -141,6 +141,7 @@ func TestAutomationHopsDecoding(t *testing.T) {
 					"one/main.hops",
 					[]byte(`
 						on event_action pipeline {
+							worker = "other.worker"
 							if = true != false
 						}
 					`),
@@ -151,7 +152,7 @@ func TestAutomationHopsDecoding(t *testing.T) {
 					{
 						"label": "event_action",
 						"name": "pipeline",
-						"handler": "handle"
+						"worker": "other.worker"
 					}
 				]
 			}`,

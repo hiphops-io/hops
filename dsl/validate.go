@@ -76,6 +76,7 @@ func (h *HopsValidator) SlugRegister(slugRegister []slugRange) hcl.Diagnostics {
 	seen := map[string]bool{}
 
 	// Ensure we don't have multiple blocks with the same 'name'
+	// TODO: Ensure name comes from labels across all resources
 	// (which may come from either a label or attribute - the block decides)
 	for _, nr := range slugRegister {
 		typedName := fmt.Sprintf("%s-%s", nr.blockID, nr.name)
@@ -84,15 +85,15 @@ func (h *HopsValidator) SlugRegister(slugRegister []slugRange) hcl.Diagnostics {
 			var detail string
 			switch nr.blockID {
 			case BlockIDOn:
-				detail = "If 'name' is set, it must be unique for all 'on' config blocks across all .hops files in all automations"
+				detail = "Name must be unique for all 'on' blocks of the same type within a flow"
 			case BlockIDTask:
-				detail = "Tasks must have unique names across all .hops files in all automations."
+				detail = "Tasks must have unique names within a flow"
 			case BlockIDParam:
-				detail = "Parameters must have unique names within a task's config block."
+				detail = "Parameters must have unique names within a task block."
 			case BlockIDSchedule:
-				detail = "Schedules must have unique names across all .hops files in all automations."
+				detail = "Schedules must have unique names within a flow"
 			default:
-				detail = "Names for a config block must be unique for that type of config block."
+				detail = "Names for a config block must be unique for that type of config block within a flow"
 			}
 
 			d = d.Append(&hcl.Diagnostic{

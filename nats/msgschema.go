@@ -14,6 +14,7 @@ const (
 	AllEventId     = ">"
 	ChannelNotify  = "notify"
 	ChannelRequest = "request"
+	ChannelWork    = "work"
 	DoneMessageId  = "done"
 	HopsMessageId  = "hops"
 	SourceEventId  = "event"
@@ -22,6 +23,7 @@ const (
 var (
 	NotifyStreamSubjects  = []string{fmt.Sprintf("%s.>", ChannelNotify)}
 	RequestStreamSubjects = []string{fmt.Sprintf("%s.>", ChannelRequest)}
+	WorkStreamSubjects    = []string{fmt.Sprintf("%s.>", ChannelWork)}
 )
 
 type (
@@ -111,6 +113,8 @@ func (m *MsgMeta) Msg() jetstream.Msg {
 }
 
 func (m *MsgMeta) ResponseSubject() string {
+	// TODO: Will need to handle work response subjects as they have an extra component (flow_name.worker_name)
+	// Though, will workers ever have responses?
 	tokens := []string{
 		ChannelNotify,
 		m.SequenceId,
@@ -262,6 +266,10 @@ func SourceEventSubject(sequenceId string) string {
 }
 
 // WorkerRequestFilterSubject returns the filter subject for the worker consumer
+//
+// Note: This has a name clash with the new concept of worker - which is user-defined functions.
+// Worker in this context refers to an integration that handles outbound requests.
+// This clash will be resolved prior to v1
 func WorkerRequestFilterSubject(appName string, handler string) string {
 	tokens := []string{
 		ChannelRequest,
@@ -269,6 +277,16 @@ func WorkerRequestFilterSubject(appName string, handler string) string {
 		"*",
 		appName,
 		handler,
+	}
+
+	return strings.Join(tokens, ".")
+}
+
+func WorkSubject(sequenceId string, workerName string) string {
+	tokens := []string{
+		ChannelWork,
+		sequenceId,
+		workerName,
 	}
 
 	return strings.Join(tokens, ".")

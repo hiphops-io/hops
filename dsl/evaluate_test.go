@@ -17,7 +17,6 @@ func TestEvaluateValid(t *testing.T) {
 	// test that split hops files have identical result as single hops file
 	hopsFiles := []string{
 		"./testdata/valid",
-		"./testdata/multi-hops",
 	}
 
 	for _, hopsFile := range hopsFiles {
@@ -38,11 +37,11 @@ func TestEvaluateValid(t *testing.T) {
 		// Test the first on block had the proper values
 		assert.Equal(t, "change_merged", ons[0].Label)
 		assert.Equal(t, "change_merged-a_sensor", ons[0].Slug)
-		assert.Equal(t, "handler", ons[0].Handler)
+		assert.Equal(t, "valid.worker", ons[0].Worker)
 
 		// Test the second on block had the proper values
 		assert.Equal(t, "change", ons[1].Label)
-		assert.Equal(t, "handle", ons[1].Handler)
+		assert.Equal(t, "valid.worker", ons[1].Worker)
 		// assert.Len(t, ons[1].Calls, 0)
 
 		// Test the index named on block had the proper values

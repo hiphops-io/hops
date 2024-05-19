@@ -27,6 +27,9 @@ func (u *UpCmd) Run() error {
 		"-d", "--wait",
 		"--remove-orphans",
 	)
+	// TODO: In detached mode, we don't get to see errors within the container
+	// if any (e.g. CMD failed).
+	// We should find a way to detect failures and automatically show the logs
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

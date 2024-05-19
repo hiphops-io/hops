@@ -16,19 +16,21 @@ func TestSchemaValidation(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "Simple valid config",
-			hops: `on foo handle_foo {}`,
+			hops: `on foo handle_foo {worker = "worker"}`,
 		},
 		{
 			name: "Full valid config",
 			hops: `
 			on anevent_action handle_event {
-				handler = "handler"
+				worker = "worker"
 			}
 
-			on bar handle_bar {}
+			on bar handle_bar {
+				worker = "worker"
+			}
 
 			on bar handle_bar_two {
-				script = "console.log('Hello, World!')"
+				worker = "worker"
 			}
 
 			schedule hourly {
@@ -70,32 +72,35 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Unknown root attribute",
 			hops: `
-			on foo my_foo {}
+			on foo my_foo {worker = "worker"}
 			bar = ""`,
 			numDiags: 1,
 		},
 		{
 			name: "Unknown root block",
 			hops: `
-			on foo do_thing {}
+			on foo do_thing {worker = "worker"}
 			bar {}`,
 			numDiags: 1,
 		},
 		{
 			name:     "On too few labels",
-			hops:     `on foo {}`,
+			hops:     `on foo {worker = "worker"}`,
 			numDiags: 1,
 		},
 		{
 			name: "On unknown attribute",
 			hops: `on foo handle_foo {
 				an_unknown_attr = "value"
+				worker = "worker"
 			}`,
 			numDiags: 1,
 		},
 		{
 			name: "On unknown block",
 			hops: `on foo do_thing {
+				worker = "worker"
+
 				an_unknown_block {
 					val = "val"
 				}
@@ -106,14 +111,14 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Invalid labels",
 			hops: `
-			on FOO bar {}
-			on foo BAR1 {}
-			on foo areallylonglabelisnotallowed_the_max_is_fifty_chars {}
-			on _foo bar2 {}
-			on foo_ bar3 {}
-			on fo-o bar4 {}
-			on foo__bar buzz {}
-			on areallylonglabelisnotallowed_the_max_is_fifty_chars foo {}
+			on FOO bar {worker = "worker"}
+			on foo BAR1 {worker = "worker"}
+			on foo areallylonglabelisnotallowed_the_max_is_fifty_chars {worker = "worker"}
+			on _foo bar2 {worker = "worker"}
+			on foo_ bar3 {worker = "worker"}
+			on fo-o bar4 {worker = "worker"}
+			on foo__bar buzz {worker = "worker"}
+			on areallylonglabelisnotallowed_the_max_is_fifty_chars foo {worker = "worker"}
 
 			task FOO {}
 
@@ -175,7 +180,7 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Shared names different types",
 			hops: `
-			on app_event same {}
+			on app_event same {worker = "worker"}
 
 			schedule same {
 				cron = "@daily"
@@ -187,8 +192,8 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Duplicate on names",
 			hops: `
-			on app_event same {}
-			on app_event same {}
+			on app_event same {worker = "worker"}
+			on app_event same {worker = "worker"}
 			`,
 			numDiags: 1,
 		},
@@ -263,7 +268,7 @@ func TestAutomationValidation(t *testing.T) {
 		{
 			name: "Valid",
 			files: []*AutomationFile{
-				{"one/main.hops", []byte(`on foo ensure_foo_is_good {}`)},
+				{"one/main.hops", []byte(`on foo ensure_foo_is_good {worker = "worker"}`)},
 				{"one/other.txt", []byte(``)},
 			},
 			numDiags: 0,
@@ -275,11 +280,12 @@ func TestAutomationValidation(t *testing.T) {
 					"one/invalid.hops",
 					[]byte(`
 						on foo bar {
+							worker = "worker"
 							no_such_attribute = "anything"
 						}
 					`),
 				},
-				{"two/invalid.hops", []byte(`on only_one_label {}`)},
+				{"two/invalid.hops", []byte(`on only_one_label {worker = "worker"}`)},
 			},
 			numDiags: 2,
 		},
@@ -289,8 +295,8 @@ func TestAutomationValidation(t *testing.T) {
 				{
 					"one/invalid.hops",
 					[]byte(`
-						on foo do_good_foo {}
-						on foo do_good_foo {}
+						on foo do_good_foo {worker = "worker"}
+						on foo do_good_foo {worker = "worker"}
 					`),
 				},
 			},
@@ -301,11 +307,11 @@ func TestAutomationValidation(t *testing.T) {
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
-					[]byte(`on foo do_good_foo {}`),
+					[]byte(`on foo do_good_foo {worker = "worker"}`),
 				},
 				{
 					"one/copy.hops",
-					[]byte(`on foo do_good_foo {}`),
+					[]byte(`on foo do_good_foo {worker = "worker"}`),
 				},
 			},
 			numDiags: 1,
@@ -315,12 +321,12 @@ func TestAutomationValidation(t *testing.T) {
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
-					[]byte(`on foo do_good_foo {}`),
+					[]byte(`on foo do_good_foo {worker = "worker"}`),
 				},
 				{
 					"two/main.hops",
 					[]byte(`
-						on foo do_good_foo {}
+						on foo do_good_foo {worker = "worker"}
 					`),
 				},
 			},

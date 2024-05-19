@@ -7,22 +7,20 @@ schedule foo {
 
 on change_merged a_sensor {
   if = true == true && glob("foo", "fo*")
-  handler = "handler"
+  worker = "worker"
 }
 
-on change another_sensor {}
+on change another_sensor {
+  worker = "worker"
+}
 
 // An on block with index based name, due to omitted name field
 on change do_change {
-  script = <<-EOT
-  console.log("Hello world!")
-  EOT
+  worker = "worker"
 }
 
 on change_no_such_action non_matching_sensor {
-  script = <<-EOT
-  console.log("Hello world!")
-  EOT
+  worker = "worker"
 }
 
 task foo {}

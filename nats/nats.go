@@ -103,14 +103,16 @@ func (n *NatsServer) initStreams(ctx context.Context) error {
 		return err
 	}
 
-	// TODO: maxGB for both streams needs to be configurable
-	_, err = UpsertNotifyStream(ctx, js, 10)
-	if err != nil {
+	// TODO: maxGB for all streams needs to be configurable
+	if _, err := UpsertNotifyStream(ctx, js, 10); err != nil {
 		return err
 	}
 
-	_, err = UpsertRequestStream(ctx, js, 10)
-	if err != nil {
+	if _, err := UpsertRequestStream(ctx, js, 5); err != nil {
+		return err
+	}
+
+	if _, err := UpsertWorkStream(ctx, js, 5); err != nil {
 		return err
 	}
 
@@ -142,7 +144,24 @@ func UpsertRequestStream(ctx context.Context, js jetstream.JetStream, maxGB floa
 		Subjects:          RequestStreamSubjects,
 		Discard:           jetstream.DiscardOld,
 		Retention:         jetstream.LimitsPolicy,
-		MaxAge:            time.Hour * 24 * 14,
+		MaxAge:            time.Hour * 24 * 3,
+		MaxBytes:          maxBytes,
+		MaxMsgsPerSubject: 1,
+	}
+
+	return js.CreateOrUpdateStream(ctx, cfg)
+}
+
+// UpsertWorkStream creates the stream for 'work' messages from hops/to user workers
+func UpsertWorkStream(ctx context.Context, js jetstream.JetStream, maxGB float64) (jetstream.Stream, error) {
+	maxBytes := int64(math.Floor(1024 * 1024 * 1024 * maxGB))
+
+	cfg := jetstream.StreamConfig{
+		Name:              ChannelWork,
+		Subjects:          WorkStreamSubjects,
+		Discard:           jetstream.DiscardOld,
+		Retention:         jetstream.LimitsPolicy,
+		MaxAge:            time.Hour * 24 * 3,
 		MaxBytes:          maxBytes,
 		MaxMsgsPerSubject: 1,
 	}

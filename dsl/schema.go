@@ -3,6 +3,7 @@ package dsl
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/gosimple/slug"
@@ -39,13 +40,11 @@ type (
 	}
 
 	OnAST struct {
-		Label   string         `json:"label" hcl:"label,label" validate:"block_label"`
-		Name    string         `json:"name" hcl:"name,label" validate:"block_label"`
-		Handler string         `json:"handler,omitempty" hcl:"handler,optional" validate:"required_without=Script,excluded_with=Script"`
-		Script  string         `json:"script,omitempty" hcl:"script,optional" validate:"required_without=Handler,excluded_with=Handler"`
-		IfExpr  hcl.Expression `json:"-" hcl:"if,optional"`
-		// Name    string         `json:"name,omitempty" hcl:"name,optional"`
-		Slug string `json:"-"`
+		Label  string         `json:"label" hcl:"label,label" validate:"block_label"`
+		Name   string         `json:"name" hcl:"name,label" validate:"block_label"`
+		Worker string         `json:"worker,omitempty" hcl:"worker,optional" validate:"required"`
+		IfExpr hcl.Expression `json:"-" hcl:"if,optional"`
+		Slug   string         `json:"-"`
 		hclStore
 	}
 
@@ -176,9 +175,10 @@ func (h *HopsAST) DecodeOnAST(on *OnAST, idx int) hcl.Diagnostics {
 	on.Slug = slugify(on.Label, on.Name)
 	h.slugRegister = append(h.slugRegister, slugRange{on.Slug, BlockIDOn, &on.block.LabelRanges[1]})
 
-	// Add a default handler, if none found
-	if on.Handler == "" && on.Script == "" {
-		on.Handler = "handle"
+	// Convert relative worker names to absolute
+	if !strings.Contains(on.Worker, ".") {
+		dir, _ := filepath.Split(on.block.DefRange.Filename)
+		on.Worker = fmt.Sprintf("%s.%s", filepath.Base(dir), on.Worker)
 	}
 
 	d = d.Extend(valid.BlockStruct(on))
