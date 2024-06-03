@@ -129,7 +129,7 @@ func (h *HopsServer) startHTTPServer(ctx context.Context, natsClient *nats.Clien
 }
 
 func (h *HopsServer) startNATS(cfg *config.Config) (func(), error) {
-	logger := h.logger.Level(zerolog.WarnLevel)
+	logger := h.logger.Level(zerolog.InfoLevel)
 	zlog := logs.NewNatsZeroLogger(logger)
 
 	server, err := nats.NewNatsServer(

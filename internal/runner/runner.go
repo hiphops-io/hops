@@ -107,10 +107,12 @@ func (r *Runner) MessageHandler(
 		wg.Add(1)
 		onLogger := logger.With().Str("on", on.Slug).Logger()
 
-		go r.dispatchWork(ctx, on, msgData, msgMeta, errChan, onLogger)
+		go r.dispatchWork(ctx, &wg, on, msgData, msgMeta, errChan, onLogger)
 	}
 
 	wg.Wait()
+	close(errChan)
+
 	for err := range errChan {
 		errs = errors.Join(errs, err)
 	}
@@ -118,7 +120,9 @@ func (r *Runner) MessageHandler(
 	return errs
 }
 
-func (r *Runner) dispatchWork(ctx context.Context, on *dsl.On, data []byte, meta *nats.MsgMeta, errChan chan<- error, logger zerolog.Logger) {
+func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, on *dsl.On, data []byte, meta *nats.MsgMeta, errChan chan<- error, logger zerolog.Logger) {
+	defer wg.Done()
+
 	subject := nats.WorkSubject(meta.SequenceId, on.Worker)
 	if _, _, err := r.natsClient.Publish(ctx, data, subject); err != nil {
 		errChan <- err

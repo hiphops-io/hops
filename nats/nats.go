@@ -116,6 +116,10 @@ func (n *NatsServer) initStreams(ctx context.Context) error {
 		return err
 	}
 
+	if _, err := UpsertWorkConsumer(ctx, js); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -167,6 +171,20 @@ func UpsertWorkStream(ctx context.Context, js jetstream.JetStream, maxGB float64
 	}
 
 	return js.CreateOrUpdateStream(ctx, cfg)
+}
+
+// UpsertWorkConsumer creates the consumer for 'work' messages used by user-backend
+func UpsertWorkConsumer(ctx context.Context, js jetstream.JetStream) (jetstream.Consumer, error) {
+	cfg := jetstream.ConsumerConfig{
+		Name:          ChannelWork,
+		Durable:       ChannelWork,
+		DeliverPolicy: jetstream.DeliverNewPolicy,
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		AckWait:       time.Minute * 1,
+		MaxDeliver:    5,
+	}
+
+	return js.CreateOrUpdateConsumer(ctx, ChannelWork, cfg)
 }
 
 func WithDataDirOpt(dataDir string) ServerOpt {

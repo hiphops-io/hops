@@ -102,12 +102,12 @@ func (c *Client) Consume(
 		}
 
 		g.Go(func() error {
-			err := handler(ctx, msg.Data(), msgMeta, deadline)
-			if errors.Is(err, ErrEventFatal) {
-				msg.TermWithReason(err.Error())
-				return nil
-			}
-			if err != nil {
+			if err := handler(ctx, msg.Data(), msgMeta, deadline); err != nil {
+				if errors.Is(err, ErrEventFatal) {
+					msg.TermWithReason(err.Error())
+					return nil
+				}
+
 				msg.NakWithDelay(3 * time.Second)
 				return nil
 			}
