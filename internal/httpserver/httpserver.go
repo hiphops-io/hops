@@ -20,6 +20,7 @@ type (
 func NewHTTPServer(addr string, natsClient *nats.Client) *HTTPServer {
 	e := echo.New()
 	e.HideBanner = true
+	e.HidePort = true
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		// TODO: The host names etc here will require user config, given this will be self hosted
 		AllowOrigins:     []string{"http://localhost:*", "http://0.0.0.0:*", "https://*.hiphops.io"},

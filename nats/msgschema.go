@@ -265,6 +265,17 @@ func SourceEventSubject(sequenceId string) string {
 	return strings.Join(tokens, ".")
 }
 
+func SourceEventSubjectAccount(accountId string, sequenceId string) string {
+	tokens := []string{
+		ChannelNotify,
+		accountId,
+		sequenceId,
+		"event",
+	}
+
+	return strings.Join(tokens, ".")
+}
+
 // WorkerRequestFilterSubject returns the filter subject for the worker consumer
 //
 // Note: This has a name clash with the new concept of worker - which is user-defined functions.
