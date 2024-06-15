@@ -29,8 +29,11 @@ type (
 	MessageHandler func(ctx context.Context, msgData []byte, msgMeta *MsgMeta, ackDeadline time.Duration) error
 )
 
-func NewClient(natsUrl string) (*Client, error) {
-	conn, err := Connect(natsUrl)
+// NewClient creates a new nats client configured to use Hiphops
+//
+// credsPath can be empty if connecting without auth/using an authenticated URL
+func NewClient(natsUrl string, credsPath string) (*Client, error) {
+	conn, err := Connect(natsUrl, credsPath)
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +165,27 @@ func (c *Client) PublishResult(
 	return nil, false
 }
 
+// PublishSourceEventAccount creates and publishes a source event namespaced to an account
+func (c *Client) PublishSourceEventAccount(
+	ctx context.Context,
+	data map[string]any,
+	source string,
+	event string,
+	action string,
+	accountID string,
+) error {
+	sourceEvent, hash, err := CreateSourceEvent(data, source, event, action, "")
+	if err != nil {
+		return fmt.Errorf("error creating source event: %w", err)
+	}
+	subject := SourceEventSubjectAccount(accountID, hash)
+	if _, _, err := c.Publish(ctx, sourceEvent, subject); err != nil {
+		return fmt.Errorf("error publishing source event: %w", err)
+	}
+
+	return nil
+}
+
 // ReplayConsumer returns a consumer for replaying events
 func (c *Client) ReplayConsumer(ctx context.Context, sequenceId string) (jetstream.Consumer, error) {
 	// Create a new, random replay sequence ID
@@ -238,12 +262,21 @@ func (c *Client) WorkerConsumer(ctx context.Context, appName string, durable boo
 }
 
 // Connect establishes a NATS connection, retrying on failed connect attempts
-func Connect(natsUrl string) (*nats.Conn, error) {
-	nc, err := nats.Connect(
-		natsUrl,
+func Connect(natsUrl string, credsPath string) (*nats.Conn, error) {
+
+	connOpts := []nats.Option{
 		nats.RetryOnFailedConnect(true),
 		nats.MaxReconnects(5),
-		nats.ReconnectWait(5*time.Second),
+		nats.ReconnectWait(5 * time.Second),
+	}
+
+	if credsPath != "" {
+		connOpts = append(connOpts, nats.UserCredentials(credsPath))
+	}
+
+	nc, err := nats.Connect(
+		natsUrl,
+		connOpts...,
 	)
 	if err != nil {
 		return nil, err
