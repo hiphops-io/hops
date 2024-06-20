@@ -145,7 +145,7 @@ func publishAndConsumeMessage(t *testing.T, client *Client, consumer jetstream.C
 func setupClient(t *testing.T) (*Client, func()) {
 	server := setupNatsServer(t)
 
-	client, err := NewClient(server.URL())
+	client, err := NewClient(server.URL(), "")
 	require.NoError(t, err, "Test setup: HopsNats should initialise without error")
 
 	cleanup := func() {

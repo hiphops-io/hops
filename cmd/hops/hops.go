@@ -142,7 +142,7 @@ func (h *HopsServer) startNATS(cfg *config.Config) (func(), error) {
 		return nil, err
 	}
 
-	natsClient, err := nats.NewClient(server.URL())
+	natsClient, err := nats.NewClient(server.URL(), "")
 	if err != nil {
 		defer server.Close()
 		h.logger.Error().Err(err).Msg("Failed to start NATS client")
