@@ -180,7 +180,7 @@ func (c *Client) PublishSourceEventAccount(
 	}
 	subject := SourceEventSubjectAccount(accountID, hash)
 	if _, _, err := c.Publish(ctx, sourceEvent, subject); err != nil {
-		return fmt.Errorf("error publishing source event: %w", err)
+		return fmt.Errorf("error publishing source event on subject '%s': %w", subject, err)
 	}
 
 	return nil
