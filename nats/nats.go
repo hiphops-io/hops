@@ -32,14 +32,27 @@ type (
 // function exist.
 // NatsServer.Close() should be called when finished with the server
 func NewNatsServer(configPath string, debug bool, logger server.Logger, serverOpts ...ServerOpt) (*NatsServer, error) {
-	ctx := context.Background()
-	opts, err := server.ProcessConfigFile(configPath)
+	n, err := NewDefaultNatsServer(configPath, debug, logger, serverOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, opt := range serverOpts {
-		opt(opts)
+	ctx := context.Background()
+	if err = n.initStreams(ctx); err != nil {
+		return nil, err
+	}
+
+	return n, nil
+}
+
+// NewDefaultNatsServer starts an in-process nats server from a config file
+//
+// This will create the NATS server but does not set up any streams
+// NatsServer.Close() should be called when finished with the server
+func NewDefaultNatsServer(configPath string, debug bool, logger server.Logger, serverOpts ...ServerOpt) (*NatsServer, error) {
+	opts, err := createOpts(configPath, serverOpts...)
+	if err != nil {
+		return nil, err
 	}
 
 	n := &NatsServer{
@@ -47,10 +60,6 @@ func NewNatsServer(configPath string, debug bool, logger server.Logger, serverOp
 	}
 
 	if err := n.initServer(debug, logger); err != nil {
-		return nil, err
-	}
-
-	if err = n.initStreams(ctx); err != nil {
 		return nil, err
 	}
 
@@ -195,4 +204,19 @@ func WithDataDirOpt(dataDir string) ServerOpt {
 
 		opts.StoreDir = dataDir
 	}
+}
+
+func createOpts(configPath string, serverOpts ...ServerOpt) (*server.Options, error) {
+	opts, err := server.ProcessConfigFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, opt := range serverOpts {
+		opt(opts)
+	}
+
+	opts.DisableJetStreamBanner = true
+
+	return opts, nil
 }
