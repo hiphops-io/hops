@@ -33,6 +33,7 @@ type (
 
 	LinkCmd struct {
 		Dir string `arg:"positional" default:"." help:"path to Hiphops dir - defaults to current directory"`
+		// TODO: Accept an optional output path argument to write the creds to
 	}
 )
 
@@ -44,12 +45,11 @@ func (l *LinkCmd) Run() error {
 		return err
 	}
 
-	fmt.Printf("I got some creds! %s\n", creds)
 	// TODO:
 	// Restart things if required after writing creds - might be easier to have
 	// them restart on their own when files change
 
-	credsPath := filepath.Join(l.Dir, ".hiphops", "user.creds")
+	credsPath := filepath.Join(l.Dir, ".hiphops", "hiphops-io.creds")
 	os.WriteFile(credsPath, []byte(creds), 0644)
 
 	return nil
