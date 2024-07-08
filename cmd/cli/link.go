@@ -32,8 +32,8 @@ type (
 	}
 
 	LinkCmd struct {
-		Dir string `arg:"positional" default:"." help:"path to Hiphops dir - defaults to current directory"`
-		// TODO: Accept an optional output path argument to write the creds to
+		Dir    string `arg:"positional" default:"." help:"path to Hiphops dir [default: .]"`
+		Output string `arg:"-o,--output" help:"path to store the creds file [default: DIR/.hiphops/hiphops-io.creds]"`
 	}
 )
 
@@ -49,14 +49,17 @@ func (l *LinkCmd) Run() error {
 	// Restart things if required after writing creds - might be easier to have
 	// them restart on their own when files change
 
-	credsPath := filepath.Join(l.Dir, ".hiphops", "hiphops-io.creds")
+	credsPath := l.Output
+	if credsPath == "" {
+		credsPath = filepath.Join(l.Dir, ".hiphops", "hiphops-io.creds")
+	}
 	os.WriteFile(credsPath, []byte(creds), 0644)
 
 	return nil
 }
 
 func (l *LinkCmd) getCreds() (string, error) {
-	urlStr := "https://stage-app.hiphops.io/"
+	urlStr := "https://v1.hiphops.io"
 	// Note: We should move this into a config struct at the top level for cmds
 	if value, ok := os.LookupEnv("HIPHOPS_WEB_URL"); ok {
 		urlStr = value
@@ -83,6 +86,7 @@ func NewLinkServer() (*LinkServer, error) {
 
 	e := echo.New()
 	e.HideBanner = true
+	e.HidePort = true
 	e.Validator = NewEchoValidator()
 	e.Listener = listener
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
@@ -124,8 +128,7 @@ func (l *LinkServer) LinkAccount(hiphopsURL *url.URL) (string, error) {
 		return c.JSON(http.StatusOK, struct{}{})
 	})
 
-	// TODO: Check if I actually need the address here, given it's present on listener
-	go l.server.Start("0.0.0.0:0")
+	go l.server.Start("")
 	defer l.server.Shutdown(ctx)
 
 	signinURL, err := signinURLString(hiphopsURL, l.server.Listener.Addr().(*net.TCPAddr).Port, oneTimePath)

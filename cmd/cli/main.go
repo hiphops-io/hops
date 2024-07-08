@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/alexflint/go-arg"
+	_ "github.com/joho/godotenv/autoload"
 )
 
 type (
