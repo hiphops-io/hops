@@ -98,6 +98,15 @@ runner:
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			hopsDir := setupHopsDir(t, tc.configFiles)
+
+			cleanEnvVars(t, []string{
+				"HIPHOPS_DEV",
+				"HIPHOPS_RUNNER_SERVE",
+				"HIPHOPS_RUNNER_NATS_CONFIG",
+				"HIPHOPS_RUNNER_DATA_DIR",
+				"HIPHOPS_RUNNER_LOCAL",
+			})
+
 			for name, value := range tc.envVars {
 				t.Setenv(name, value)
 			}
@@ -140,4 +149,11 @@ func setupHopsDir(t *testing.T, configs map[string][]byte) string {
 	}
 
 	return hopsDir
+}
+
+func cleanEnvVars(t *testing.T, envVars []string) {
+	for _, env := range envVars {
+		err := os.Unsetenv(env)
+		require.NoError(t, err, "Test setup: Unable to clean env vars")
+	}
 }

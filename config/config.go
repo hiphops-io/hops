@@ -86,5 +86,6 @@ func (c *Config) LocalDirPath() string {
 }
 
 func (c *Config) NATSConfigPath() string {
+	fmt.Println("Config dir path is:", c.ConfigDirPath())
 	return filepath.Join(c.ConfigDirPath(), "nats.conf")
 }
