@@ -31,6 +31,18 @@ func TestBuild(t *testing.T) {
 				"sub/page.html": []byte("<p>A page</p>"),
 			},
 		},
+
+		{
+			"Other files",
+			map[string][]byte{
+				"foo.txt":               []byte("foo"),
+				"sub/scripts/script.js": []byte("console.log('Hey');"),
+			},
+			map[string][]byte{
+				"foo.txt":               []byte("foo"),
+				"sub/scripts/script.js": []byte("console.log('Hey');"),
+			},
+		},
 	}
 
 	for _, tc := range tests {

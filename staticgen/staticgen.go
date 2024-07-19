@@ -47,7 +47,6 @@ func (s *StaticBuilder) Build(source, build string) error {
 	if err := os.RemoveAll(build); err != nil {
 		return err
 	}
-	// TODO: On error, delete all contents in build dir if any
 
 	err := filepath.WalkDir(source, func(path string, de fs.DirEntry, err error) error {
 		if err != nil {
@@ -66,14 +65,11 @@ func (s *StaticBuilder) Build(source, build string) error {
 
 		return s.BuildFile(path, filepath.Dir(buildPath))
 	})
-	// Walk the source directory
-	// - creating an equivalent structure in the build dir
-	// - render markdown files into their html output files
-	// - append generated headers/full html page structure
-	// - - use frontmatter to help populate
-	// - generate an index.html
-	// - include default css file(s)
-	// What about dynamic paths? Do they even exist?
+
+	// Attempt to wipe the dir if we had an error
+	if err != nil {
+		os.RemoveAll(build)
+	}
 	return err
 }
 
@@ -85,10 +81,10 @@ func (s *StaticBuilder) BuildFile(path, build string) error {
 		if err := s.BuildMarkdown(path, build); err != nil {
 			return err
 		}
-	case ".css":
-		// TODO: Copy CSS and add to header/create cache buster filename
 	default:
-		// Just straight copy
+		if err := s.BuildPlain(path, build); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -124,6 +120,25 @@ func (s *StaticBuilder) BuildMarkdown(source, build string) error {
 	pageData.Content = template.HTML(mdOutput.String())
 
 	return s.pageTemplate.Execute(writer, pageData)
+}
+
+// BuildPlain takes a source file path and copies into the equivalent location
+// in the build target dir
+func (s *StaticBuilder) BuildPlain(source, build string) error {
+	content, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+
+	path := buildPath(source, build, "")
+	writer, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+
+	_, err = writer.Write(content)
+	return err
 }
 
 // buildPath converts a source file path into a path in the build dir, optionally

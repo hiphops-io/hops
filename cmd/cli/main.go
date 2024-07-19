@@ -10,10 +10,11 @@ import (
 
 type (
 	Cmd struct {
-		Down       *DownCmd `arg:"subcommand:down" help:"stop Hiphops"`
-		Initialise *InitCmd `arg:"subcommand:init" help:"initialise a new Hiphops project"`
-		Link       *LinkCmd `arg:"subcommand:link" help:"link to a hiphops.io account"`
-		Up         *UpCmd   `arg:"subcommand:up" help:"start Hiphops"`
+		Build      *BuildCmd `arg:"subcommand:build" help:"build your Hiphops app"`
+		Down       *DownCmd  `arg:"subcommand:down" help:"stop Hiphops"`
+		Initialise *InitCmd  `arg:"subcommand:init" help:"initialise a new Hiphops project"`
+		Link       *LinkCmd  `arg:"subcommand:link" help:"link to a hiphops.io account"`
+		Up         *UpCmd    `arg:"subcommand:up" help:"start Hiphops"`
 		// Create flow (add empty flow or add from template, default to blank)
 	}
 )
@@ -32,6 +33,8 @@ func runCmd() error {
 	p := arg.MustParse(cmd)
 
 	switch {
+	case cmd.Build != nil:
+		return cmd.Build.Run()
 	case cmd.Down != nil:
 		return cmd.Down.Run()
 	case cmd.Initialise != nil:
