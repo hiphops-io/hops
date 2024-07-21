@@ -159,8 +159,8 @@ jobs:
         if: inputs.env == 'live'
         run: |
           cd cmd/hiphops
-          ko build -t "hiphops/hiphops:${{ inputs.ref }}" \
-          -t "hiphops/hiphops:latest" \
+          ko build -t "${{ inputs.ref }}" \
+          -t "latest" \
           --platform "linux/amd64" \
           --platform "linux/arm64"
 
@@ -168,7 +168,7 @@ jobs:
         if: inputs.env == 'stage'
         run: |
           cd cmd/hiphops
-          ko build -t "hiphops/hiphops:alpha-${{ inputs.ref }}" \
-          -t "hiphops/hiphops:alpha" \
+          ko build -t "alpha-${{ inputs.ref }}" \
+          -t "alpha" \
           --platform "linux/amd64" \
           --platform "linux/arm64"
