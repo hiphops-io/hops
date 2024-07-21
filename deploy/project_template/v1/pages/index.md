@@ -4,4 +4,4 @@ description: Automate all the things!
 ---
 # Hiphops.io dev portal
 
-Enjoy our automated goodness.
+Let's build something amazing.
