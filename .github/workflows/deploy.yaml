@@ -154,7 +154,6 @@ jobs:
           docker_token: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           echo "${docker_token}" | ko login docker.io --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-          ko build
 
       - name: Build and push (live)
         if: inputs.env == 'live'
