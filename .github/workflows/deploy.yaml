@@ -137,7 +137,6 @@ jobs:
             zip/*.zip
 
   release-docker:
-    if: inputs.env == 'live'
     runs-on: ubuntu-latest
 
     steps:
@@ -162,9 +161,20 @@ jobs:
           echo "${docker_token}" | ko login --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
           ko build
       
-      - run: |
+      - name: Build and push (live)
+        if: inputs.env == 'live'
+        run: |
           cd cmd/hiphops
           ko build -t "hiphops/hiphops:${{ inputs.ref }}" \
           -t "hiphops/hiphops:latest" \
+          -p "linux/amd64" \
+          -p "linux/arm64"
+      
+      - name: Build and push (stage)
+        if: inputs.env == 'stage'
+        run: |
+          cd cmd/hiphops
+          ko build -t "hiphops/hiphops:alpha-${{ inputs.ref }}" \
+          -t "hiphops/hiphops:alpha" \
           -p "linux/amd64" \
           -p "linux/arm64"
