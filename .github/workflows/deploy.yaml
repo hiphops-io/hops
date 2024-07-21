@@ -161,8 +161,8 @@ jobs:
           cd cmd/hiphops
           ko build -t "hiphops/hiphops:${{ inputs.ref }}" \
           -t "hiphops/hiphops:latest" \
-          -p "linux/amd64" \
-          -p "linux/arm64"
+          --platform "linux/amd64" \
+          --platform "linux/arm64"
 
       - name: Build and push (stage)
         if: inputs.env == 'stage'
@@ -170,5 +170,5 @@ jobs:
           cd cmd/hiphops
           ko build -t "hiphops/hiphops:alpha-${{ inputs.ref }}" \
           -t "hiphops/hiphops:alpha" \
-          -p "linux/amd64" \
-          -p "linux/arm64"
+          --platform "linux/amd64" \
+          --platform "linux/arm64"
