@@ -160,7 +160,6 @@ jobs:
         run: |
           cd cmd/hiphops
           ko build -B \
-          --tag-only \
           -t "${{ inputs.ref }},latest" \
           --platform "linux/amd64,"linux/arm64"
 
@@ -169,6 +168,5 @@ jobs:
         run: |
           cd cmd/hiphops
           ko build -B \
-          --tag-only \
           -t "alpha-${{ inputs.ref }},alpha" \
           --platform "linux/amd64,linux/arm64"
