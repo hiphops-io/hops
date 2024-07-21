@@ -16,40 +16,23 @@ func TestSchemaValidation(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "Simple valid config",
-			hops: `on foo {}`,
+			hops: `on foo handle_foo {worker = "worker"}`,
 		},
 		{
 			name: "Full valid config",
 			hops: `
-			on anevent_action {
-				name = "anevent"
-
-				call app_handler {
-					name = "first_call"
-			
-					if = lower("FOO") == "foo"
-			
-					inputs = {
-						foo = "bar"
-					}
-				}
-			
-				call app_handler {}
-			
-				call app_handler {
-					if = first_call.completed
-				}
-			
-				done {
-					errored = first_call.errored
-					completed = first_call.completed
-				}
+			on anevent_action handle_event {
+				worker = "worker"
 			}
 
-			on bar {}
+			on bar handle_bar {
+				worker = "worker"
+			}
 
-			on bar {}
-			
+			on bar handle_bar_two {
+				worker = "worker"
+			}
+
 			schedule hourly {
 				cron = "@hourly"
 			}
@@ -57,21 +40,21 @@ func TestSchemaValidation(t *testing.T) {
 			schedule daily_midnight {
 				cron = "0 0 * * *"
 			}
-			
+
 			task goodbye {}
-			
+
 			task say_hello {
 				display_name = "Send Greeting"
 				summary = "Send a greeting"
 				description = "Send a greeting to someone of your choosing"
 				emoji = "👋"
-			
+
 				param greeting {
 					required=true
 					type="text"
 					default="Hello there"
 				}
-			
+
 				param greetee {
 					type = "string"
 				}
@@ -89,46 +72,37 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Unknown root attribute",
 			hops: `
-			on foo {}
+			on foo my_foo {worker = "worker"}
 			bar = ""`,
 			numDiags: 1,
 		},
 		{
 			name: "Unknown root block",
 			hops: `
-			on foo {}
+			on foo do_thing {worker = "worker"}
 			bar {}`,
 			numDiags: 1,
 		},
 		{
-			name:     "On too many labels",
-			hops:     `on foo bar {}`,
+			name:     "On too few labels",
+			hops:     `on foo {worker = "worker"}`,
 			numDiags: 1,
 		},
 		{
 			name: "On unknown attribute",
-			hops: `on foo {
+			hops: `on foo handle_foo {
 				an_unknown_attr = "value"
+				worker = "worker"
 			}`,
 			numDiags: 1,
 		},
 		{
 			name: "On unknown block",
-			hops: `on foo {
+			hops: `on foo do_thing {
+				worker = "worker"
+
 				an_unknown_block {
 					val = "val"
-				}
-			}`,
-			numDiags: 1,
-		},
-		{
-			name: "Call inputs defined as block",
-			hops: `
-			on foo {
-				call app_handler {
-					inputs {
-						value = "hey"
-					}
 				}
 			}`,
 			numDiags: 1,
@@ -137,22 +111,15 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Invalid labels",
 			hops: `
-			on FOO {}
-			on _foo {}
-			on foo_ {}
-			on fo-o {}
-			on foo__bar {}
-			on areallylonglabelisnotallowed_the_max_is_fifty_chars {}
+			on FOO bar {worker = "worker"}
+			on foo BAR1 {worker = "worker"}
+			on foo areallylonglabelisnotallowed_the_max_is_fifty_chars {worker = "worker"}
+			on _foo bar2 {worker = "worker"}
+			on foo_ bar3 {worker = "worker"}
+			on fo-o bar4 {worker = "worker"}
+			on foo__bar buzz {worker = "worker"}
+			on areallylonglabelisnotallowed_the_max_is_fifty_chars foo {worker = "worker"}
 
-			on bar {
-				call FOO {}
-				call _foo {}
-				call foo_ {}
-				call fo-o {}
-				call foo__bar {}
-				call areallylonglabelisnotallowed_the_max_is_fifty_chars {}
-			}
-			
 			task FOO {}
 
 			task foo {
@@ -163,7 +130,7 @@ func TestSchemaValidation(t *testing.T) {
 				cron = "@daily"
 			}
 			`,
-			numDiags: 15,
+			numDiags: 11,
 		},
 		{
 			name: "Invalid schedule cron",
@@ -171,9 +138,9 @@ func TestSchemaValidation(t *testing.T) {
 			schedule empty {
 				cron = ""
 			}
-			
+
 			schedule gibberish {
-				cron = "ekekekeh! 12 12"
+				cron = "Ekekekeh! Ni! Ni! Ni!"
 			}
 
 			schedule wrong_cron_format {
@@ -188,7 +155,7 @@ func TestSchemaValidation(t *testing.T) {
 			schedule empty {
 				cron = ""
 			}
-			
+
 			schedule gibberish {
 				cron = "ekekekeh! 12 12"
 			}
@@ -213,9 +180,7 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Shared names different types",
 			hops: `
-			on app_event {
-				name = "same"
-			}
+			on app_event same {worker = "worker"}
 
 			schedule same {
 				cron = "@daily"
@@ -227,13 +192,8 @@ func TestSchemaValidation(t *testing.T) {
 		{
 			name: "Duplicate on names",
 			hops: `
-			on app_event {
-				name = "same"
-			}
-
-			on app_event {
-				name = "same"
-			}
+			on app_event same {worker = "worker"}
+			on app_event same {worker = "worker"}
 			`,
 			numDiags: 1,
 		},
@@ -256,37 +216,6 @@ func TestSchemaValidation(t *testing.T) {
 			task duplicate_name {}
 
 			task duplicate_name {}
-			`,
-			numDiags: 1,
-		},
-		{
-			name: "Shared call names different on",
-			hops: `
-			on foo {
-				call app_handler {
-					name = "same"
-				}
-			}
-
-			on foo {
-				call app_handler {
-					name = "same"
-				}
-			}
-			`,
-		},
-		{
-			name: "Duplicate call names",
-			hops: `
-			on foo {
-				call app_handler {
-					name = "same"
-				}
-
-				call otherapp_handler {
-					name = "same"
-				}
-			}
 			`,
 			numDiags: 1,
 		},
@@ -339,7 +268,7 @@ func TestAutomationValidation(t *testing.T) {
 		{
 			name: "Valid",
 			files: []*AutomationFile{
-				{"one/main.hops", []byte(`on foo {}`)},
+				{"one/main.hops", []byte(`on foo ensure_foo_is_good {worker = "worker"}`)},
 				{"one/other.txt", []byte(``)},
 			},
 			numDiags: 0,
@@ -350,16 +279,13 @@ func TestAutomationValidation(t *testing.T) {
 				{
 					"one/invalid.hops",
 					[]byte(`
-						on foo {
-							call app_handler {
-								inputs {
-									inputs_should_not = "be_a_block"
-								}
-							}
+						on foo bar {
+							worker = "worker"
+							no_such_attribute = "anything"
 						}
 					`),
 				},
-				{"two/invalid.hops", []byte(`on foo extra_label {}`)},
+				{"two/invalid.hops", []byte(`on only_one_label {worker = "worker"}`)},
 			},
 			numDiags: 2,
 		},
@@ -369,13 +295,8 @@ func TestAutomationValidation(t *testing.T) {
 				{
 					"one/invalid.hops",
 					[]byte(`
-						on foo {
-							name = "the_same"
-						}
-
-						on foo {
-							name = "the_same"
-						}
+						on foo do_good_foo {worker = "worker"}
+						on foo do_good_foo {worker = "worker"}
 					`),
 				},
 			},
@@ -386,19 +307,11 @@ func TestAutomationValidation(t *testing.T) {
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
-					[]byte(`
-						on foo {
-							name = "the_same"
-						}
-					`),
+					[]byte(`on foo do_good_foo {worker = "worker"}`),
 				},
 				{
 					"one/copy.hops",
-					[]byte(`
-						on foo {
-							name = "the_same"
-						}
-					`),
+					[]byte(`on foo do_good_foo {worker = "worker"}`),
 				},
 			},
 			numDiags: 1,
@@ -408,18 +321,12 @@ func TestAutomationValidation(t *testing.T) {
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
-					[]byte(`
-						on foo {
-							name = "the_same"
-						}
-					`),
+					[]byte(`on foo do_good_foo {worker = "worker"}`),
 				},
 				{
 					"two/main.hops",
 					[]byte(`
-						on foo {
-							name = "the_same"
-						}
+						on foo do_good_foo {worker = "worker"}
 					`),
 				},
 			},

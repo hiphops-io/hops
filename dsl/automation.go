@@ -3,6 +3,7 @@ package dsl
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,7 +17,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/zclconf/go-cty/cty"
 
-	"github.com/hiphops-io/hops/dsl/ctyutils"
+	"github.com/hiphops-io/hops/dsl/ctyconv"
 )
 
 const (
@@ -48,20 +49,7 @@ type (
 	}
 
 	On struct {
-		Calls []*Call
-		Done  *Done
 		*OnAST
-	}
-
-	Call struct {
-		Inputs []byte
-		*CallAST
-	}
-
-	Done struct {
-		Completed bool
-		Errored   bool
-		*DoneAST
 	}
 )
 
@@ -148,89 +136,7 @@ func NewAutomationsFromDir(dirPath string) (*Automations, hcl.Diagnostics, error
 	return a, d, nil
 }
 
-// EventCalls evaluates the calls for an on block against a populated event bundle
-// returning all calls that have their conditions for dispatch met.
-func (a *Automations) EventCalls(callASTs []*CallAST, evalCtx *hcl.EvalContext) ([]*Call, hcl.Diagnostics) {
-	d := hcl.Diagnostics{}
-	calls := []*Call{}
-
-	for _, callAST := range callASTs {
-		ifVal, diags := EvaluateBoolExpression(callAST.IfExpr, true, evalCtx)
-		if diags.HasErrors() {
-			d = d.Extend(diags)
-			continue
-		}
-
-		if !ifVal {
-			continue
-		}
-
-		inputs, diags := EvaluateInputsExpression(callAST.InputsExpr, evalCtx)
-		d = d.Extend(diags)
-
-		call := &Call{
-			CallAST: callAST,
-			Inputs:  inputs,
-		}
-
-		calls = append(calls, call)
-	}
-
-	return calls, d
-}
-
-// EventDefaultDone checks if an on block is done by default,
-// regardless of explicit done blocks.
-//
-// An on block becomes done if all dispatchable calls already have results
-func (a *Automations) EventDefaultDone(calls []*Call, responseVars map[string]cty.Value) *Done {
-	var done *Done
-
-	isDone := true
-	for _, call := range calls {
-		_, ok := responseVars[call.Slug]
-		if !ok {
-			isDone = false
-			break
-		}
-	}
-
-	if isDone {
-		done = &Done{
-			Completed: true,
-		}
-	}
-
-	return done
-}
-
-// EventDone returns the first done block that is either errored or completed, or nil
-func (a *Automations) EventDone(doneASTs []*DoneAST, evalCtx *hcl.EvalContext) (*Done, hcl.Diagnostics) {
-	var done *Done
-	d := hcl.Diagnostics{}
-
-	for _, doneAST := range doneASTs {
-		erroredVal, diags := EvaluateBoolExpression(doneAST.ErroredExpr, false, evalCtx)
-		d = d.Extend(diags)
-
-		completedVal, diags := EvaluateBoolExpression(doneAST.CompletedExpr, false, evalCtx)
-		d = d.Extend(diags)
-
-		if erroredVal || completedVal {
-			done = &Done{
-				Completed: completedVal,
-				Errored:   erroredVal,
-				DoneAST:   doneAST,
-			}
-
-			break
-		}
-	}
-
-	return done, d
-}
-
-func (a *Automations) EventOns(eventBundle map[string][]byte) ([]*On, hcl.Diagnostics) {
+func (a *Automations) EventOns(eventData []byte) ([]*On, hcl.Diagnostics) {
 	d := hcl.Diagnostics{}
 	ons := []*On{}
 
@@ -238,20 +144,21 @@ func (a *Automations) EventOns(eventBundle map[string][]byte) ([]*On, hcl.Diagno
 		return nil, d
 	}
 
-	variables, err := ctyutils.EventBundleToCty(eventBundle, "-")
+	eventVal, err := ctyconv.JSONToCtyValue(eventData)
 	if err != nil {
 		d = d.Append(&hcl.Diagnostic{
 			Severity: hcl.DiagError,
-			Summary:  "Unable to parse pipeline event data",
-			Detail:   fmt.Sprintf("An error occurred parsing the event bundle: %s", err.Error()),
+			Summary:  "Unable to parse source event",
+			Detail:   fmt.Sprintf("An error occurred parsing the event: %s", err.Error()),
 		})
 		return nil, d
 	}
 
-	evaluationCtx := NewEvaluationCtx(a, variables)
+	ctxVars := map[string]cty.Value{"event": eventVal}
+	evaluationCtx := NewEvaluationCtx(a, ctxVars)
 
 	// Get the event name/action from the bundle
-	event, action, err := ctyutils.ParseEventVar(evaluationCtx.evalCtx.Variables, HopsMetaKey)
+	event, action, err := ctyconv.CtyToEventAction(eventVal, HopsMetaKey)
 	if err != nil {
 		return nil, hcl.Diagnostics{
 			&hcl.Diagnostic{
@@ -281,30 +188,9 @@ func (a *Automations) EventOns(eventBundle map[string][]byte) ([]*On, hcl.Diagno
 
 		on := &On{
 			OnAST: onAST,
-			Calls: []*Call{},
 		}
 
 		ons = append(ons, on)
-
-		// Check if user provided done blocks have been met
-		done, diags := a.EventDone(onAST.Done, blockEval)
-		if !diags.HasErrors() {
-			on.Done = done
-		}
-		d = d.Extend(diags)
-
-		if done != nil {
-			continue
-		}
-
-		// Gather all calls that have their dispatch conditions met
-		calls, diags := a.EventCalls(onAST.Calls, blockEval)
-		if !diags.HasErrors() {
-			on.Calls = calls
-		}
-		d = d.Extend(diags)
-
-		on.Done = a.EventDefaultDone(calls, blockEval.Variables)
 	}
 
 	return ons, d
@@ -395,6 +281,10 @@ func readAutomationDir(dirPath string) ([]*AutomationFile, error) {
 			Path:    relativePath,
 			Content: content,
 		})
+	}
+
+	if len(files) == 0 {
+		return nil, errors.New("No flows have been defined")
 	}
 
 	return files, nil

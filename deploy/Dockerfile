@@ -10,10 +10,6 @@ WORKDIR /go/src/app
 COPY go.mod .
 COPY go.sum .
 RUN go mod download
-RUN npm install -g pnpm
-
-COPY console console
-RUN cd console && pnpm install && pnpm run build
 
 # Now we copy the code and do the actual build
 COPY . .

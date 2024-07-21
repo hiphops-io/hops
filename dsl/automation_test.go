@@ -30,7 +30,7 @@ func TestAutomationLoading(t *testing.T) {
 		{
 			name: "Single hops file",
 			files: []*AutomationFile{
-				{"one/main.hops", []byte(`on foo {}`)},
+				{"one/main.hops", []byte(`on foo ping_server {}`)},
 			},
 			filePaths:  []string{"one/main.hops"},
 			numHopsOns: 1,
@@ -38,8 +38,8 @@ func TestAutomationLoading(t *testing.T) {
 		{
 			name: "Single automation, multiple hops files",
 			files: []*AutomationFile{
-				{"one/main.hops", []byte(`on foo {}`)},
-				{"one/other.hops", []byte(`on foo {}`)},
+				{"one/main.hops", []byte(`on foo approve_request {}`)},
+				{"one/other.hops", []byte(`on foo reject_request {}`)},
 			},
 			filePaths:  []string{"one/main.hops", "one/other.hops"},
 			numHopsOns: 2,
@@ -47,8 +47,8 @@ func TestAutomationLoading(t *testing.T) {
 		{
 			name: "Multiple automations with only hops",
 			files: []*AutomationFile{
-				{"one/main.hops", []byte(`on foo {}`)},
-				{"two/main.hops", []byte(`on foo {}`)},
+				{"one/main.hops", []byte(`on foo draw_cat_picture {}`)},
+				{"two/main.hops", []byte(`on foo run_report {}`)},
 			},
 			filePaths:  []string{"one/main.hops", "two/main.hops"},
 			numHopsOns: 2,
@@ -56,9 +56,9 @@ func TestAutomationLoading(t *testing.T) {
 		{
 			name: "Automations with other files",
 			files: []*AutomationFile{
-				{"one/main.hops", []byte(`on foo {}`)},
+				{"one/main.hops", []byte(`on foo run_tests {}`)},
 				{"one/userList.json", []byte(`["lizzie@example.com", "dave@example.com"]`)},
-				{"two/pipelines.hops", []byte(`on foo {}`)},
+				{"two/pipelines.hops", []byte(`on foo approve_small_change {}`)},
 				{"two/notes.txt", []byte(`This automation contains nice useful pipelines`)},
 			},
 			filePaths:  []string{"one/main.hops", "one/userList.json", "two/pipelines.hops", "two/notes.txt"},
@@ -67,12 +67,12 @@ func TestAutomationLoading(t *testing.T) {
 		{
 			name: "Automations with manifests",
 			files: []*AutomationFile{
-				{"one/main.hops", []byte(`on foo {}`)},
+				{"one/main.hops", []byte(`on foo run_tests {}`)},
 				{"one/manifest.yaml", []byte(sampleManifest)},
 				{
 					"two/hippity.hops",
 					[]byte(`
-						on foo {}
+						on foo send_result_msg {}
 
 						task bar {}
 					`),
@@ -116,52 +116,33 @@ func TestAutomationHopsDecoding(t *testing.T) {
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
-					[]byte(`on foo {}`),
+					[]byte(`on foo handle {worker = "worker"}`),
 				},
 				{
 					"two/main.hops",
 					[]byte(`
-						on foo {}
-						on bar {}
+						on foo reject_bad {worker = "worker"}
+						on bar handle_good {worker = "worker"}
 					`),
 				},
 			},
 			expectedHops: `{
 				"ons": [
-					{"label": "foo"},
-					{"label": "foo"},
-					{"label": "bar"}
+					{"label": "foo", "name": "handle", "worker": "one.worker"},
+					{"label": "foo", "name": "reject_bad", "worker": "two.worker"},
+					{"label": "bar", "name": "handle_good", "worker": "two.worker"}
 				]
 			}`,
 		},
 		{
-			name: "On and call blocks",
+			name: "On blocks",
 			files: []*AutomationFile{
 				{
 					"one/main.hops",
 					[]byte(`
-						on event_action {
-							name = "pipeline"
+						on event_action pipeline {
+							worker = "other.worker"
 							if = true != false
-
-							call app_handler {
-								name = "a_call"
-
-								if = event.value == "something"
-
-								inputs = {
-									a = "b"
-								}
-							}
-
-							call otherapp_handler {
-								if = a_call.completed
-							}
-
-							done {
-								completed = false
-								errored = false
-							}
 						}
 					`),
 				},
@@ -171,16 +152,7 @@ func TestAutomationHopsDecoding(t *testing.T) {
 					{
 						"label": "event_action",
 						"name": "pipeline",
-						"calls": [
-							{
-								"label": "app_handler",
-								"name": "a_call"
-							},
-							{
-								"label": "otherapp_handler"
-							}
-						],
-						"done": [{}]
+						"worker": "other.worker"
 					}
 				]
 			}`,
@@ -322,16 +294,16 @@ func TestAutomationIndexing(t *testing.T) {
 				{
 					"one/main.hops",
 					[]byte(`
-						on foo {}
-						on event_action {}
-						on foo_action {}
+						on foo handle_foo {}
+						on event_action handle_event {}
+						on foo_action perform_foo_action {}
 					`),
 				},
 				{
 					"two/main.hops",
 					[]byte(`
-						on foo {}
-						on bar {}
+						on foo check_success {}
+						on bar reject_bad_change {}
 					`),
 				},
 			},

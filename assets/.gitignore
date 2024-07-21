@@ -1,6 +1,0 @@
-# The files in the console dir are created at build time/during dev.
-# We use favicon.ico to keep the dir to prevent the go linter complaining about
-# the embed directive referencing a non-existent dir
-# The entire dir gets overwritten at build time, so the gitignore must be here.
-console/**/*
-!favicon.ico

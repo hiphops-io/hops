@@ -1,0 +1,33 @@
+version: "3.8"
+services:
+  hops:
+    image: ko.local/hops-c37ae648861240e86430fc7296dbed6d
+    platform: "linux/arm64"
+    ports:
+      - 4222:4222
+    healthcheck:
+      test: ["CMD", "hops", "health"]
+      interval: 5s
+      retries: 5
+      start_period: 1s
+      timeout: 5s
+    environment:
+      HIPHOPS_TAG: "dev"
+      HIPHOPS_DIR: "/hiphops/"
+      HIPHOPS_RUNNER_DATA_DIR: "/hiphops/.hiphops/data/jetstream"
+    volumes:
+      - type: bind
+        source: .
+        target: /hiphops/
+
+  user-app:
+    image: user-backend:wip
+    depends_on:
+      hops:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-S", "http://localhost:8080/health"]
+      interval: 5s
+      retries: 5
+      start_period: 1s
+      timeout: 5s

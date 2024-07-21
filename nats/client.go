@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,134 +13,112 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	ChannelNotify  = "notify"
-	ChannelRequest = "request"
-
-	DefaultConsumerName = "runner"
-	// How far back to look for events by default
-	DefaultEventLookback = -time.Hour
-
-	// Interest topic which is used by default
-	DefaultInterestTopic = "default"
-
-	// Number of events returned max
-	GetEventHistoryEventLimit = 100
-
-	// limits for GetEventHistory
-	defaultBatchSize = 160
-	maxWaitTime      = time.Millisecond * 200
-)
-
 var (
-	ErrEventFatal          = errors.New("This event cannot be processed")
-	ErrIncompleteMsgBundle = errors.New("Unable to fetch complete sequence history")
+	ErrEventFatal          = errors.New("unrecoverable error handling event")
 	nameReplacer           = strings.NewReplacer("*", "all", ".", "dot", ">", "children")
+	wrongSequenceErrString = fmt.Sprintf("err_code=%d", jetstream.JSErrCodeStreamWrongLastSequence)
 )
 
 type (
 	Client struct {
-		Consumers       map[string]jetstream.Consumer
-		JetStream       jetstream.JetStream
-		NatsConn        *nats.Conn
-		SysObjStore     nats.ObjectStore
-		accountId       string
-		interestTopic   string
-		logger          Logger
-		preferEphemeral bool
-		stream          jetstream.Stream
-		streamName      string
+		JetStream jetstream.JetStream
+		NatsConn  *nats.Conn
 	}
 
-	// ClientOpt functions configure a nats.Client via NewClient()
-	ClientOpt func(*Client) error
-
-	// MessageBundle is a map of messageIDs and the data that message contained
-	//
-	// MessageBundle is designed to be passed to a runner to ensure it has the aggregate state
-	// of a hiphops sequence of messages.
-	MessageBundle map[string][]byte
-
-	// SequenceHandler is a function that receives the sequenceId and message bundle for a sequence of messages
-	SequenceHandler interface {
-		SequenceCallback(context.Context, string, MessageBundle) (bool, error)
-	}
+	// MessageHandler is a callback function provided to Client.Consume to handle messages
+	MessageHandler func(ctx context.Context, msgData []byte, msgMeta *MsgMeta, ackDeadline time.Duration) error
 )
 
-// NewClient returns a new hiphops specific NATS client
+// NewClient creates a new nats client configured to use Hiphops
 //
-// By default it is configured as a runner consumer (listening for incoming source events)
-// Passing *any* ClientOpts will override this default.
-func NewClient(natsUrl string, accountId string, interestTopic string, logger Logger, clientOpts ...ClientOpt) (*Client, error) {
-	ctx := context.Background()
-
-	natsClient := &Client{
-		Consumers:     map[string]jetstream.Consumer{},
-		accountId:     accountId,
-		interestTopic: interestTopic,
-		// Override this using WithStreamName ClientOpt if required.
-		streamName: nameReplacer.Replace(accountId),
-		logger:     logger,
-	}
-	err := natsClient.initNatsConnection(natsUrl)
+// credsPath can be empty if connecting without auth/using an authenticated URL
+func NewClient(natsUrl string, credsPath string) (*Client, error) {
+	conn, err := Connect(natsUrl, credsPath)
 	if err != nil {
 		return nil, err
 	}
 
-	err = natsClient.initJetStream()
+	js, err := jetstream.New(conn)
 	if err != nil {
-		defer natsClient.Close()
+		defer conn.Drain()
 		return nil, err
 	}
 
-	err = natsClient.initObjectStore(ctx, accountId)
-	if err != nil {
-		defer natsClient.Close()
-		return nil, err
+	c := &Client{
+		JetStream: js,
+		NatsConn:  conn,
 	}
 
-	if len(clientOpts) == 0 {
-		clientOpts = DefaultClientOpts()
-	}
-
-	for _, opt := range clientOpts {
-		err := opt(natsClient)
-		if err != nil {
-			defer natsClient.Close()
-			return nil, err
-		}
-	}
-
-	// We initialise the stream after applying clientopts, as they may alter
-	// the stream we need to create.
-	err = natsClient.initStream(ctx)
-	if err != nil {
-		defer natsClient.Close()
-		return nil, err
-	}
-
-	logger.Debugf("Interest topic is: %s", natsClient.interestTopic)
-
-	return natsClient, err
+	return c, nil
 }
 
 func (c *Client) CheckConnection() bool {
-	// TODO: Enhance this with more meaningful checks (e.g. sending a message back and forth)
 	return c.NatsConn.IsConnected()
 }
 
-func (c *Client) Close() {
+// Close closes the nats connection
+//
+// Note: An error will only be returned if closing doesn't complete within 1m.
+// It is possible for the client to close after erroring, so it should
+// never be re-used after calling Close.
+func (c *Client) Close() error {
+	if c.NatsConn.IsClosed() {
+		return nil
+	}
+
+	closedChan := make(chan struct{})
+	c.NatsConn.Opts.ClosedCB = func(*nats.Conn) {
+		closedChan <- struct{}{}
+	}
+
 	c.NatsConn.Drain()
+
+	select {
+	case <-closedChan:
+		return nil
+	case <-time.After(1 * time.Minute):
+		return errors.New("client connection did not close within timeout")
+	}
 }
 
-// Consume consumes messages from the HopsNats.Consumers[fromConsumer]
+// Consume pulls messages from the stream via the consumer, pre-processes and calls the given handler
 //
-// This will block the calling goroutine until the context is cancelled
-// and can be ran as a long-lived service
-func (c *Client) Consume(ctx context.Context, fromConsumer string, callback jetstream.MessageHandler) error {
-	consumer, found := c.Consumers[fromConsumer]
-	if !found {
-		return fmt.Errorf("Consumer '%s' not found on client", fromConsumer)
+// TODO: Investigate if this is the best place to handle automatically extending the ack deadline.
+// If so then do that and potentially remove deadline from handler signature. If not then remove this note
+func (c *Client) Consume(
+	ctx context.Context,
+	consumer jetstream.Consumer,
+	handler MessageHandler,
+) error {
+	g, ctx := errgroup.WithContext(ctx)
+	// Note: In future we should make the active goroutine limit configurable
+	g.SetLimit(20)
+
+	deadline := consumer.CachedInfo().Config.AckWait
+
+	callback := func(msg jetstream.Msg) {
+		msgMeta, err := Parse(msg)
+		if err != nil {
+			// There's no way to recover an unparseable event
+			msg.TermWithReason(fmt.Sprintf("unable to parse event: %s", err.Error()))
+			return
+		}
+
+		g.Go(func() error {
+			if err := handler(ctx, msg.Data(), msgMeta, deadline); err != nil {
+				if errors.Is(err, ErrEventFatal) {
+					msg.TermWithReason(err.Error())
+					return nil
+				}
+
+				msg.NakWithDelay(3 * time.Second)
+				return nil
+			}
+
+			DoubleAck(ctx, msg)
+
+			return nil
+		})
 	}
 
 	consumerCtx, err := consumer.Consume(callback)
@@ -150,523 +127,167 @@ func (c *Client) Consume(ctx context.Context, fromConsumer string, callback jets
 	}
 	defer consumerCtx.Stop()
 
-	// Run until context cancelled
 	<-ctx.Done()
 
 	return nil
 }
 
-// ConsumeSequences is a wrapper around consume that presents the aggregate state of a sequence to the callback
-// instead of individual messages.
-func (c *Client) ConsumeSequences(ctx context.Context, fromConsumer string, handler SequenceHandler) error {
-	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(20)
-
-	// TODO: This code has become more involved with the specifics of running workloads that was intended
-	// Much of the logic here should be pushed into Runner, which should be similar in approach to worker.AppWorker
-	wrappedCB := func(msg jetstream.Msg) {
-		hopsMsg, err := Parse(msg)
-		if err != nil {
-			// If parsing is failing, there's no point retrying the message
-			msg.Term()
-			c.logger.Errf(err, "Unable to parse message")
-			return
-		}
-
-		if hopsMsg.MessageId == HopsMessageId || hopsMsg.Done {
-			err := DoubleAck(ctx, msg)
-			if err != nil {
-				c.logger.Errf(err, "Unable to acknowledge message: %s", msg.Subject())
-			}
-
-			return
-		}
-
-		g.Go(func() (nilErr error) {
-			msgBundle, err := c.FetchMessageBundle(ctx, hopsMsg)
-			if err != nil && err != ErrIncompleteMsgBundle {
-				c.logger.Errf(err, "Unable to fetch message bundle")
-			}
-			if err != nil {
-				msg.NakWithDelay(3 * time.Second)
-				return
-			}
-
-			handled, err := handler.SequenceCallback(ctx, hopsMsg.SequenceId, msgBundle)
-			if errors.Is(err, ErrEventFatal) {
-				msg.Term()
-				return
-			}
-			if err != nil {
-				msg.NakWithDelay(3 * time.Second)
-				return
-			}
-
-			// Immediately clean up source events we have no handler for.
-			// We check for two events in the bundle as it should have a hops
-			// assignment message too.
-			if !handled && len(msgBundle) <= 2 {
-				go c.DeleteMsgSequence(ctx, hopsMsg)
-				return
-			}
-
-			DoubleAck(ctx, msg)
-			return
-		})
-	}
-
-	return c.Consume(ctx, fromConsumer, wrappedCB)
-}
-
-// DeleteMsgSequence deletes a given message and the entire sequence it is part of
-//
-// Main use case is preventing build up of source events that do not relate to any
-// configured automation
-func (c *Client) DeleteMsgSequence(ctx context.Context, msgMeta *MsgMeta) error {
-	c.logger.Debugf("Deleting sequence: %s", msgMeta.SequenceId)
-
-	if err := msgMeta.Msg().Term(); err != nil {
-		c.logger.Errf(err, "Failed to terminate unhandled message")
-		return nil
-	}
-
-	err := c.stream.Purge(ctx, jetstream.WithPurgeSubject(msgMeta.SequenceFilter()))
-	if err != nil {
-		c.logger.Infof("Unable to delete sequence %s: %s", msgMeta.SequenceId, err.Error())
-	}
-
-	return err
-}
-
-// FetchMessageBundle pulls all historic messages for a sequenceId from the stream, converting them to a message bundle
-//
-// The returned message bundle will contain all previous messages in addition to the newly received message
-func (c *Client) FetchMessageBundle(ctx context.Context, incomingMsg *MsgMeta) (MessageBundle, error) {
-	filter := incomingMsg.SequenceFilter()
-
-	consumerConf := jetstream.OrderedConsumerConfig{
-		FilterSubjects:    []string{filter},
-		DeliverPolicy:     jetstream.DeliverAllPolicy,
-		InactiveThreshold: time.Millisecond * 500,
-	}
-	cons, err := c.JetStream.OrderedConsumer(ctx, c.streamName, consumerConf)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
-	}
-
-	if cons.CachedInfo().NumPending <= 0 {
-		return nil, ErrIncompleteMsgBundle
-	}
-
-	msgBundle := MessageBundle{}
-
-	msgCtx, err := cons.Messages(
-		jetstream.PullMaxMessages(cons.CachedInfo().NumPending),
-		jetstream.PullExpiry(time.Second),
-	)
-	if msgCtx != nil {
-		defer msgCtx.Stop()
-	}
-	if err != nil {
-		return nil, ErrIncompleteMsgBundle
-	}
-
-	// Being cautious. If everything is operating normally, this shouldn't fire.
-	timer := time.AfterFunc(time.Second*10, msgCtx.Stop)
-
-	for {
-		// Get the next message in the sequence
-		m, err := msgCtx.Next()
-		if err != nil {
-			return nil, err
-		}
-
-		// Parse the important bits for easy handling
-		msg, err := Parse(m)
-		if err != nil {
-			return nil, err
-		}
-
-		// Add to the message bundle
-		msgBundle[msg.MessageId] = m.Data()
-
-		// Stop when there's no more left
-		if msg.NumPending <= 0 {
-			break
-		}
-	}
-	// No need to cancel the message context early. Will be cleaned up on return
-	timer.Stop()
-
-	if _, ok := msgBundle[incomingMsg.MessageId]; !ok {
-		return nil, fmt.Errorf("Incomplete event history for: %s", incomingMsg.SequenceId)
-	}
-
-	return msgBundle, nil
-}
-
-// GetEventHistory pulls historic events, most recent first, from now back to start time.
-//
-// Times out if events take longer than a second to be received.
-// Only returns the first 100 events. (const GetEventHistoryEventLimit)
-// If sourceOnly is true, only returns source events (i.e. not pipeline events)
-func (c *Client) GetEventHistory(ctx context.Context, start time.Time, sourceOnly bool) ([]*MsgMeta, error) {
-	rawEvents := []jetstream.Msg{}
-	events := []*MsgMeta{}
-	var eventId string
-
-	if sourceOnly {
-		eventId = SourceEventId
-	} else {
-		eventId = AllEventId
-	}
-
-	consumerConf := jetstream.OrderedConsumerConfig{
-		FilterSubjects:    []string{EventLogFilterSubject(c.accountId, c.interestTopic, eventId)},
-		DeliverPolicy:     jetstream.DeliverByStartTimePolicy,
-		InactiveThreshold: time.Millisecond * 500,
-		OptStartTime:      &start,
-	}
-	cons, err := c.JetStream.OrderedConsumer(ctx, c.streamName, consumerConf)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to create ordered consumer: %w", err)
-	}
-
-	info, err := cons.Info(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to get consumer info: %w", err)
-	}
-
-	numPending := int(info.NumPending)
-	if numPending == 0 {
-		return events, nil
-	}
-
-	for {
-		// Don't call more than is in the stream (otherwise have to wait for timeout)
-		var batchSize int
-		if numPending > defaultBatchSize {
-			batchSize = defaultBatchSize
-		} else {
-			batchSize = numPending
-		}
-
-		msgs, err := cons.Fetch(batchSize, jetstream.FetchMaxWait(maxWaitTime))
-		if err != nil {
-			return nil, fmt.Errorf("Unable to fetch messages: %w", err)
-		}
-
-		for rawM := range msgs.Messages() {
-			// count down so we don't have to timeout on the last fetch
-			numPending--
-
-			// Append to the events
-			rawEvents = append(rawEvents, rawM)
-		}
-
-		// Keep only the most recent (last) 100 items
-		if len(rawEvents) > 100 {
-			rawEvents = rawEvents[len(rawEvents)-100:]
-		}
-
-		// If we've got all the events, we can stop
-		if numPending == 0 {
-			break
-		}
-	}
-
-	c.logger.Debugf("Events received %d", len(rawEvents))
-
-	// Parse the events in reverse order (most recent first)
-	for i := len(rawEvents) - 1; i >= 0; i-- {
-		rawM := rawEvents[i]
-		m, err := Parse(rawM)
-		if err != nil {
-			c.logger.Errf(err, "Unable to parse message")
-			return nil, err
-		}
-
-		events = append(events, m)
-	}
-
-	return events, nil
-}
-
-func (c *Client) GetMsg(ctx context.Context, subjTokens ...string) (*jetstream.RawStreamMsg, error) {
-	subject := c.buildSubject(subjTokens...)
-
-	return c.stream.GetLastMsgForSubject(ctx, subject)
-}
-
-func (c *Client) GetSysObject(key string) ([]byte, error) {
-	return c.SysObjStore.GetBytes(key)
-}
-
-func (c *Client) Publish(ctx context.Context, data []byte, subjTokens ...string) (*jetstream.PubAck, bool, error) {
+func (c *Client) Publish(ctx context.Context, data []byte, subject string) (*jetstream.PubAck, bool, error) {
 	sent := true
-	subject := ""
-	isFullSubject := len(subjTokens) == 1 && strings.Contains(subjTokens[0], ".")
 
-	// If we have individual subject tokens, construct into string and prefix with accountId and interestTopic
-	if !isFullSubject {
-		subject = c.buildSubject(subjTokens...)
-	} else {
-		subject = subjTokens[0]
-	}
-
-	puback, err := c.JetStream.Publish(ctx, subject, data)
-	if err != nil && strings.Contains(err.Error(), "maximum messages per subject exceeded") {
-		err = nil
+	puback, err := c.JetStream.Publish(ctx, subject, data, jetstream.WithExpectLastSequencePerSubject(0))
+	if err != nil {
 		sent = false
-		c.logger.Debugf("Skipping duplicate message %s", subject)
-	} else if err == nil {
-		c.logger.Debugf("Message sent %s", subject)
+
+		if strings.Contains(err.Error(), wrongSequenceErrString) {
+			// Wrong last sequence error is expected in normal operation. It is how we
+			// ensure idempotency at message creation level.
+			err = nil
+		}
 	}
 
 	return puback, sent, err
 }
 
-// Deprecated: PublishResult is a convenience wrapper that json encodes a ResultMsg and publishes it
+// PublishResult publishes a result message for a given request message
 //
-// In most cases you should use PublishResultWithAck instead, deferring acking of the original messaging
-// until after we've sent a result.
-// This method will be removed in future.
-func (c *Client) PublishResult(ctx context.Context, startedAt time.Time, result interface{}, err error, subjTokens ...string) (error, bool) {
-	resultMsg, ok := result.(ResultMsg)
-	if !ok {
-		resultMsg = NewResultMsg(startedAt, result, err)
-	}
+// TODO: Might be okay to delete this
+func (c *Client) PublishResult(
+	ctx context.Context,
+	request jetstream.Msg,
+	result interface{},
+	err error,
+	subjectTokens ...string,
+) (error, bool) {
+	// Note: We can use request.Metadata() Timestamp to decide when the original request was made
+	// paired with time.Now() we can calculate latency and add it to result messages.
 
-	resultBytes, err := json.Marshal(resultMsg)
+	return nil, false
+}
+
+// PublishSourceEventAccount creates and publishes a source event namespaced to an account
+func (c *Client) PublishSourceEventAccount(
+	ctx context.Context,
+	data map[string]any,
+	source string,
+	event string,
+	action string,
+	accountID string,
+) error {
+	sourceEvent, hash, err := CreateSourceEvent(data, source, event, action, "")
 	if err != nil {
-		return err, false
+		return fmt.Errorf("error creating source event: %w", err)
+	}
+	subject := SourceEventSubjectAccount(accountID, hash)
+	if _, _, err := c.Publish(ctx, sourceEvent, subject); err != nil {
+		return fmt.Errorf("error publishing source event on subject '%s': %w", subject, err)
 	}
 
-	_, sent, err := c.Publish(ctx, resultBytes, subjTokens...)
-	return err, sent
-}
-
-func (c *Client) PublishResultWithAck(ctx context.Context, msg jetstream.Msg, startedAt time.Time, result interface{}, err error, subjTokens ...string) (bool, error) {
-	err, sent := c.PublishResult(ctx, startedAt, result, err, subjTokens...)
-
-	if err == nil && sent {
-		err = DoubleAck(ctx, msg)
-	}
-
-	return sent, err
-}
-
-func (c *Client) PutSysObject(name string, data []byte) (*nats.ObjectInfo, error) {
-	return c.SysObjStore.PutBytes(name, data)
-}
-
-func (c *Client) buildSubject(subjTokens ...string) string {
-	tokens := append([]string{c.accountId, c.interestTopic}, subjTokens...)
-	return strings.Join(tokens, ".")
-}
-
-func (c *Client) initJetStream() error {
-	js, err := jetstream.New(c.NatsConn)
-	if err != nil {
-		return err
-	}
-
-	c.JetStream = js
 	return nil
 }
 
-func (c *Client) initNatsConnection(natsUrl string) error {
-	nc, err := nats.Connect(
-		natsUrl,
+// ReplayConsumer returns a consumer for replaying events
+func (c *Client) ReplayConsumer(ctx context.Context, sequenceId string) (jetstream.Consumer, error) {
+	// Create a new, random replay sequence ID
+	replaySequenceId := fmt.Sprintf("replay-%s", uuid.NewString()[:20])
+
+	stream, err := c.JetStream.Stream(ctx, ChannelNotify)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the source message to be replayed from the stream
+	rawMsg, err := stream.GetLastMsgForSubject(ctx, SourceEventSubject(sequenceId))
+	if err != nil || rawMsg == nil {
+		return nil, fmt.Errorf("Failed to fetch source event for '%s': %w", sequenceId, err)
+	}
+
+	// Create ephemeral consumer filtered by replayed sequence ID
+	consumerCfg := jetstream.ConsumerConfig{
+		Name:          replaySequenceId,
+		Description:   fmt.Sprintf("Replaying event: '%s'", sequenceId),
+		FilterSubject: ReplayFilterSubject(replaySequenceId),
+		DeliverPolicy: jetstream.DeliverAllPolicy,
+	}
+	consumer, err := c.JetStream.CreateConsumer(ctx, ChannelNotify, consumerCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Publish the source message with replayed sequence ID so it's picked up by
+	// ephemeral consumer
+	c.Publish(ctx, rawMsg.Data, SourceEventSubject(replaySequenceId))
+
+	return consumer, nil
+}
+
+// RunnerConsumer returns a consumer for the `notify` stream
+func (c *Client) RunnerConsumer(ctx context.Context) (jetstream.Consumer, error) {
+	cfg := jetstream.ConsumerConfig{
+		Name:          ChannelNotify,
+		Durable:       ChannelNotify,
+		FilterSubject: NotifyFilterSubject(),
+		DeliverPolicy: jetstream.DeliverNewPolicy,
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		AckWait:       time.Minute * 1,
+		MaxDeliver:    5,
+		ReplayPolicy:  jetstream.ReplayInstantPolicy,
+	}
+
+	return c.JetStream.CreateOrUpdateConsumer(ctx, ChannelNotify, cfg)
+}
+
+// WorkerConsumer returns a consumer for the `request` stream
+//
+// The consumer will filter requests by the given appName
+// If durable is true, then the consumer created will be a durable one, otherwise it will be ephemeral.
+func (c *Client) WorkerConsumer(ctx context.Context, appName string, durable bool) (jetstream.Consumer, error) {
+	name := fmt.Sprintf("%s-%s", ChannelRequest, appName)
+	name = nameReplacer.Replace(name)
+
+	cfg := jetstream.ConsumerConfig{
+		Name:          name,
+		FilterSubject: WorkerRequestFilterSubject(appName, "*"),
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		AckWait:       1 * time.Minute,
+		MaxDeliver:    120, // Two hours of redelivery attempts
+		ReplayPolicy:  jetstream.ReplayInstantPolicy,
+	}
+
+	if durable {
+		cfg.Durable = name
+	}
+
+	return c.JetStream.CreateOrUpdateConsumer(ctx, ChannelRequest, cfg)
+}
+
+// Connect establishes a NATS connection, retrying on failed connect attempts
+func Connect(natsUrl string, credsPath string) (*nats.Conn, error) {
+
+	connOpts := []nats.Option{
 		nats.RetryOnFailedConnect(true),
 		nats.MaxReconnects(5),
-		nats.ReconnectWait(time.Second),
+		nats.ReconnectWait(5 * time.Second),
+	}
+
+	if credsPath != "" {
+		connOpts = append(connOpts, nats.UserCredentials(credsPath))
+	}
+
+	nc, err := nats.Connect(
+		natsUrl,
+		connOpts...,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	c.NatsConn = nc
-	return nil
+	return nc, nil
 }
 
-// initObjectStore initialises required system object store in NATS for a client
-func (c *Client) initObjectStore(ctx context.Context, accountId string) error {
-	js, err := c.NatsConn.JetStream()
-	if err != nil {
-		return err
-	}
-
-	sysObjConf := nats.ObjectStoreConfig{
-		Bucket: "system",
-	}
-	sysObj, err := js.CreateObjectStore(&sysObjConf)
-	if err != nil {
-		return err
-	}
-
-	// Set the system object store on the client
-	c.SysObjStore = sysObj
-	return nil
-}
-
-func (c *Client) initStream(ctx context.Context) error {
-	stream, err := c.JetStream.Stream(ctx, c.streamName)
-	if err != nil {
-		return err
-	}
-
-	c.stream = stream
-
-	return nil
-}
-
-// ClientOpts - passed through to NewClient() to configure the client setup
-
-// DefaultClientOpts configures the hiphops nats.Client as a RunnerClient
-func DefaultClientOpts() []ClientOpt {
-	return []ClientOpt{
-		WithRunner(DefaultConsumerName),
-	}
-}
-
-// WithReplay initialises the client with a consumer for replaying a sequence
-func WithReplay(name string, sequenceId string) ClientOpt {
-	return func(c *Client) error {
-		ctx := context.Background() // TODO: Move all context creation in ClientOpts to argument rather than in function
-
-		// Get the source message from the stream
-		stream, err := c.JetStream.Stream(ctx, c.streamName)
-		if err != nil {
-			return err
-		}
-
-		// Get the source message to be replayed from the stream
-		sourceMsgSubject := SourceEventSubject(c.accountId, c.interestTopic, sequenceId)
-		rawMsg, err := stream.GetLastMsgForSubject(ctx, sourceMsgSubject)
-		if err != nil {
-			return fmt.Errorf("Failed to fetch source event: %w", err)
-		}
-		if rawMsg == nil {
-			return fmt.Errorf("No source event found for subject '%s'", sourceMsgSubject)
-		}
-
-		// Create a new, random replay sequence ID
-		replaySequenceId := fmt.Sprintf("replay-%s", uuid.NewString()[:20])
-
-		// Create ephemeral consumer filtered by replayed sequence ID
-		consumerCfg := jetstream.ConsumerConfig{
-			Name:          replaySequenceId,
-			Description:   fmt.Sprintf("Replay request for sequence: '%s'", sequenceId),
-			FilterSubject: ReplayFilterSubject(c.accountId, c.interestTopic, replaySequenceId),
-			DeliverPolicy: jetstream.DeliverAllPolicy,
-		}
-		consumer, err := c.JetStream.CreateConsumer(ctx, c.streamName, consumerCfg)
-		if err != nil {
-			return err
-		}
-
-		// Publish the source message with replayed sequence ID so it's picked up by
-		// ephemeral consumer
-		c.Publish(ctx, rawMsg.Data, ChannelNotify, replaySequenceId, "event")
-
-		// Set the consumer on the client
-		c.Consumers[name] = consumer
-		return nil
-	}
-}
-
-// WithRunner initialises the client with a consumer for running pipelines
-func WithRunner(name string) ClientOpt {
-	return func(c *Client) error {
-		ctx := context.Background()
-
-		consumerName := fmt.Sprintf("%s-%s-%s-v2", c.accountId, c.interestTopic, ChannelNotify)
-		consumerName = nameReplacer.Replace(consumerName)
-
-		cfg := jetstream.ConsumerConfig{
-			Name:          consumerName,
-			Durable:       consumerName,
-			FilterSubject: NotifyFilterSubject(c.accountId, c.interestTopic),
-			DeliverPolicy: jetstream.DeliverNewPolicy,
-			AckPolicy:     jetstream.AckExplicitPolicy,
-			AckWait:       time.Minute * 1,
-			MaxDeliver:    5,
-			ReplayPolicy:  jetstream.ReplayInstantPolicy,
-		}
-		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, cfg)
-		if err != nil {
-			return err
-		}
-
-		c.Consumers[name] = consumer
-		return nil
-	}
-}
-
-// WithLocalRunner initialises a runner with a randomised interest topic and ephemeral consumer
-func WithLocalRunner(name string) ClientOpt {
-	return func(c *Client) error {
-		ctx := context.Background()
-
-		c.interestTopic = fmt.Sprintf("local-%s", uuid.NewString()[:7])
-		c.preferEphemeral = true
-
-		cfg := jetstream.ConsumerConfig{
-			Name:          c.interestTopic,
-			FilterSubject: NotifyFilterSubject(c.accountId, c.interestTopic),
-			DeliverPolicy: jetstream.DeliverNewPolicy,
-			AckPolicy:     jetstream.AckExplicitPolicy,
-			AckWait:       time.Minute * 1,
-			MaxDeliver:    5,
-			ReplayPolicy:  jetstream.ReplayInstantPolicy,
-		}
-		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, cfg)
-		if err != nil {
-			return err
-		}
-
-		c.Consumers[name] = consumer
-		return nil
-	}
-}
-
-// WithStreamName overrides the stream name to be used (which defaults to accountId otherwise)
-//
-// Should be given before any ClientOpts that use the stream,
-// as otherwise they will be initialised with the default stream name
-func WithStreamName(name string) ClientOpt {
-	return func(c *Client) error {
-		c.streamName = name
-		return nil
-	}
-}
-
-// WithWorker initialises the client with a consumer to receive call requests for a worker
-func WithWorker(appName string) ClientOpt {
-	return func(c *Client) error {
-		ctx := context.Background()
-
-		name := fmt.Sprintf("%s-%s-%s-%s", c.accountId, c.interestTopic, ChannelRequest, appName)
-		name = nameReplacer.Replace(name)
-
-		// Create or update the consumer, since these are created dynamically
-		consumerCfg := jetstream.ConsumerConfig{
-			Name:          name,
-			FilterSubject: WorkerRequestFilterSubject(c.accountId, c.interestTopic, appName, "*"),
-			AckWait:       1 * time.Minute,
-			MaxDeliver:    120, // Two hours of redelivery attempts
-		}
-		if !c.preferEphemeral {
-			consumerCfg.Durable = name
-		}
-
-		consumer, err := c.JetStream.CreateOrUpdateConsumer(ctx, c.streamName, consumerCfg)
-		if err != nil {
-			return err
-		}
-
-		c.Consumers[appName] = consumer
-		return nil
-	}
+// DoubleAck is a convenience wrapper around NATS acking with a timeout
+func DoubleAck(ctx context.Context, msg jetstream.Msg) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	return msg.DoubleAck(ctx)
 }
