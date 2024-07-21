@@ -147,7 +147,7 @@ jobs:
 
       - uses: ko-build/setup-ko@v0.6
         env:
-          KO_DOCKER_REPO: docker.io/hiphops/hiphops
+          KO_DOCKER_REPO: hiphops
 
       - name: Login to Docker Hub Registry
         env:
@@ -159,16 +159,13 @@ jobs:
         if: inputs.env == 'live'
         run: |
           cd cmd/hiphops
-          ko build -t "${{ inputs.ref }}" \
-          -t "latest" \
-          --platform "linux/amd64" \
-          --platform "linux/arm64"
+          ko build \
+          -t "${{ inputs.ref }},latest" \
+          --platform "linux/amd64,"linux/arm64"
 
       - name: Build and push (stage)
         if: inputs.env == 'stage'
         run: |
           cd cmd/hiphops
-          ko build -t "alpha-${{ inputs.ref }}" \
-          -t "alpha" \
-          --platform "linux/amd64" \
-          --platform "linux/arm64"
+          ko build -t "alpha-${{ inputs.ref }},alpha" \
+          --platform "linux/amd64,linux/arm64"
