@@ -14,7 +14,7 @@ import (
 
 type InitCmd struct {
 	Dir      string `arg:"positional" default:"." help:"path to Hiphops dir - defaults to current directory"`
-	Template string `arg:"-t,--template" help:"URL or filepath of the project template" default:"github.com/hiphops-io/hops/deploy/project_template/"`
+	Template string `arg:"-t,--template" help:"URL or filepath of the project template" default:"github.com/hiphops-io/hops/deploy/project_template/v1/"`
 }
 
 func (i *InitCmd) Run() error {

@@ -52,7 +52,7 @@ func Start(cfg *config.Config) error {
 		return err
 	}
 
-	h.startHTTPServer(ctx, h.natsClient)
+	h.startHTTPServer(ctx)
 
 	return h.runGroup.Run()
 }
@@ -115,7 +115,7 @@ func (h *HopsServer) startAutomationsLoader(ctx context.Context, cfg *config.Con
 	return automationsLoader, nil
 }
 
-func (h *HopsServer) startHTTPServer(ctx context.Context, natsClient *nats.Client) {
+func (h *HopsServer) startHTTPServer(ctx context.Context) {
 	server := httpserver.NewHTTPServer(":8080", h.natsClient)
 
 	h.runGroup.Add(
