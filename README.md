@@ -32,12 +32,12 @@ cd my-hiphops-app
 #### Setup hops
 
 ```
-/path/to/hops-repo/cmd/hops/bin/hops init
-/path/to/hops-repo/cmd/hops/bin/hops link
+HIPHOPS_WEB_URL="http://localhost:3000" /path/to/hops-repo/cmd/hops/bin/hops init
+HIPHOPS_WEB_URL="http://localhost:3000" /path/to/hops-repo/cmd/hops/bin/hops link
 ```
 
 #### Run hops
 
 ```
-/path/to/hops-repo/cmd/hops/bin/hops up
+HIPHOPS_WEB_URL="http://localhost:3000" /path/to/hops-repo/cmd/hops/bin/hops up
 ```
