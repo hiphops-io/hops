@@ -11,3 +11,33 @@ Full docs can be found at [docs.hiphops.io](https://docs.hiphops.io)
 ---
 
 Our guide for contributing to hops itself is [here](./docs/contributing.md)
+
+## Local development
+
+### Build
+
+```
+go build -C cmd/hops -o bin/hops
+```
+
+### Run
+
+Make a directory for your hops installation
+
+```
+mkdir my-hiphops-app
+cd my-hiphops-app
+```
+
+#### Setup hops
+
+```
+/path/to/hops-repo/cmd/hops/bin/hops init
+/path/to/hops-repo/cmd/hops/bin/hops link
+```
+
+#### Run hops
+
+```
+/path/to/hops-repo/cmd/hops/bin/hops up
+```
