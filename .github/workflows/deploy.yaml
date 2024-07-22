@@ -80,8 +80,8 @@ jobs:
             # wait for parallel builds to finish
             wait
             # create universal binary
-            lipo -create -output bin/hops${EXT} bin/hops-arm64 bin/hops-amd64
-            rm bin/hops-arm64 bin/hops-amd64
+            lipo -create -output cmd/hops/bin/hops${EXT} cmd/hops/bin/hops-arm64 cmd/hops/bin/hops-amd64
+            rm cmd/hops/bin/hops-arm64 cmd/hops/bin/hops-amd64
           else
             CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -C cmd/hops -o bin/hops${EXT}
           fi
