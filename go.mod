@@ -1,6 +1,6 @@
 module github.com/hiphops-io/hops
 
-go 1.22
+go 1.22.0
 
 require (
 	github.com/alexflint/go-arg v1.4.3

@@ -103,9 +103,9 @@ jobs:
       - name: Prepare for release
         run: |
           mkdir -p zip
-          cd bin
-          zip ../zip/hops-${{ matrix.goos }}-${{ matrix.goarch }}.zip hops${EXT}
-          cd ..
+          cd cmd/hops/bin
+          zip ../../../zip/hops-${{ matrix.goos }}-${{ matrix.goarch }}.zip hops${EXT}
+          cd ../../../
 
       - name: Sign MacOS zip
         if: matrix.goos == 'darwin'
