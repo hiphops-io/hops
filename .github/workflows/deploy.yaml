@@ -98,7 +98,7 @@ jobs:
         env:
           APPLE_CODE_SIGNING_DEVELOPER_ID: ${{ secrets.APPLE_CODE_SIGNING_DEVELOPER_ID }}
         run: |
-          .github/scripts/codesign.sh bin/hops${EXT}
+          .github/scripts/codesign.sh cmd/hops/bin/hops${EXT}
 
       - name: Prepare for release
         run: |
