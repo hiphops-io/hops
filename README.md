@@ -1,6 +1,6 @@
 # Hiphops DevOps Control Plane (Hops)
 
-![Hiphops Casey Logo](assets/casey-full.png)
+![Hiphops Casey Logo](docs/images/casey-full.png)
 
 Hiphops is a DevOps Control Plane and automation engine
 
