@@ -1,0 +1,12 @@
+// Hops files use an HCL based DSL (similar to Terraform, Docker Bake, and other tools)
+// These files are where you match inbound events to workers
+// create schedules, and define custom commands
+
+// Example of triggering a worker on a pullrequest merged event (e.g. from github)
+// `pullrequest` is the event, `merged` is the event action.
+// `notify_prs` is the name you've given to the flow
+on pullrequest_merged notify_prs {
+  // Will trigger the worker code in `hello.work.js` (or hello.work.ts if you prefer)
+  worker = "hello"
+}
+
