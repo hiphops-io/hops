@@ -30,7 +30,7 @@ services:
     entrypoint: "sh"
     command: ["/hiphops/watch.sh"]
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-S", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--spider", "-S", "http://127.0.0.1:8080/health"]
       interval: 5s
       retries: 5
       start_period: 1s
