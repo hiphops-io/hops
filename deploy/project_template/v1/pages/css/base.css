@@ -1,3 +1,182 @@
+/* base.css */
+
+/* Reset CSS */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
 body {
-  background-color: yellowgreen;
+  height: 100%;
+  font-family: Arial, sans-serif;
+  background-color: black;
+  color: white;
+  display: flex;
+  width: 100%;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin-bottom: 16px;
+}
+
+h1 {
+  font-size: 2em;
+}
+
+h2 {
+  font-size: 1.75em;
+}
+
+h3 {
+  font-size: 1.5em;
+}
+
+h4 {
+  font-size: 1.25em;
+}
+
+h5 {
+  font-size: 1em;
+}
+
+h6 {
+  font-size: 0.875em;
+}
+
+p {
+  margin-bottom: 16px;
+}
+
+em {
+  font-style: italic;
+}
+
+strong {
+  font-weight: bold;
+}
+
+ul,
+ol {
+  margin-bottom: 16px;
+  padding-left: 40px;
+}
+
+ul ul,
+ol ol {
+  margin-bottom: 0;
+}
+
+a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+blockquote {
+  margin: 16px 0;
+  padding: 16px;
+  background-color: #1e1e1e;
+  border-left: 4px solid #007bff;
+}
+
+code {
+  background-color: #1e1e1e;
+  border: 1px solid #666;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+pre {
+  background-color: #1e1e1e;
+  border: 1px solid #666;
+  padding: 16px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+th,
+td {
+  padding: 8px;
+  border: 1px solid #666;
+  text-align: left;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #666;
+  margin: 16px 0;
+}
+
+.sidebar {
+  width: 15%;
+  height: 100vh;
+  padding: 16px;
+  font-size: 14px;
+}
+
+.page_group ul {
+  padding-left: 1px !important;
+  margin-bottom: 0px !important;
+  list-style: none;
+}
+
+.page_group li {
+  padding-left: 1px !important;
+}
+
+.page_title {
+  font-weight: bold;
+}
+
+.subpage_title {
+  opacity: 80%;
+}
+
+.subpage_list {
+  padding-left: 16px;
+}
+
+.subpage_list li {
+  margin-top: 4px;
+}
+
+.markdown_container {
+  background-color: #1e1e1e;
+  padding: 40px 0px;
+  border-radius: 4px;
+  margin: 8px;
+  width: 85%;
+  color: white;
+  height: fit-content;
+}
+
+.markdown_div {
+  margin: 0 auto;
+  width: 720px;
 }
