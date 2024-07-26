@@ -40,6 +40,15 @@ type (
 func (l *LinkCmd) Run() error {
 	fmt.Println("Linking to hiphops.io")
 
+	if l.Dir == "." {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("unable to get current working directory: %w", err)
+		}
+
+		l.Dir = cwd
+	}
+
 	creds, err := l.getCreds()
 	if err != nil {
 		return err
@@ -57,7 +66,7 @@ func (l *LinkCmd) Run() error {
 		return fmt.Errorf("failed to write credentials to %s: %w", credsPath, err)
 	}
 
-	fmt.Printf("Wrote credentials to: %s", credsPath)
+	fmt.Printf("Wrote credentials to: %s\n", credsPath)
 	fmt.Println("NOTE: This file grants access to your Hiphops.io account and its integrations. Protect it as you would a password")
 
 	return nil

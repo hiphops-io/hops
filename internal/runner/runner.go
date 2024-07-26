@@ -85,6 +85,7 @@ func (r *Runner) MessageHandler(
 	ackDeadline time.Duration,
 ) error {
 	logger := r.logger.With().Str("sequence_id", msgMeta.SequenceId).Logger()
+	logger.Debug().Msgf("Received event '%s'", msgMeta.Subject)
 
 	ons, d := r.automations.EventOns(msgData)
 	if d.HasErrors() {
