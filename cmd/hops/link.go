@@ -53,7 +53,12 @@ func (l *LinkCmd) Run() error {
 	if credsPath == "" {
 		credsPath = filepath.Join(l.Dir, ".hiphops", "hiphops-io.creds")
 	}
-	os.WriteFile(credsPath, []byte(creds), 0644)
+	if err := os.WriteFile(credsPath, []byte(creds), 0644); err != nil {
+		return fmt.Errorf("failed to write credentials to %s: %w", credsPath, err)
+	}
+
+	fmt.Printf("Wrote credentials to: %s", credsPath)
+	fmt.Println("NOTE: This file grants access to your Hiphops.io account and its integrations. Protect it as you would a password")
 
 	return nil
 }
