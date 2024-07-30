@@ -1,4 +1,4 @@
-package dsl
+package main
 
 import (
 	"context"
@@ -6,10 +6,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/oklog/run"
+	"github.com/rs/zerolog"
 	"github.com/slok/reload"
 )
 
@@ -17,71 +18,18 @@ type (
 	// DirNotifier watches a path and its subdirectories for changes
 	// notifying when one occurs
 	DirNotifier struct {
+		path    string
+		logger  zerolog.Logger
 		watcher *fsnotify.Watcher
-	}
-
-	AutomationsLoader struct {
-		automations *Automations
-		mu          sync.RWMutex
-		path        string
 	}
 )
 
-func NewAutomationsLoader(path string, tolerant bool) (*AutomationsLoader, error) {
-	al := &AutomationsLoader{path: path}
-	err := al.Reload(context.Background(), tolerant)
-	if err != nil {
-		return al, err
-	}
-
-	return al, nil
-}
-
-func (al *AutomationsLoader) Reload(ctx context.Context, tolerant bool) error {
-	a, d, err := NewAutomationsFromDir(al.path)
-	if err != nil && !tolerant {
-		return fmt.Errorf("Failed to read hops files: %w", err)
-	}
-	if d.HasErrors() && !tolerant {
-		return fmt.Errorf("Failed to decode hops files: %s", d.Error())
-	}
-
-	// Only reached when in tolerant mode or there's no errors
-	failedLoad := err != nil || d.HasErrors()
-	if failedLoad && al.automations != nil && al.automations.Hash != "empty" {
-		// If an automation is already loaded, then don't replace with the broken one
-		return nil
-	}
-
-	if failedLoad {
-		a = &Automations{
-			Files:     map[string][]byte{},
-			Hash:      "empty",
-			Hops:      &HopsAST{},
-			Manifests: map[string]*Manifest{},
-		}
-	}
-
-	al.mu.Lock()
-	al.automations = a
-	al.mu.Unlock()
-
-	return nil
-}
-
-// Get returns the automations for the given hash key or the local automations
-// if hash key is the empty string
-func (al *AutomationsLoader) Get() (*Automations, error) {
-	al.mu.RLock()
-	defer al.mu.RUnlock()
-	return al.automations, nil
-}
-
-func NewDirNotifier(path string) (*DirNotifier, error) {
-	d := &DirNotifier{}
+func NewDirNotifier(path string, logger zerolog.Logger) (*DirNotifier, error) {
+	d := &DirNotifier{path: path, logger: logger}
 
 	err := d.initWatcher(path)
 	if err != nil {
+		logger.Error().Err(err).Msg("Error watching directory for changes")
 		return nil, err
 	}
 
@@ -135,6 +83,26 @@ func (d *DirNotifier) Notifier(ctx context.Context) reload.Notifier {
 			return "", err
 		}
 	})
+}
+
+func (d *DirNotifier) NotifyReload(ctx context.Context, reloadMngr *reload.Manager, runGroup *run.Group) {
+	// Add file watcher based reload notifier.
+	reloadMngr.On(d.Notifier(ctx))
+
+	ctx, cancel := context.WithCancel(ctx)
+	runGroup.Add(
+		func() error {
+			// Block forever until the watcher stops.
+			d.logger.Info().Msgf("Watching %s for changes", d.path)
+			<-ctx.Done()
+			return nil
+		},
+		func(_ error) {
+			d.logger.Info().Msg("Stopping watching dir for changes")
+			d.Close()
+			cancel()
+		},
+	)
 }
 
 func (d *DirNotifier) initWatcher(path string) error {

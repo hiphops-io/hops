@@ -1,5 +1,4 @@
-// Package staticgen is a static site generator for hiphops
-package staticgen
+package markdown
 
 import (
 	"bytes"

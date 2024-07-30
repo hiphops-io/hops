@@ -4,29 +4,28 @@ import (
 	"context"
 	"time"
 
-	"github.com/goccy/go-json"
 	"github.com/robfig/cron"
 	"github.com/rs/zerolog"
 
-	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/markdown"
 	"github.com/hiphops-io/hops/nats"
 )
 
 type Schedule struct {
-	Config       *dsl.ScheduleAST
 	CronSchedule cron.Schedule
+	flow         *markdown.Flow
 	logger       zerolog.Logger
 	natsClient   *nats.Client
 }
 
-func NewSchedule(config *dsl.ScheduleAST, natsClient *nats.Client, logger zerolog.Logger) (*Schedule, error) {
-	cronSchedule, err := cron.ParseStandard(config.Cron)
+func NewSchedule(flow *markdown.Flow, natsClient *nats.Client, logger zerolog.Logger) (*Schedule, error) {
+	cronSchedule, err := cron.ParseStandard(flow.Schedule)
 	if err != nil {
 		return nil, err
 	}
 
 	schedule := &Schedule{
-		Config:       config,
+		flow:         flow,
 		CronSchedule: cronSchedule,
 		logger:       logger,
 		natsClient:   natsClient,
@@ -36,30 +35,20 @@ func NewSchedule(config *dsl.ScheduleAST, natsClient *nats.Client, logger zerolo
 }
 
 func (s *Schedule) Run() {
-	s.logger.Info().Msgf("Triggering schedule %s", s.Config.Name)
+	s.logger.Info().Msgf("Triggering schedule %s", s.flow.ID)
 	ctx := context.Background()
 
 	now := time.Now().UTC()
 	// Timestamp without seconds to create 'buckets' for idempotency
 	triggerTime := now.Format(time.RFC822Z)
 
-	// Create the payload and add inputs + trigger time
-	schedulePayload := map[string]any{}
-
-	if s.Config.Inputs != nil {
-		err := json.Unmarshal(s.Config.Inputs, &schedulePayload)
-		if err != nil {
-			s.logger.Error().Err(err).Msgf("Unable to parse inputs for schedule: %s", s.Config.Name)
-			return
-		}
-	}
-
-	schedulePayload["trigger_time"] = triggerTime
+	// Create the payload with trigger time
+	schedulePayload := map[string]any{"trigger_time": triggerTime}
 
 	// Construct the source event
-	sourceEvent, sequenceID, err := dsl.CreateSourceEvent(schedulePayload, "hiphops", "schedule", s.Config.Name)
+	sourceEvent, sequenceID, err := nats.CreateSourceEvent(schedulePayload, "hiphops", "schedule", s.flow.ActionName(), "")
 	if err != nil {
-		s.logger.Error().Err(err).Msgf("Unable to create source event for schedule: %s", s.Config.Name)
+		s.logger.Error().Err(err).Msgf("Unable to create source event for schedule: %s", s.flow.ID)
 		return
 	}
 
@@ -67,6 +56,6 @@ func (s *Schedule) Run() {
 	subject := nats.SourceEventSubject(sequenceID)
 	_, _, err = s.natsClient.Publish(ctx, sourceEvent, subject)
 	if err != nil {
-		s.logger.Error().Err(err).Msgf("Unable to dispatch source event for schedule: %s", s.Config.Name)
+		s.logger.Error().Err(err).Msgf("Unable to dispatch source event for schedule: %s", s.flow.ID)
 	}
 }

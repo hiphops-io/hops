@@ -71,24 +71,41 @@ func InterfaceToCtyVal(i interface{}) (cty.Value, error) {
 	}
 }
 
-func CtyToEventAction(val cty.Value, metadataKey string) (event string, action string, err error) {
+func CtyToEventAction(val cty.Value, metadataKey string) (source, event, action string, err error) {
+	source, event, action = "", "", ""
+	err = nil
+
 	metadata, ok := val.AsValueMap()[metadataKey]
 	if !ok {
-		return "", "", fmt.Errorf("event is missing required metadata")
+		err = fmt.Errorf("event is missing required metadata. Missing 'hops' key")
+		return
 	}
 	metadataMap := metadata.AsValueMap()
 
+	sourceVal, ok := metadataMap["source"]
+	if ok {
+		source = sourceVal.AsString()
+	}
+	if source == "" {
+		err = fmt.Errorf("event is missing required metadata. Missing 'source' key")
+		return
+	}
+
 	eventVal, ok := metadataMap["event"]
-	if !ok {
-		return "", "", fmt.Errorf("event is missing required metadata. Missing 'event' key")
+	if ok {
+		event = eventVal.AsString()
+	}
+	if event == "" {
+		err = fmt.Errorf("event is missing required metadata. Missing 'event' key")
+		return
 	}
 
 	actionVal, ok := metadataMap["action"]
-	if !ok {
-		return eventVal.AsString(), "", nil
+	if ok {
+		action = actionVal.AsString()
 	}
 
-	return eventVal.AsString(), actionVal.AsString(), nil
+	return
 }
 
 // CtyValueToInterface converts a cty.Value to an interface{}.

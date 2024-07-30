@@ -1,4 +1,4 @@
-package staticgen
+package markdown
 
 import (
 	"os"
@@ -48,7 +48,7 @@ func TestBuild(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			buildDir := t.TempDir()
-			sourceDir := setupSourceDir(t, tc.source)
+			sourceDir := setupPopulatedTestDir(t, tc.source)
 
 			builder, err := NewStaticBuilder()
 			require.NoError(t, err, "Test setup error")
@@ -114,7 +114,7 @@ description: This page
 			sourceFile := map[string][]byte{
 				"test.md": tc.source,
 			}
-			sourceDir := setupSourceDir(t, sourceFile)
+			sourceDir := setupPopulatedTestDir(t, sourceFile)
 			source := filepath.Join(sourceDir, "test.md")
 
 			builder, err := NewStaticBuilder()
@@ -143,21 +143,4 @@ description: This page
 			}
 		})
 	}
-}
-
-func setupSourceDir(t *testing.T, source map[string][]byte) string {
-	sourceDir := t.TempDir()
-	for relPath, content := range source {
-		// Ensure the file's dir exists (in case of nested dir structures)
-		path := filepath.Join(sourceDir, relPath)
-		fileDir := filepath.Dir(path)
-
-		err := os.MkdirAll(fileDir, os.ModePerm)
-		require.NoError(t, err, "Test setup: Unable to create source file dir")
-
-		err = os.WriteFile(path, content, os.ModePerm)
-		require.NoError(t, err, "Test setup: Unable to write source file")
-	}
-
-	return sourceDir
 }

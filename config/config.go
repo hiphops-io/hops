@@ -19,7 +19,6 @@ type (
 	}
 
 	RunnerConf struct {
-		Serve    bool   `yaml:"serve" env:"SERVE"` // TODO: I think this can now be removed?
 		NATSConf string `yaml:"nats_config" env:"NATS_CONFIG"`
 		DataDir  string `yaml:"data_dir" env:"DATA_DIR"`
 		Local    bool   `yaml:"local" env:"LOCAL"` // TODO: Check we actually use/need this
@@ -44,6 +43,8 @@ func LoadConfig(hiphopsDir string, tag string) (*Config, error) {
 		NATSConf: c.NATSConfigPath(),
 	}
 
+	fmt.Println("Config pre base:", c.Runner.NATSConf, c.Runner.DataDir)
+
 	if err := cleanenv.ReadConfig(c.BaseConfigPath(), c); err != nil {
 		return nil, err
 	}
@@ -52,7 +53,11 @@ func LoadConfig(hiphopsDir string, tag string) (*Config, error) {
 		return c, nil
 	}
 
+	fmt.Println("Config pre tag:", c.Runner.NATSConf, c.Runner.DataDir)
+
 	err := cleanenv.ReadConfig(c.ConfigPath(), c)
+
+	fmt.Println("Config post:", c.Runner.NATSConf, c.Runner.DataDir)
 
 	return c, err
 }
@@ -86,6 +91,9 @@ func (c *Config) LocalDirPath() string {
 }
 
 func (c *Config) NATSConfigPath() string {
-	fmt.Println("Config dir path is:", c.ConfigDirPath())
+	if c.Runner.NATSConf != "" {
+		return c.Runner.NATSConf
+	}
+
 	return filepath.Join(c.ConfigDirPath(), "nats.conf")
 }

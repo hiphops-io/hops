@@ -7,7 +7,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 
-	"github.com/hiphops-io/hops/dsl/ctyconv"
+	"github.com/hiphops-io/hops/expression/ctyconv"
 )
 
 // TemplateFunc is a stateful cty function that evaluates a file and variables

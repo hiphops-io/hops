@@ -26,15 +26,10 @@ func TestLoadConfig(t *testing.T) {
 			configFiles: map[string][]byte{
 				"": []byte(`
 dev: true
-runner:
-  serve: true
 `),
 			},
 			expectedHopsConf: Config{
 				Dev: true,
-				Runner: RunnerConf{
-					Serve: true,
-				},
 			},
 		},
 		{
@@ -42,19 +37,13 @@ runner:
 			configFiles: map[string][]byte{
 				"": []byte(`
 dev: true
-runner:
-  serve: true
 `),
 			},
 			envVars: map[string]string{
-				"HIPHOPS_DEV":          "false",
-				"HIPHOPS_RUNNER_SERVE": "false",
+				"HIPHOPS_DEV": "false",
 			},
 			expectedHopsConf: Config{
 				Dev: false,
-				Runner: RunnerConf{
-					Serve: false,
-				},
 			},
 		},
 		{
@@ -65,18 +54,15 @@ runner:
 dev: true
 runner:
   local: false
-  serve: true
 `),
 				"dev": []byte(`
 runner:
-  serve: false
   local: true
 `),
 			},
 			expectedHopsConf: Config{
 				Dev: true,
 				Runner: RunnerConf{
-					Serve: false,
 					Local: true,
 				},
 			},
@@ -88,7 +74,6 @@ runner:
 dev: "not a boolean val"
 runner:
   local: false
-  serve: true
 `),
 			},
 			wantError: true,
@@ -101,7 +86,6 @@ runner:
 
 			cleanEnvVars(t, []string{
 				"HIPHOPS_DEV",
-				"HIPHOPS_RUNNER_SERVE",
 				"HIPHOPS_RUNNER_NATS_CONFIG",
 				"HIPHOPS_RUNNER_DATA_DIR",
 				"HIPHOPS_RUNNER_LOCAL",

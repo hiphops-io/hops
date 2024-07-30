@@ -3,7 +3,7 @@ package main
 import (
 	"path/filepath"
 
-	"github.com/hiphops-io/hops/staticgen"
+	"github.com/hiphops-io/hops/markdown"
 )
 
 type BuildCmd struct {
@@ -23,7 +23,7 @@ func buildSite(rootDir string) error {
 	sourceDir := filepath.Join(rootDir, "pages")
 	buildDir := filepath.Join(rootDir, ".hiphops", "site")
 
-	builder, err := staticgen.NewStaticBuilder()
+	builder, err := markdown.NewStaticBuilder()
 	if err != nil {
 		return err
 	}

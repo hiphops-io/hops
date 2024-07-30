@@ -5,39 +5,37 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/robfig/cron"
 	"github.com/rs/zerolog"
 
-	"github.com/hiphops-io/hops/dsl"
+	"github.com/hiphops-io/hops/markdown"
 	"github.com/hiphops-io/hops/nats"
 )
 
 type Runner struct {
-	automations       *dsl.Automations
-	automationsLoader *dsl.AutomationsLoader
-	consumer          jetstream.Consumer
-	cron              *cron.Cron
-	hopsLock          sync.RWMutex
-	logger            zerolog.Logger
-	natsClient        *nats.Client
-	schedules         []*Schedule
+	flows      markdown.FlowIndex
+	flowReader *markdown.FlowReader
+	consumer   jetstream.Consumer
+	cron       *cron.Cron
+	flowMtx    sync.RWMutex
+	logger     zerolog.Logger
+	natsClient *nats.Client
+	schedules  []*Schedule
 }
 
-func NewRunner(natsClient *nats.Client, automationsLoader *dsl.AutomationsLoader, consumer jetstream.Consumer, logger zerolog.Logger) (*Runner, error) {
+func NewRunner(natsClient *nats.Client, flowReader *markdown.FlowReader, consumer jetstream.Consumer, logger zerolog.Logger) (*Runner, error) {
 	r := &Runner{
-		automationsLoader: automationsLoader,
-		consumer:          consumer,
-		logger:            logger,
-		natsClient:        natsClient,
+		flowReader: flowReader,
+		consumer:   consumer,
+		logger:     logger,
+		natsClient: natsClient,
 	}
 
-	err := r.Reload(context.Background())
+	err := r.Load(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -45,25 +43,22 @@ func NewRunner(natsClient *nats.Client, automationsLoader *dsl.AutomationsLoader
 	return r, nil
 }
 
-func (r *Runner) Reload(ctx context.Context) error {
-	automations, err := r.automationsLoader.Get()
+func (r *Runner) Load(ctx context.Context) error {
+	flows, err := r.flowReader.ReadAll()
 	if err != nil {
 		return err
 	}
 
-	// TODO: Check we actually need to store the automations in here (with locking etc)
-	// rather than just use automationsLoader copy directly
-	r.hopsLock.Lock()
-	defer r.hopsLock.Unlock()
-
-	r.automations = automations
+	r.flowMtx.Lock()
+	r.flows = flows
+	r.flowMtx.Unlock()
 
 	err = r.prepareHopsSchedules()
 	if err != nil {
 		return fmt.Errorf("Unable to create schedules %w", err)
 	}
 
-	r.setCron()
+	r.startCron()
 
 	return nil
 }
@@ -87,28 +82,29 @@ func (r *Runner) MessageHandler(
 	logger := r.logger.With().Str("sequence_id", msgMeta.SequenceId).Logger()
 	logger.Debug().Msgf("Received event '%s'", msgMeta.Subject)
 
-	ons, d := r.automations.EventOns(msgData)
-	if d.HasErrors() {
-		r.logDiagnostics(d, logger)
-		return fmt.Errorf("%w: %s", nats.ErrEventFatal, d.Error())
+	r.flowMtx.RLock()
+	matchedFlows, err := markdown.MatchFlows(r.flows, msgData)
+	r.flowMtx.RUnlock()
+	if err != nil {
+		return fmt.Errorf("%w: %w", nats.ErrEventFatal, err)
 	}
 
-	if len(ons) == 0 {
+	if len(matchedFlows) == 0 {
 		return nil
 	}
 
-	// Now we've collected the matching on blocks, dispatch their work.
+	// Now we've collected the matching flows, dispatch their work.
 
 	var errs error
 	var wg sync.WaitGroup
-	errChan := make(chan error, len(ons))
+	errChan := make(chan error, len(matchedFlows))
 
-	for _, on := range ons {
-		on := on
+	for _, flow := range matchedFlows {
+		flow := flow
 		wg.Add(1)
-		onLogger := logger.With().Str("on", on.Slug).Logger()
+		onLogger := logger.With().Str("on", flow.ID).Logger()
 
-		go r.dispatchWork(ctx, &wg, on, msgData, msgMeta, errChan, onLogger)
+		go r.dispatchWork(ctx, &wg, flow, msgData, msgMeta, errChan, onLogger)
 	}
 
 	wg.Wait()
@@ -121,16 +117,16 @@ func (r *Runner) MessageHandler(
 	return errs
 }
 
-func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, on *dsl.On, data []byte, meta *nats.MsgMeta, errChan chan<- error, logger zerolog.Logger) {
+func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, flow *markdown.Flow, data []byte, meta *nats.MsgMeta, errChan chan<- error, logger zerolog.Logger) {
 	defer wg.Done()
 
-	subject := nats.WorkSubject(meta.SequenceId, on.Worker)
+	subject := nats.WorkSubject(meta.SequenceId, flow.Worker)
 	if _, _, err := r.natsClient.Publish(ctx, data, subject); err != nil {
 		errChan <- err
 		return
 	}
 
-	logger.Info().Msgf("Dispatched work: %s", on.Slug)
+	logger.Info().Msgf("Dispatched work: %s", flow.ID)
 
 	errChan <- nil
 }
@@ -142,8 +138,8 @@ func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, on *dsl.O
 // This function should only ever be called within a lock on r.hopsLock
 func (r *Runner) prepareHopsSchedules() error {
 	schedules := []*Schedule{}
-	for _, scheduleConf := range r.automations.GetSchedules() {
-		schedule, err := NewSchedule(scheduleConf, r.natsClient, r.logger)
+	for _, flow := range r.flowReader.ScheduledFlows() {
+		schedule, err := NewSchedule(flow, r.natsClient, r.logger)
 		if err != nil {
 			return err
 		}
@@ -156,8 +152,7 @@ func (r *Runner) prepareHopsSchedules() error {
 	return nil
 }
 
-// TODO: Rename setCron. Name is meaningless.
-func (r *Runner) setCron() {
+func (r *Runner) startCron() {
 	if r.cron != nil {
 		r.cron.Stop()
 	}
@@ -168,25 +163,4 @@ func (r *Runner) setCron() {
 		r.cron.Schedule(schedule.CronSchedule, schedule)
 	}
 	r.cron.Start()
-}
-
-func (r *Runner) logDiagnostics(diags hcl.Diagnostics, logger zerolog.Logger) {
-	for _, diag := range diags {
-		errLog := logger.Error()
-
-		var manifest *dsl.Manifest
-
-		if diag.Subject != nil {
-			automationDir := filepath.Dir(diag.Subject.Filename)
-			manifest = r.automations.Manifests[automationDir]
-		}
-
-		if manifest != nil {
-			errLog = errLog.Str("automation", manifest.Name)
-		}
-
-		errLog = errLog.Interface("diagnostic", diag)
-
-		errLog.Msg(diag.Summary)
-	}
 }

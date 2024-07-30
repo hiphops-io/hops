@@ -8,19 +8,22 @@ import (
 	"github.com/slok/reload"
 
 	"github.com/hiphops-io/hops/config"
-	"github.com/hiphops-io/hops/dsl"
 	"github.com/hiphops-io/hops/internal/httpserver"
 	"github.com/hiphops-io/hops/internal/runner"
 	"github.com/hiphops-io/hops/logs"
+	"github.com/hiphops-io/hops/markdown"
 	"github.com/hiphops-io/hops/nats"
 )
 
-type HopsServer struct {
-	logger        zerolog.Logger
-	natsClient    *nats.Client
-	reloadManager reload.Manager
-	runGroup      run.Group
-}
+type (
+	HopsServer struct {
+		logger     zerolog.Logger
+		natsClient *nats.Client
+		runGroup   run.Group
+	}
+
+	Reloader func(ctx context.Context) error
+)
 
 func Start(cfg *config.Config) error {
 	// TODO: Ensure errors are gathered and logged at the top level
@@ -31,10 +34,6 @@ func Start(cfg *config.Config) error {
 		logger: logs.InitLogger(cfg.Dev),
 	}
 
-	if cfg.Dev {
-		h.reloadManager = reload.NewManager()
-	}
-
 	close, err := h.startNATS(cfg)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("Failed to start NATS client")
@@ -42,68 +41,53 @@ func Start(cfg *config.Config) error {
 	}
 	defer close()
 
-	automationsLoader, err := h.startAutomationsLoader(ctx, cfg)
+	runnerReload, err := h.initRunner(ctx, cfg)
 	if err != nil {
-		h.logger.Error().Err(err).Msg("Start failed")
-		return err
-	}
-
-	if err := h.startRunner(ctx, cfg, automationsLoader); err != nil {
 		return err
 	}
 
 	h.startHTTPServer(ctx)
 
+	if cfg.Dev {
+		if err := h.startReloader(ctx, cfg, runnerReload); err != nil {
+			h.logger.Error().Err(err).Msg("Failed to watch reloader")
+			return err
+		}
+	}
+
 	return h.runGroup.Run()
 }
 
-func (h *HopsServer) startAutomationsLoader(ctx context.Context, cfg *config.Config) (*dsl.AutomationsLoader, error) {
-	automationsLoader, err := dsl.NewAutomationsLoader(cfg.FlowsPath(), cfg.Dev)
-	if !cfg.Dev {
-		return automationsLoader, err
-	}
+func (h *HopsServer) startReloader(ctx context.Context, cfg *config.Config, reloaders ...Reloader) error {
+	reloadManager := reload.NewManager()
 
-	h.reloadManager.Add(0, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-		err := automationsLoader.Reload(ctx, true)
-		if err != nil {
-			h.logger.Warn().Msgf("Hops files could not be reloaded: %s", err.Error())
-			return nil
-		}
-
-		h.logger.Info().Msg("Hops files reloaded")
-		return nil
-	}))
-
-	{
-		dirNotifier, err := dsl.NewDirNotifier(cfg.FlowsPath())
-		if err != nil {
-			return nil, err
-		}
-
-		// Add file watcher based reload notifier.
-		h.reloadManager.On(dirNotifier.Notifier(ctx))
-
-		ctx, cancel := context.WithCancel(ctx)
-		h.runGroup.Add(
-			func() error {
-				// Block forever until the watcher stops.
-				h.logger.Info().Msgf("Watching %s for changes", cfg.FlowsPath())
-				<-ctx.Done()
+	for _, r := range reloaders {
+		reloadManager.Add(0, reload.ReloaderFunc(func(ctx context.Context, id string) error {
+			err := r(ctx)
+			if err != nil {
+				h.logger.Warn().Msgf("Unable to reload: %s", err.Error())
 				return nil
-			},
-			func(_ error) {
-				h.logger.Info().Msg("Stopping hops file watcher")
-				dirNotifier.Close()
-				cancel()
-			},
-		)
+			}
+
+			h.logger.Info().Msg("Flows reloaded")
+			return nil
+		}))
 	}
+
+	notifer, err := NewDirNotifier(cfg.FlowsPath(), h.logger)
+	if err != nil {
+		return err
+	}
+
+	notifer.NotifyReload(ctx, &reloadManager, &h.runGroup)
+
+	reloadManager.On(notifer.Notifier(ctx))
 
 	{
 		ctx, cancel := context.WithCancel(ctx)
 		h.runGroup.Add(
 			func() error {
-				return h.reloadManager.Run(ctx)
+				return reloadManager.Run(ctx)
 			},
 			func(_ error) {
 				h.logger.Info().Msg("Auto-reloading cancelled")
@@ -112,7 +96,7 @@ func (h *HopsServer) startAutomationsLoader(ctx context.Context, cfg *config.Con
 		)
 	}
 
-	return automationsLoader, nil
+	return nil
 }
 
 func (h *HopsServer) startHTTPServer(ctx context.Context) {
@@ -159,26 +143,24 @@ func (h *HopsServer) startNATS(cfg *config.Config) (func(), error) {
 	return close, nil
 }
 
-func (h *HopsServer) startRunner(ctx context.Context, cfg *config.Config, automationsLoader *dsl.AutomationsLoader) error {
-	if !cfg.Runner.Serve {
-		return nil
-	}
+func (h *HopsServer) initRunner(ctx context.Context, cfg *config.Config) (Reloader, error) {
+	flowReader := markdown.NewFlowReader(cfg.FlowsPath())
 
 	consumer, err := h.natsClient.RunnerConsumer(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	runner, err := runner.NewRunner(h.natsClient, automationsLoader, consumer, h.logger)
+	runner, err := runner.NewRunner(h.natsClient, flowReader, consumer, h.logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if cfg.Dev {
-		h.reloadManager.Add(10, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-			return runner.Reload(ctx)
-		}))
-	}
+	// if cfg.Dev {
+	// 	h.reloadManager.Add(10, reload.ReloaderFunc(func(ctx context.Context, id string) error {
+	// 		return runner.Reload(ctx)
+	// 	}))
+	// }
 
 	ctx, cancel := context.WithCancel(ctx)
 	h.runGroup.Add(
@@ -191,5 +173,5 @@ func (h *HopsServer) startRunner(ctx context.Context, cfg *config.Config, automa
 		},
 	)
 
-	return nil
+	return runner.Load, nil
 }
