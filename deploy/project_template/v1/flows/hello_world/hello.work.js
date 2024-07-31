@@ -12,8 +12,6 @@ hiphops.run(async ({ data, subject }) => {
     // Recipient addresses need to be added to your account's allow list before you
     // can send.
     to: ["someone@example.com"],
-    // In this case, data is the raw pull_request event from GitHub (plus the `hops` metadata)
-    // GitHub's own docs describe the exact structure of events
     content: `Hello!`,
   });
 });
