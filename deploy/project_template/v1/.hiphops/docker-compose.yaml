@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   hops:
-    image: hiphops/hiphops:alpha
+    image: hiphops/hiphops:alpha-2407-humble-eft
     platform: "linux/arm64"
     ports:
       - 4222:4222
