@@ -114,6 +114,10 @@ func (r *Runner) MessageHandler(
 		errs = errors.Join(errs, err)
 	}
 
+	if errs != nil {
+		logger.Error().Err(err).Msg("Unable to dispatch work")
+	}
+
 	return errs
 }
 
@@ -135,7 +139,6 @@ func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, flow *mar
 // the cron schedules ready for running
 //
 // This function will not run the schedules, just prepare them
-// This function should only ever be called within a lock on r.hopsLock
 func (r *Runner) prepareHopsSchedules() error {
 	schedules := []*Schedule{}
 	for _, flow := range r.flowReader.ScheduledFlows() {
