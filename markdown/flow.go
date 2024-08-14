@@ -50,7 +50,7 @@ type (
 	ParamItem map[string]Param
 
 	Param struct {
-		Type     string `yaml:"type"`
+		Type     string `yaml:"type" validate:"oneof=string text number bool"`
 		Default  any    `yaml:"default"`
 		Required bool   `yaml:"required"`
 	}
@@ -260,6 +260,10 @@ func (f *Flow) IfValue(evalCtx *hcl.EvalContext) (bool, error) {
 
 func (pi *ParamItem) Param() (string, Param) {
 	for name, p := range *pi {
+		if p.Type == "" {
+			p.Type = "string"
+		}
+		// We only allow a single param per ParamItem, so return immediately
 		return name, p
 	}
 
