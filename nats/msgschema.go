@@ -17,6 +17,7 @@ const (
 	ChannelWork    = "work"
 	DoneMessageId  = "done"
 	HopsMessageId  = "hops"
+	MetadataKey    = "hops"
 	SourceEventId  = "event"
 )
 
@@ -27,26 +28,30 @@ var (
 )
 
 type (
+	HopsMsg struct {
+		Action           string
+		AppName          string
+		Channel          string
+		ConsumerSequence uint64
+		Data             map[string]any
+		Done             bool // Message is a pipeline 'done' message
+		Event            string
+		HandlerName      string
+		MessageId        string
+		NumPending       uint64
+		SequenceId       string
+		Source           string
+		StreamSequence   uint64
+		Subject          string
+		Timestamp        time.Time
+		msg              jetstream.Msg
+	}
+
 	// HopsResultMeta is metadata included in the top level of a result message
 	HopsResultMeta struct {
 		Error      string    `json:"error,omitempty"`
 		FinishedAt time.Time `json:"finished_at"`
 		StartedAt  time.Time `json:"started_at"`
-	}
-
-	MsgMeta struct {
-		AppName          string
-		Channel          string
-		ConsumerSequence uint64
-		Done             bool // Message is a pipeline 'done' message
-		HandlerName      string
-		MessageId        string
-		NumPending       uint64
-		SequenceId       string
-		StreamSequence   uint64
-		Subject          string
-		Timestamp        time.Time
-		msg              jetstream.Msg
 	}
 
 	// ResultMsg is the schema for handler call result messages
@@ -92,27 +97,29 @@ func CreateSourceEvent(rawEvent map[string]any, source string, event string, act
 	return sourceBytes, hash, nil
 }
 
-func Parse(msg jetstream.Msg) (*MsgMeta, error) {
-	message := &MsgMeta{msg: msg}
+func Parse(msg jetstream.Msg) (*HopsMsg, error) {
+	message := &HopsMsg{msg: msg}
 
-	err := message.initTokens()
-	if err != nil {
+	if err := message.parseTokens(); err != nil {
 		return nil, err
 	}
 
-	err = message.initMetadata()
-	if err != nil {
+	if err := message.parseMetadata(); err != nil {
+		return nil, err
+	}
+
+	if err := message.parseData(); err != nil {
 		return nil, err
 	}
 
 	return message, nil
 }
 
-func (m *MsgMeta) Msg() jetstream.Msg {
+func (m *HopsMsg) Msg() jetstream.Msg {
 	return m.msg
 }
 
-func (m *MsgMeta) ResponseSubject() string {
+func (m *HopsMsg) ResponseSubject() string {
 	// TODO: Will need to handle work response subjects as they have an extra component (flow_name.worker_name)
 	// Though, will workers ever have responses?
 	tokens := []string{
@@ -124,7 +131,43 @@ func (m *MsgMeta) ResponseSubject() string {
 	return strings.Join(tokens, ".")
 }
 
-func (m *MsgMeta) initMetadata() error {
+func (m *HopsMsg) parseData() error {
+	msgData := map[string]any{}
+	if err := json.Unmarshal(m.msg.Data(), &msgData); err != nil {
+		return fmt.Errorf("unable to unmarshal: %w", err)
+	}
+
+	metadata, ok := msgData[MetadataKey]
+	if !ok {
+		return fmt.Errorf("missing required metadata object: %s", MetadataKey)
+	}
+
+	metadataMap, ok := metadata.(map[string]any)
+	if !ok {
+		return fmt.Errorf("incorrect metadata object structure")
+	}
+
+	source, ok := metadataMap["source"].(string)
+	if !ok || source == "" {
+		return fmt.Errorf("missing required metadata value 'source'")
+	}
+
+	event, ok := metadataMap["event"].(string)
+	if !ok || event == "" {
+		return fmt.Errorf("missing required metadata value 'event'")
+	}
+
+	action, _ := metadataMap["action"].(string)
+
+	m.Action = action
+	m.Data = msgData
+	m.Event = event
+	m.Source = source
+
+	return nil
+}
+
+func (m *HopsMsg) parseMetadata() error {
 	meta, err := m.msg.Metadata()
 	if err != nil {
 		return err
@@ -139,13 +182,13 @@ func (m *MsgMeta) initMetadata() error {
 	return nil
 }
 
-// initTokens parses tokens from a message subject into the Msg struct
+// parseTokens parses tokens from a message subject into the Msg struct
 //
 // Example hops subjects are:
 // `notify.sequence_id.event`
 // `notify.sequence_id.message_id`
 // `request.sequence_id.message_id.app.handler`
-func (m *MsgMeta) initTokens() error {
+func (m *HopsMsg) parseTokens() error {
 	subjectTokens := strings.Split(m.msg.Subject(), ".")
 	if len(subjectTokens) < 3 {
 		return fmt.Errorf("Invalid message subject (too few tokens): %s", m.msg.Subject())

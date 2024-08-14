@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -13,7 +14,7 @@ import (
 )
 
 type receivedMsg struct {
-	meta *MsgMeta
+	meta *HopsMsg
 	data []byte
 }
 
@@ -48,7 +49,7 @@ func TestClientConsume(t *testing.T) {
 	consumer, err := client.RunnerConsumer(ctx)
 	require.NoError(t, err, "Consumer must be created without error")
 
-	msgData := []byte("Hello world")
+	msgData := []byte(`{"hops": {"source": "test", "event": "test"}, "Hello": "world"}`)
 	sequenceID := "SEQ_ID"
 	subject := SourceEventSubject(sequenceID)
 
@@ -56,7 +57,7 @@ func TestClientConsume(t *testing.T) {
 	require.NoError(t, err, "Publishing and consuming a message should not return an error")
 
 	assert.Equal(t, msg.meta.Subject, fmt.Sprintf("notify.%s.event", sequenceID))
-	assert.Equal(t, msgData, msg.data)
+	assert.JSONEq(t, string(msgData), string(msg.data))
 }
 
 func TestClientPublish(t *testing.T) {
@@ -89,7 +90,7 @@ func TestClientWorkerPublish(t *testing.T) {
 	consumer, err := client.WorkerConsumer(ctx, "app", true)
 	require.NoError(t, err, "Consumer must be created without error")
 
-	msgData := []byte("Hello world")
+	msgData := []byte(`{"hops": {"source": "test", "event": "test"}, "Hello": "world"}`)
 	subject := RequestSubject("SEQ_ID", "MSG_ID", "app", "handler")
 
 	_, err = publishAndConsumeMessage(t, client, consumer, msgData, subject)
@@ -114,14 +115,17 @@ func publishAndConsumeMessage(t *testing.T, client *Client, consumer jetstream.C
 	msgChan := make(chan receivedMsg)
 
 	go func() {
-		client.Consume(ctx, consumer, func(ctx context.Context, msgData []byte, msgMeta *MsgMeta, ackDeadline time.Duration) error {
+		client.Consume(ctx, consumer, func(ctx context.Context, hopsMsg *HopsMsg, ackDeadline time.Duration) error {
 			// We double ack here as otherwise there's a race condition where we could
 			// return the received message back before client.Consume finished everything up.
-			msgMeta.msg.DoubleAck(ctx)
+			hopsMsg.msg.DoubleAck(ctx)
+
+			data, err := json.Marshal(hopsMsg.Data)
+			require.NoError(t, err)
 
 			msgChan <- receivedMsg{
-				meta: msgMeta,
-				data: msgData,
+				meta: hopsMsg,
+				data: data,
 			}
 
 			return nil

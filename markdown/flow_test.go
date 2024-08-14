@@ -10,7 +10,7 @@ func TestFlowReader(t *testing.T) {
 	type testCase struct {
 		name        string
 		source      map[string][]byte
-		expected    FlowIndex
+		expected    map[string][]*Flow
 		expectError bool
 	}
 
@@ -22,13 +22,13 @@ func TestFlowReader(t *testing.T) {
 on: "github.pull_request.closed"
 schedule: "* * * * *"
 command:
-  p: {type: text, default: Hello, required: false}
+- p: {type: text, default: Hello, required: false}
 if: event.branch == "main"
 ---
 This is a basic flow that runs on closed PRs
 `),
 			},
-			expected: FlowIndex{
+			expected: map[string][]*Flow{
 				"github.pull_request.closed": {
 					{
 						On:       "github.pull_request.closed",
@@ -37,7 +37,7 @@ This is a basic flow that runs on closed PRs
 						ID:       "first_flow.hello",
 						If:       `event.branch == "main"`,
 						Command: Command{
-							"p": Param{"text", "Hello", false},
+							{"p": Param{"text", "Hello", false}},
 						},
 					},
 				},
@@ -49,11 +49,11 @@ This is a basic flow that runs on closed PRs
 						ID:       "first_flow.hello",
 						If:       `event.branch == "main"`,
 						Command: Command{
-							"p": Param{"text", "Hello", false},
+							{"p": Param{"text", "Hello", false}},
 						},
 					},
 				},
-				"hiphops.command.first_flow-hello": {
+				"*.command.first_flow-hello": {
 					{
 						On:       "github.pull_request.closed",
 						Schedule: "* * * * *",
@@ -61,7 +61,7 @@ This is a basic flow that runs on closed PRs
 						ID:       "first_flow.hello",
 						If:       `event.branch == "main"`,
 						Command: Command{
-							"p": Param{"text", "Hello", false},
+							{"p": Param{"text", "Hello", false}},
 						},
 					},
 				},
@@ -94,7 +94,7 @@ worker: one
 Other flow two
 `),
 			},
-			expected: FlowIndex{
+			expected: map[string][]*Flow{
 				"*.pull_request.*": {
 					{
 						On:     "pull_request",
@@ -138,7 +138,7 @@ on: "github.pull_request.closed"
 A flow
 `),
 			},
-			expected: FlowIndex{
+			expected: map[string][]*Flow{
 				"github.pull_request.closed": {
 					{
 						On:     "github.pull_request.closed",
@@ -202,7 +202,7 @@ Flow
 			source: map[string][]byte{
 				"first_flow/hello.md": []byte(`---
 command:
-  foo: {type: "madeupstuff"}
+- foo: {type: "madeupstuff"}
 ---
 Flow
 `),
@@ -215,7 +215,7 @@ Flow
 			source: map[string][]byte{
 				"first_flow/hello.md": []byte(`---
 command:
-  foo: {type: "text", default: true}
+- foo: {type: "text", default: true}
 ---
 Flow
 `),
@@ -228,7 +228,7 @@ Flow
 			source: map[string][]byte{
 				"first_flow/hello.md": []byte(`---
 command:
-  foo: {type: "string", default: 1}
+- foo: {type: "string", default: 1}
 ---
 Flow
 `),
@@ -254,7 +254,7 @@ Flow
 			source: map[string][]byte{
 				"first_flow/hello.md": []byte(`---
 command:
-  foo: {type: "number", default: "Hello!"}
+- foo: {type: "number", default: "Hello!"}
 ---
 Flow
 `),
@@ -267,11 +267,14 @@ Flow
 		t.Run(tc.name, func(t *testing.T) {
 			flowsDir := setupPopulatedTestDir(t, tc.source)
 
-			flowIdx, err := NewFlowReader(flowsDir).ReadAll()
+			flowReader := NewFlowReader(flowsDir)
+			err := flowReader.ReadAll()
 			if tc.expectError {
 				assert.Error(t, err, "Invalid flows should return error")
 				return
 			}
+
+			flowIdx := flowReader.IndexedSensors()
 
 			assert.NoError(t, err, "Flows should parse without error")
 			for key, expectedFlows := range tc.expected {

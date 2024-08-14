@@ -26,7 +26,7 @@ type (
 	}
 
 	// MessageHandler is a callback function provided to Client.Consume to handle messages
-	MessageHandler func(ctx context.Context, msgData []byte, msgMeta *MsgMeta, ackDeadline time.Duration) error
+	MessageHandler func(ctx context.Context, hopsMsg *HopsMsg, ackDeadline time.Duration) error
 )
 
 // NewClient creates a new nats client configured to use Hiphops
@@ -97,7 +97,7 @@ func (c *Client) Consume(
 	deadline := consumer.CachedInfo().Config.AckWait
 
 	callback := func(msg jetstream.Msg) {
-		msgMeta, err := Parse(msg)
+		hopsMsg, err := Parse(msg)
 		if err != nil {
 			// There's no way to recover an unparseable event
 			msg.TermWithReason(fmt.Sprintf("unable to parse event: %s", err.Error()))
@@ -105,7 +105,7 @@ func (c *Client) Consume(
 		}
 
 		g.Go(func() error {
-			if err := handler(ctx, msg.Data(), msgMeta, deadline); err != nil {
+			if err := handler(ctx, hopsMsg, deadline); err != nil {
 				if errors.Is(err, ErrEventFatal) {
 					msg.TermWithReason(err.Error())
 					return nil

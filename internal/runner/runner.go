@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/robfig/cron"
 	"github.com/rs/zerolog"
@@ -17,11 +18,9 @@ import (
 )
 
 type Runner struct {
-	flows      markdown.FlowIndex
 	flowReader *markdown.FlowReader
 	consumer   jetstream.Consumer
 	cron       *cron.Cron
-	flowMtx    sync.RWMutex
 	logger     zerolog.Logger
 	natsClient *nats.Client
 	schedules  []*Schedule
@@ -44,17 +43,11 @@ func NewRunner(natsClient *nats.Client, flowReader *markdown.FlowReader, consume
 }
 
 func (r *Runner) Load(ctx context.Context) error {
-	flows, err := r.flowReader.ReadAll()
-	if err != nil {
+	if err := r.flowReader.ReadAll(); err != nil {
 		return err
 	}
 
-	r.flowMtx.Lock()
-	r.flows = flows
-	r.flowMtx.Unlock()
-
-	err = r.prepareHopsSchedules()
-	if err != nil {
+	if err := r.prepareHopsSchedules(); err != nil {
 		return fmt.Errorf("Unable to create schedules %w", err)
 	}
 
@@ -75,16 +68,58 @@ func (r *Runner) Run(ctx context.Context) error {
 
 func (r *Runner) MessageHandler(
 	ctx context.Context,
-	msgData []byte,
-	msgMeta *nats.MsgMeta,
+	hopsMsg *nats.HopsMsg,
 	ackDeadline time.Duration,
 ) error {
-	logger := r.logger.With().Str("sequence_id", msgMeta.SequenceId).Logger()
-	logger.Debug().Msgf("Received event '%s'", msgMeta.Subject)
+	logger := r.logger.With().Str("sequence_id", hopsMsg.SequenceId).Logger()
+	logger.Debug().Msgf("Received event '%s'", hopsMsg.Subject)
 
-	r.flowMtx.RLock()
-	matchedFlows, err := markdown.MatchFlows(r.flows, msgData)
-	r.flowMtx.RUnlock()
+	if hopsMsg.Event == "command_request" {
+		return r.handleCommandRequest(hopsMsg)
+	}
+
+	return r.handleSourceEvent(ctx, hopsMsg, logger)
+}
+
+func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, flow *markdown.Flow, hopsMsg *nats.HopsMsg, errChan chan<- error, logger zerolog.Logger) {
+	defer wg.Done()
+
+	dataB, err := json.Marshal(hopsMsg.Data)
+	if err != nil {
+		errChan <- err
+		return
+	}
+
+	subject := nats.WorkSubject(hopsMsg.SequenceId, flow.Worker)
+	if _, _, err := r.natsClient.Publish(ctx, dataB, subject); err != nil {
+		errChan <- err
+		return
+	}
+
+	logger.Info().Msgf("Dispatched work: %s", flow.ID)
+
+	errChan <- nil
+}
+
+func (r *Runner) handleCommandRequest(hopsMsg *nats.HopsMsg) error {
+	flow, err := markdown.MatchCommandFlows(r.flowReader.IndexedCommands(), hopsMsg, nil)
+
+	switch hopsMsg.Source {
+	case "slack":
+		return BeginSlackCommandFlow(flow, hopsMsg, err, SlackAccessTokenFunc(r.natsClient))
+	default:
+		if err != nil {
+			return err
+		}
+
+		// TODO: Directly translate into a command event.
+	}
+
+	return nil
+}
+
+func (r *Runner) handleSourceEvent(ctx context.Context, hopsMsg *nats.HopsMsg, logger zerolog.Logger) error {
+	matchedFlows, err := markdown.MatchFlows(r.flowReader.IndexedSensors(), hopsMsg, nil)
 	if err != nil {
 		return fmt.Errorf("%w: %w", nats.ErrEventFatal, err)
 	}
@@ -94,7 +129,6 @@ func (r *Runner) MessageHandler(
 	}
 
 	// Now we've collected the matching flows, dispatch their work.
-
 	var errs error
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(matchedFlows))
@@ -102,9 +136,8 @@ func (r *Runner) MessageHandler(
 	for _, flow := range matchedFlows {
 		flow := flow
 		wg.Add(1)
-		onLogger := logger.With().Str("on", flow.ID).Logger()
-
-		go r.dispatchWork(ctx, &wg, flow, msgData, msgMeta, errChan, onLogger)
+		flowLogger := logger.With().Str("flow", flow.ID).Logger()
+		go r.dispatchWork(ctx, &wg, flow, hopsMsg, errChan, flowLogger)
 	}
 
 	wg.Wait()
@@ -121,27 +154,15 @@ func (r *Runner) MessageHandler(
 	return errs
 }
 
-func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, flow *markdown.Flow, data []byte, meta *nats.MsgMeta, errChan chan<- error, logger zerolog.Logger) {
-	defer wg.Done()
-
-	subject := nats.WorkSubject(meta.SequenceId, flow.Worker)
-	if _, _, err := r.natsClient.Publish(ctx, data, subject); err != nil {
-		errChan <- err
-		return
-	}
-
-	logger.Info().Msgf("Dispatched work: %s", flow.ID)
-
-	errChan <- nil
-}
-
 // prepareHopsSchedules parses the schedule blocks in a hops config and inits
 // the cron schedules ready for running
 //
 // This function will not run the schedules, just prepare them
 func (r *Runner) prepareHopsSchedules() error {
 	schedules := []*Schedule{}
-	for _, flow := range r.flowReader.ScheduledFlows() {
+	scheduledFlows := r.flowReader.IndexedSchedules()
+
+	for _, flow := range scheduledFlows {
 		schedule, err := NewSchedule(flow, r.natsClient, r.logger)
 		if err != nil {
 			return err

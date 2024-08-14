@@ -27,6 +27,10 @@ func JSONToCtyValue(jsonStr []byte) (cty.Value, error) {
 	return event, nil
 }
 
+// InterfaceToCtyVal converts an arbitrary interface into a cty.Value
+//
+// Note: Not all nested types are supported, only those that can be produced
+// by json.Marshal() into a generic interface{} value
 func InterfaceToCtyVal(i interface{}) (cty.Value, error) {
 	switch i := i.(type) {
 	case string:

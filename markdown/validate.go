@@ -40,42 +40,72 @@ func ValidateCommand(fl validator.FieldLevel) bool {
 		return false
 	}
 
+	uniqueNames := map[string]bool{}
+
 	for _, p := range command {
-		ok := ValidateParamValueType(p.Type, p.Default)
+		name, ok := ValidateParam(p)
 		if !ok {
 			return false
 		}
+
+		if seen := uniqueNames[name]; seen {
+			return false
+		}
+
+		uniqueNames[name] = true
 	}
 
 	return true
 }
 
-func ValidateParamValueType(paramType string, value any) bool {
-	switch paramType {
-	case "string":
-		if _, ok := value.(string); !ok {
-			return false
-		}
-	case "text":
-		if _, ok := value.(string); !ok {
-			return false
-		}
-	case "number":
-		if _, ok := value.(int); ok {
-			break
-		}
-		if _, ok := value.(float64); ok {
-			break
-		}
-
-		return false
-	case "bool":
-		if _, ok := value.(bool); !ok {
-			return false
-		}
-	default:
-		return false
+func ValidateParam(p ParamItem) (string, bool) {
+	if len(p) != 1 {
+		return "", false
 	}
 
-	return true
+	name, param := p.Param()
+
+	switch param.Type {
+	case "string":
+		if param.Default == nil {
+			break
+		}
+
+		if _, ok := param.Default.(string); !ok {
+			return "", false
+		}
+	case "text":
+		if param.Default == nil {
+			break
+		}
+
+		if _, ok := param.Default.(string); !ok {
+			return "", false
+		}
+	case "number":
+		if param.Default == nil {
+			break
+		}
+
+		if _, ok := param.Default.(int); ok {
+			break
+		}
+		if _, ok := param.Default.(float64); ok {
+			break
+		}
+
+		return "", false
+	case "bool":
+		if param.Default == nil {
+			break
+		}
+
+		if _, ok := param.Default.(bool); !ok {
+			return "", false
+		}
+	default:
+		return "", false
+	}
+
+	return name, true
 }

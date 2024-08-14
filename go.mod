@@ -19,11 +19,13 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/justinas/alice v1.2.0
 	github.com/labstack/echo/v4 v4.12.0
+	github.com/manterfield/go-mapreader v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nats-io/nats.go v1.33.0
 	github.com/oklog/run v1.1.0
 	github.com/robfig/cron v1.2.0
 	github.com/rs/zerolog v1.32.0
+	github.com/slack-go/slack v0.13.1
 	github.com/slok/reload v0.1.0
 	github.com/stretchr/testify v1.8.4
 	github.com/valyala/fasttemplate v1.2.2
@@ -54,6 +56,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.6.0 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect

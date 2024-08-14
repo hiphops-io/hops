@@ -43,8 +43,6 @@ func LoadConfig(hiphopsDir string, tag string) (*Config, error) {
 		NATSConf: c.NATSConfigPath(),
 	}
 
-	fmt.Println("Config pre base:", c.Runner.NATSConf, c.Runner.DataDir)
-
 	if err := cleanenv.ReadConfig(c.BaseConfigPath(), c); err != nil {
 		return nil, err
 	}
@@ -53,11 +51,7 @@ func LoadConfig(hiphopsDir string, tag string) (*Config, error) {
 		return c, nil
 	}
 
-	fmt.Println("Config pre tag:", c.Runner.NATSConf, c.Runner.DataDir)
-
 	err := cleanenv.ReadConfig(c.ConfigPath(), c)
-
-	fmt.Println("Config post:", c.Runner.NATSConf, c.Runner.DataDir)
 
 	return c, err
 }

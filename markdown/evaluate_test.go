@@ -1,9 +1,9 @@
 package markdown
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/hiphops-io/hops/nats"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
@@ -13,7 +13,7 @@ func TestMatchFlows(t *testing.T) {
 	type testCase struct {
 		name        string
 		source      map[string][]byte
-		event       []byte
+		event       *nats.HopsMsg
 		expectedIDs []string
 		expectError bool
 	}
@@ -28,7 +28,7 @@ on: "github.pull_request.closed"
 A flow
 `),
 			},
-			event:       setupTestEvent(t, "github", "pull_request", "closed", nil),
+			event:       setupTestMsg("github", "pull_request", "closed", nil),
 			expectedIDs: []string{"flow.one"},
 		},
 
@@ -41,7 +41,7 @@ on: "pull_request"
 A flow
 `),
 			},
-			event:       setupTestEvent(t, "github", "pull_request", "closed", nil),
+			event:       setupTestMsg("github", "pull_request", "closed", nil),
 			expectedIDs: []string{"flow.one"},
 		},
 
@@ -55,7 +55,7 @@ if: event.data != "hello"
 A flow
 `),
 			},
-			event: setupTestEvent(t, "github", "pull_request", "closed", map[string]any{"data": "hello"}),
+			event: setupTestMsg("github", "pull_request", "closed", map[string]any{"data": "hello"}),
 		},
 
 		{
@@ -74,7 +74,7 @@ if: event.data == "hello"
 A flow
 `),
 			},
-			event:       setupTestEvent(t, "github", "pull_request", "closed", map[string]any{"data": "hello"}),
+			event:       setupTestMsg("github", "pull_request", "closed", map[string]any{"data": "hello"}),
 			expectedIDs: []string{"flow.two"},
 		},
 
@@ -88,7 +88,7 @@ if: can(event.no_such_key)
 A flow
 `),
 			},
-			event: setupTestEvent(t, "github", "pull_request", "closed", nil),
+			event: setupTestMsg("github", "pull_request", "closed", nil),
 		},
 
 		{
@@ -101,7 +101,7 @@ if: not_a_func(event.no_such_key)
 A flow
 `),
 			},
-			event:       setupTestEvent(t, "github", "pull_request", "closed", nil),
+			event:       setupTestMsg("github", "pull_request", "closed", nil),
 			expectError: true,
 		},
 
@@ -115,33 +115,7 @@ if: event.no_such_key != "hello"
 A flow
 `),
 			},
-			event:       setupTestEvent(t, "github", "pull_request", "closed", nil),
-			expectError: true,
-		},
-
-		{
-			name: "Invalid hops metadata",
-			source: map[string][]byte{
-				"flow/one.md": []byte(`---
-on: "pull_request"
----
-A flow
-`),
-			},
-			event:       setupTestEvent(t, "github", "", "closed", nil),
-			expectError: true,
-		},
-
-		{
-			name: "Invalid event",
-			source: map[string][]byte{
-				"flow/one.md": []byte(`---
-on: "pull_request"
----
-A flow
-`),
-			},
-			event:       []byte("not json"),
+			event:       setupTestMsg("github", "pull_request", "closed", nil),
 			expectError: true,
 		},
 	}
@@ -151,15 +125,15 @@ A flow
 			flowsDir := setupPopulatedTestDir(t, tc.source)
 
 			flowReader := NewFlowReader(flowsDir)
-			flowIdx, err := flowReader.ReadAll()
+			err := flowReader.ReadAll()
 			require.NoError(t, err, "Test setup: Failed to read flows")
 
-			matchedFlows, err := MatchFlows(flowIdx, tc.event)
+			matchedFlows, err := MatchFlows(flowReader.IndexedSensors(), tc.event, nil)
 			if tc.expectError {
 				assert.Error(t, err, "Invalid flows should return an error")
 				return
 			} else {
-				assert.NoError(t, err, "Valid flow & event should not return erro")
+				assert.NoError(t, err, "Valid flow & event should not return error")
 			}
 
 			flowIDs := []string{}
@@ -172,9 +146,9 @@ A flow
 	}
 }
 
-func setupTestEvent(t *testing.T, source, event, action string, data map[string]any) []byte {
+func setupTestMsg(source, event, action string, data map[string]any) *nats.HopsMsg {
 	payload := map[string]any{
-		"hops": map[string]string{
+		"hops": map[string]any{
 			"source": source,
 			"event":  event,
 			"action": action,
@@ -185,8 +159,10 @@ func setupTestEvent(t *testing.T, source, event, action string, data map[string]
 		maps.Copy(payload, data)
 	}
 
-	payloadBytes, err := json.Marshal(payload)
-	require.NoError(t, err, "Test setup: Test event should marshall without error")
-
-	return payloadBytes
+	return &nats.HopsMsg{
+		Source: source,
+		Event:  event,
+		Action: action,
+		Data:   payload,
+	}
 }

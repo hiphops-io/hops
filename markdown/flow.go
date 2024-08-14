@@ -7,15 +7,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/yuin/goldmark/ast"
+	"github.com/zclconf/go-cty/cty/gocty"
 	"go.abhg.dev/goldmark/frontmatter"
 )
 
 type (
-	Command map[string]Param
+	Command []ParamItem
 
 	Flow struct {
 		If       string  `yaml:"if"`
@@ -25,19 +27,27 @@ type (
 		Worker   string  `yaml:"worker"`
 		// Calculated fields
 		ID           string
+		dirName      string
+		fileName     string
 		ifExpression hcl.Expression
 		markdown     ast.Node
 		path         string
 	}
 
-	FlowIndex map[string][]*Flow
+	FlowIndex struct {
+		Commands  map[string]*Flow
+		Schedules []*Flow
+		Sensors   map[string][]*Flow
+	}
 
 	FlowReader struct {
-		index          FlowIndex
-		basePath       string
-		md             *Markdown
-		scheduledFlows []*Flow
+		basePath   string
+		index      FlowIndex
+		indexMutex sync.RWMutex
+		md         *Markdown
 	}
+
+	ParamItem map[string]Param
 
 	Param struct {
 		Type     string `yaml:"type"`
@@ -46,26 +56,48 @@ type (
 	}
 )
 
+func NewFlowIndex() FlowIndex {
+	return FlowIndex{
+		Sensors:   map[string][]*Flow{},
+		Commands:  map[string]*Flow{},
+		Schedules: []*Flow{},
+	}
+}
+
 func NewFlowReader(basePath string) *FlowReader {
 	return &FlowReader{
 		basePath: basePath,
-		index:    FlowIndex{},
+		index:    NewFlowIndex(),
 		md:       NewMarkdownHTML(),
 	}
 }
 
-func (fr *FlowReader) AddToIndex(index string, flow *Flow) {
-	indexFlows, ok := fr.index[index]
-	if !ok {
-		fr.index[index] = []*Flow{flow}
-		return
-	}
-
-	fr.index[index] = append(indexFlows, flow)
+// IndexedCommands returns all indexed flows that are triggered by commands
+func (fr *FlowReader) IndexedCommands() map[string]*Flow {
+	fr.indexMutex.RLock()
+	defer fr.indexMutex.RUnlock()
+	return fr.index.Commands
 }
 
-func (fr *FlowReader) ReadAll() (FlowIndex, error) {
-	fr.clear()
+// IndexedSchedules returns all indexed flows that are triggered by a schedule
+func (fr *FlowReader) IndexedSchedules() []*Flow {
+	fr.indexMutex.RLock()
+	defer fr.indexMutex.RUnlock()
+	return fr.index.Schedules
+}
+
+// IndexedSensors returns all indexed flows that are triggered by events
+func (fr *FlowReader) IndexedSensors() map[string][]*Flow {
+	fr.indexMutex.RLock()
+	defer fr.indexMutex.RUnlock()
+	return fr.index.Sensors
+}
+
+func (fr *FlowReader) ReadAll() error {
+	fr.indexMutex.Lock()
+	defer fr.indexMutex.Unlock()
+
+	fr.index = NewFlowIndex()
 
 	baseDepth := strings.Count(fr.basePath, string(os.PathSeparator))
 
@@ -99,10 +131,10 @@ func (fr *FlowReader) ReadAll() (FlowIndex, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to read flow files: %w", err)
+		return fmt.Errorf("unable to read flow files: %w", err)
 	}
 
-	return fr.index, nil
+	return nil
 }
 
 func (fr *FlowReader) ReadFlow(path string) (*Flow, error) {
@@ -124,6 +156,8 @@ func (fr *FlowReader) ReadFlow(path string) (*Flow, error) {
 	flowDirName := filepath.Base(filepath.Dir(path))
 	fileName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 
+	f.dirName = flowDirName
+	f.fileName = fileName
 	f.markdown = ast
 	f.ID = fmt.Sprintf("%s.%s", flowDirName, fileName)
 
@@ -152,23 +186,9 @@ func (fr *FlowReader) ReadFlow(path string) (*Flow, error) {
 	return f, nil
 }
 
-// ScheduledFlows returns all flows that have a schedule configured
-func (fr *FlowReader) ScheduledFlows() []*Flow {
-	return fr.scheduledFlows
-}
-
-// clear resets internal caches of flows
-//
-//	It is used to avoid accumulating duplicate flows on reload
-func (fr *FlowReader) clear() {
-	fr.index = FlowIndex{}
-	fr.scheduledFlows = []*Flow{}
-}
-
 func (fr *FlowReader) indexFlow(flow *Flow) error {
-	// Create index for `on`
-	// First expand the on statement with wildcards in case parts have been
-	// omitted using the shorthand syntax
+	// Create index for sensor
+	// Convert the `on` statement from shorthand syntax to full
 	var on string
 	splitOn := strings.Split(flow.On, ".")
 	switch len(splitOn) {
@@ -181,25 +201,67 @@ func (fr *FlowReader) indexFlow(flow *Flow) error {
 	default:
 		return fmt.Errorf("invalid 'on' field, must be defined and have no more than three parts")
 	}
-	fr.AddToIndex(on, flow)
+	fr.indexSensor(on, flow)
 
 	// Create index for command
 	if flow.Command != nil {
-		fr.AddToIndex(fmt.Sprintf("hiphops.command.%s", flow.ActionName()), flow)
+		fr.index.Commands[flow.ActionName()] = flow
+		fr.indexSensor(fmt.Sprintf("*.command.%s", flow.ActionName()), flow)
 	}
 
 	// Create index for schedule
 	if flow.Schedule != "" {
-		fr.scheduledFlows = append(fr.scheduledFlows, flow)
-		fr.AddToIndex(fmt.Sprintf("hiphops.schedule.%s", flow.ActionName()), flow)
+		fr.index.Schedules = append(fr.index.Schedules, flow)
+		fr.indexSensor(fmt.Sprintf("hiphops.schedule.%s", flow.ActionName()), flow)
 	}
 
 	return nil
+}
+
+func (fr *FlowReader) indexSensor(index string, flow *Flow) {
+	indexFlows, ok := fr.index.Sensors[index]
+	if !ok {
+		fr.index.Sensors[index] = []*Flow{flow}
+		return
+	}
+
+	fr.index.Sensors[index] = append(indexFlows, flow)
 }
 
 // ActionName returns the name of the action for events generated by this flow
 //
 // Note: schedules and commands both generate events
 func (f *Flow) ActionName() string {
+	if strings.ToLower(f.fileName) == "index" {
+		return f.dirName
+	}
+
 	return strings.ReplaceAll(f.ID, ".", "-")
+}
+
+func (f *Flow) IfValue(evalCtx *hcl.EvalContext) (bool, error) {
+	if f.If == "" {
+		return true, nil
+	}
+
+	ifVal, diags := f.ifExpression.Value(evalCtx)
+	if diags.HasErrors() {
+		return false, errors.Join(diags.Errs()...)
+	}
+
+	var matches bool
+	err := gocty.FromCtyValue(ifVal, &matches)
+	if err != nil {
+		return false, fmt.Errorf("'if' expression must evaluate to true or false: %w", err)
+	}
+
+	return matches, nil
+}
+
+func (pi *ParamItem) Param() (string, Param) {
+	for name, p := range *pi {
+		return name, p
+	}
+
+	return "", Param{}
 }

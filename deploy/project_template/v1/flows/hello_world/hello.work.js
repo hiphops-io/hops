@@ -9,8 +9,8 @@ import {
 hiphops.run(async ({ data, subject }) => {
   // The notify service is built into hiphops.io, no integration required
   await notify.sendEmail({
-    // Recipient addresses need to be added to your account's allow list before you
-    // can send.
+    // Recipient addresses need to be added to your account's allow list
+    // before you can send.
     to: ["someone@example.com"],
     content: `Hello!`,
   });
