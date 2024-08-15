@@ -3,6 +3,7 @@ package runner
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -40,7 +41,7 @@ func SlackAccessTokenFunc(natsClient *nats.Client) AccessTokenGetter {
 	}
 }
 
-func BeginSlackCommandFlow(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError error, t AccessTokenGetter) error {
+func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError error, t AccessTokenGetter) error {
 	token, err := t()
 	if err != nil {
 		return fmt.Errorf("unable to fetch slack access token: %w", err)
@@ -106,7 +107,7 @@ func BeginSlackCommandFlow(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchErro
 				// Maybe with the option to hide it?
 			},
 			PrivateMetadata: string(privateMeta),
-			CallbackID:      "user_command",
+			CallbackID:      "command",
 			Submit:          slack.NewTextBlockObject("plain_text", "Run", false, false),
 			Close:           slack.NewTextBlockObject("plain_text", "Close", false, false),
 		},
@@ -117,6 +118,22 @@ func BeginSlackCommandFlow(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchErro
 		fmt.Println("Got an error opening view:", err.Error())
 		return nil
 	}
+
+	return nil
+}
+
+func SlackBlocksToCommandEvent(hopsMsg *nats.HopsMsg) error {
+	if t := mapreader.Str(hopsMsg.Data, "type"); t != "view_submission" {
+		return fmt.Errorf("unsupported slack interaction type for commands '%s'", t)
+	}
+
+	data, err := parseViewSubmissionCommand(hopsMsg.Data)
+	if err != nil {
+		return fmt.Errorf("unable to parse command from event: %w", err)
+	}
+
+	hopsMsg.Action = mapreader.Str(data, "hops.action")
+	hopsMsg.Data = data
 
 	return nil
 }
@@ -235,4 +252,71 @@ func ParamToTextInputBlock(name string, param markdown.Param) slack.Block {
 	}
 
 	return ParamInputBlock(name, param, elem)
+}
+
+func parseViewSubmissionCommand(payload map[string]any) (map[string]any, error) {
+	commandPayload := map[string]any{
+		"hops": mapreader.Map[any](payload, "hops"),
+		"ctx":  payload,
+	}
+
+	p, err := mapreader.BytesErr(payload, "view.private_metadata")
+	if err != nil {
+		return nil, errors.New("unable to read required metadata for command")
+	}
+
+	privateMeta := CommandPrivateMeta{}
+	if err := json.Unmarshal(p, &privateMeta); err != nil {
+		return nil, fmt.Errorf("unable to parse required metadata for command: %w", err)
+	}
+
+	commandPayload["channel_id"] = privateMeta.ChannelID
+	commandPayload["hops"].(map[string]any)["action"] = privateMeta.CommandAction
+
+	values, err := mapreader.MapErr[map[string]any](payload, "view.state.values")
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse command payload: %w", err)
+	}
+
+	for k, v := range values {
+		param, ok := v[k].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("unable to parse command param '%s'", k)
+		}
+
+		paramValue, err := parseViewInputValue(param)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse command param '%s' value ", k)
+		}
+
+		commandPayload[k] = paramValue
+	}
+
+	return commandPayload, nil
+}
+
+func parseViewInputValue(paramState map[string]any) (any, error) {
+	inputType := mapreader.Str(paramState, "type")
+	switch inputType {
+	case "number_input":
+		value := mapreader.Str(paramState, "value")
+		if value == "" {
+			return nil, nil
+		}
+		return strconv.ParseFloat(value, 64)
+	case "radio_buttons":
+		value := mapreader.Str(paramState, "selected_option.value")
+		switch value {
+		case "true":
+			return true, nil
+		case "false":
+			return false, nil
+		default:
+			return nil, nil
+		}
+	case "plain_text_input":
+		return mapreader.Str(paramState, "value"), nil
+	default:
+		return nil, fmt.Errorf("unsupported input type '%s'", inputType)
+	}
 }

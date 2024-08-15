@@ -74,14 +74,17 @@ func (r *Runner) MessageHandler(
 	logger := r.logger.With().Str("sequence_id", hopsMsg.SequenceId).Logger()
 	logger.Debug().Msgf("Received event '%s'", hopsMsg.Subject)
 
-	if hopsMsg.Event == "command_request" {
+	switch hopsMsg.Event {
+	case "command_request":
 		return r.handleCommandRequest(hopsMsg)
+	case "command":
+		return r.handleCommand(ctx, hopsMsg, logger)
+	default:
+		return r.handleSourceEvent(ctx, hopsMsg, logger)
 	}
-
-	return r.handleSourceEvent(ctx, hopsMsg, logger)
 }
 
-func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, flow *markdown.Flow, hopsMsg *nats.HopsMsg, errChan chan<- error, logger zerolog.Logger) {
+func (r *Runner) dispatchFlow(ctx context.Context, wg *sync.WaitGroup, flow *markdown.Flow, hopsMsg *nats.HopsMsg, errChan chan<- error, logger zerolog.Logger) {
 	defer wg.Done()
 
 	dataB, err := json.Marshal(hopsMsg.Data)
@@ -96,9 +99,39 @@ func (r *Runner) dispatchWork(ctx context.Context, wg *sync.WaitGroup, flow *mar
 		return
 	}
 
-	logger.Info().Msgf("Dispatched work: %s", flow.ID)
+	logger.Info().Msgf("Dispatched flow: %s", flow.ID)
 
 	errChan <- nil
+}
+
+func (r *Runner) dispatchFlows(ctx context.Context, flows []*markdown.Flow, hopsMsg *nats.HopsMsg, logger zerolog.Logger) error {
+	if len(flows) == 0 {
+		return nil
+	}
+
+	var err error
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(flows))
+
+	for _, flow := range flows {
+		flow := flow
+		wg.Add(1)
+		flowLogger := logger.With().Str("flow", flow.ID).Logger()
+		go r.dispatchFlow(ctx, &wg, flow, hopsMsg, errChan, flowLogger)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	for e := range errChan {
+		err = errors.Join(err, e)
+	}
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Unable to dispatch flows")
+	}
+
+	return err
 }
 
 func (r *Runner) handleCommandRequest(hopsMsg *nats.HopsMsg) error {
@@ -106,16 +139,33 @@ func (r *Runner) handleCommandRequest(hopsMsg *nats.HopsMsg) error {
 
 	switch hopsMsg.Source {
 	case "slack":
-		return BeginSlackCommandFlow(flow, hopsMsg, err, SlackAccessTokenFunc(r.natsClient))
+		return SlackCommandRequest(flow, hopsMsg, err, SlackAccessTokenFunc(r.natsClient))
 	default:
 		if err != nil {
 			return err
 		}
 
-		// TODO: Directly translate into a command event.
+		return fmt.Errorf("unsupported command request source '%s'", hopsMsg.Source)
+	}
+}
+
+func (r *Runner) handleCommand(ctx context.Context, hopsMsg *nats.HopsMsg, logger zerolog.Logger) error {
+	switch hopsMsg.Source {
+	case "slack":
+		if err := SlackBlocksToCommandEvent(hopsMsg); err != nil {
+			return fmt.Errorf("unable to process slack command: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported command source '%s'", hopsMsg.Source)
 	}
 
-	return nil
+	// Get the flow for this command and trigger it
+	cmd, ok := r.flowReader.IndexedCommands()[hopsMsg.Action]
+	if !ok {
+		return fmt.Errorf("unknown command received '%s'", hopsMsg.Action)
+	}
+
+	return r.dispatchFlows(ctx, []*markdown.Flow{cmd}, hopsMsg, logger)
 }
 
 func (r *Runner) handleSourceEvent(ctx context.Context, hopsMsg *nats.HopsMsg, logger zerolog.Logger) error {
@@ -124,34 +174,7 @@ func (r *Runner) handleSourceEvent(ctx context.Context, hopsMsg *nats.HopsMsg, l
 		return fmt.Errorf("%w: %w", nats.ErrEventFatal, err)
 	}
 
-	if len(matchedFlows) == 0 {
-		return nil
-	}
-
-	// Now we've collected the matching flows, dispatch their work.
-	var errs error
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(matchedFlows))
-
-	for _, flow := range matchedFlows {
-		flow := flow
-		wg.Add(1)
-		flowLogger := logger.With().Str("flow", flow.ID).Logger()
-		go r.dispatchWork(ctx, &wg, flow, hopsMsg, errChan, flowLogger)
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	for err := range errChan {
-		errs = errors.Join(errs, err)
-	}
-
-	if errs != nil {
-		logger.Error().Err(err).Msg("Unable to dispatch work")
-	}
-
-	return errs
+	return r.dispatchFlows(ctx, matchedFlows, hopsMsg, logger)
 }
 
 // prepareHopsSchedules parses the schedule blocks in a hops config and inits
