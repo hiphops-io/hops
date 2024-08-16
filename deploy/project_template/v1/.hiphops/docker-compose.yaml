@@ -21,7 +21,7 @@ services:
         target: /hiphops/
 
   runtime:
-    image: hiphops/runtime-deno:alpha-2407-cromulent-fox
+    image: hiphops/runtime-deno:alpha-2408-lonely-kouprey
     depends_on:
       hops:
         condition: service_healthy
