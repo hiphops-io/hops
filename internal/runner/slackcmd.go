@@ -57,6 +57,8 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 		text = fmt.Sprintf("An error occurred - this could be due to misconfiguration\n`%s`", matchError.Error())
 	} else if flow == nil {
 		text = "Command conditions not met - _Common causes are being restricted to specific channels or users_"
+	} else if channelID == "" {
+		text = "Command must be sent from within a chat context (i.e. channel, DM, etc)"
 	}
 
 	if text != "" {
