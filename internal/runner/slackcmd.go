@@ -50,7 +50,6 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 
 	channelID := mapreader.Str(hopsMsg.Data, "channel_id")
 
-	// TODO: Only do this message sending if we actually have a channel_id
 	var text string
 	if errors.Is(matchError, markdown.ErrCommandNotFound) {
 		text = fmt.Sprintf("Sorry, `%s` didn't match any commands", hopsMsg.Data["text"].(string))
@@ -270,7 +269,7 @@ func parseViewSubmissionCommand(payload map[string]any) (map[string]any, error) 
 		return nil, fmt.Errorf("unable to parse required metadata for command: %w", err)
 	}
 
-	commandPayload["channel_id"] = privateMeta.ChannelID
+	commandPayload["ctx"].(map[string]any)["channel_id"] = privateMeta.ChannelID
 	commandPayload["hops"].(map[string]any)["action"] = privateMeta.CommandAction
 
 	values, err := mapreader.MapErr[map[string]any](payload, "view.state.values")
