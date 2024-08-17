@@ -14,6 +14,8 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/zclconf/go-cty/cty/gocty"
 	"go.abhg.dev/goldmark/frontmatter"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type (
@@ -239,6 +241,14 @@ func (f *Flow) ActionName() string {
 	return strings.ReplaceAll(f.ID, ".", "-")
 }
 
+func (f *Flow) DisplayName() string {
+	if strings.ToLower(f.fileName) == "index" {
+		return titleCase(f.dirName)
+	}
+
+	return titleCase(f.ID)
+}
+
 func (f *Flow) IfValue(evalCtx *hcl.EvalContext) (bool, error) {
 	if f.If == "" {
 		return true, nil
@@ -258,6 +268,14 @@ func (f *Flow) IfValue(evalCtx *hcl.EvalContext) (bool, error) {
 	return matches, nil
 }
 
+func (pi *ParamItem) DisplayName() string {
+	for name := range *pi {
+		return titleCase(name)
+	}
+
+	return ""
+}
+
 func (pi *ParamItem) Param() (string, Param) {
 	for name, p := range *pi {
 		if p.Type == "" {
@@ -268,4 +286,12 @@ func (pi *ParamItem) Param() (string, Param) {
 	}
 
 	return "", Param{}
+}
+
+var titleCaseReplacer = strings.NewReplacer("_", " ", ".", " ")
+
+func titleCase(label string) string {
+	caser := cases.Title(language.BritishEnglish)
+	label = titleCaseReplacer.Replace(label)
+	return caser.String(label)
 }

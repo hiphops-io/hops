@@ -84,7 +84,7 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 		hopsMsg.Data["trigger_id"].(string),
 		slack.ModalViewRequest{
 			Type:  slack.VTModal,
-			Title: slack.NewTextBlockObject("plain_text", flow.ID, false, false),
+			Title: slack.NewTextBlockObject("plain_text", flow.DisplayName(), false, false),
 			Blocks: slack.Blocks{
 				BlockSet: blocks,
 				// slack.NewTextBlockObject() // We want the rendered slack markdown here
@@ -125,20 +125,19 @@ func CommandToSlackBlocks(command markdown.Command) ([]slack.Block, error) {
 
 	for _, p := range command {
 		name, param := p.Param()
+		displayName := p.DisplayName()
 
 		switch param.Type {
 		case "text", "string":
-			blocks = append(blocks, ParamToTextInputBlock(name, param))
+			blocks = append(blocks, ParamToTextInputBlock(name, displayName, param))
 		case "bool":
-			blocks = append(blocks, ParamToBooleanInputBlock(name, param))
+			blocks = append(blocks, ParamToBooleanInputBlock(name, displayName, param))
 		case "number":
-			blocks = append(blocks, ParamToNumberInputBlock(name, param))
+			blocks = append(blocks, ParamToNumberInputBlock(name, displayName, param))
 		default:
 			return nil, fmt.Errorf("unable to parse param '%s' - unknown type '%s'", name, param.Type)
 		}
 	}
-
-	// Add the submit button etc? - Need to ensure we're handling no params
 
 	return blocks, nil
 }
@@ -152,17 +151,17 @@ func ParamBlockLabel(name string) *slack.TextBlockObject {
 	}
 }
 
-func ParamInputBlock(name string, param markdown.Param, elem slack.BlockElement) slack.Block {
+func ParamInputBlock(name, displayName string, param markdown.Param, elem slack.BlockElement) slack.Block {
 	return slack.InputBlock{
 		BlockID:  name,
 		Type:     slack.MBTInput,
-		Label:    ParamBlockLabel(name),
+		Label:    ParamBlockLabel(displayName),
 		Element:  elem,
 		Optional: !param.Required,
 	}
 }
 
-func ParamToNumberInputBlock(name string, param markdown.Param) slack.Block {
+func ParamToNumberInputBlock(name, displayName string, param markdown.Param) slack.Block {
 	elem := slack.NumberInputBlockElement{
 		Type:             slack.METNumber,
 		ActionID:         name,
@@ -179,10 +178,10 @@ func ParamToNumberInputBlock(name string, param markdown.Param) slack.Block {
 		}
 	}
 
-	return ParamInputBlock(name, param, elem)
+	return ParamInputBlock(name, displayName, param, elem)
 }
 
-func ParamToBooleanInputBlock(name string, param markdown.Param) slack.Block {
+func ParamToBooleanInputBlock(name, displayName string, param markdown.Param) slack.Block {
 	trueOption := &slack.OptionBlockObject{
 		Value: "true",
 		Text: &slack.TextBlockObject{
@@ -217,10 +216,10 @@ func ParamToBooleanInputBlock(name string, param markdown.Param) slack.Block {
 		elem.InitialOption = falseOption
 	}
 
-	return ParamInputBlock(name, param, elem)
+	return ParamInputBlock(name, displayName, param, elem)
 }
 
-func ParamToTextInputBlock(name string, param markdown.Param) slack.Block {
+func ParamToTextInputBlock(name, displayName string, param markdown.Param) slack.Block {
 	elem := slack.PlainTextInputBlockElement{
 		Type:        slack.METPlainTextInput,
 		Placeholder: nil,
@@ -233,7 +232,7 @@ func ParamToTextInputBlock(name string, param markdown.Param) slack.Block {
 		elem.InitialValue = defaultVal
 	}
 
-	return ParamInputBlock(name, param, elem)
+	return ParamInputBlock(name, displayName, param, elem)
 }
 
 func parseViewSubmissionCommand(payload map[string]any) (map[string]any, error) {
