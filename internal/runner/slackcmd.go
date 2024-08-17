@@ -48,53 +48,36 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 	}
 	api := slack.New(token)
 
-	channelID := mapreader.Str(hopsMsg.Data, "channel_id")
-
-	var text string
-	if errors.Is(matchError, markdown.ErrCommandNotFound) {
-		text = fmt.Sprintf("Sorry, `%s` didn't match any commands", hopsMsg.Data["text"].(string))
-	} else if matchError != nil {
-		text = fmt.Sprintf("An error occurred - this could be due to misconfiguration\n`%s`", matchError.Error())
-	} else if flow == nil {
-		text = "Command conditions not met - _Common causes are being restricted to specific channels or users_"
-	} else if channelID == "" {
-		text = "Command must be sent from within a chat context (i.e. channel, DM, etc)"
+	responseURL, err := mapreader.StrErr(hopsMsg.Data, "response_url")
+	if err != nil {
+		return fmt.Errorf("unable to get response_url for command request: %w", err)
 	}
 
-	if text != "" {
-		_, _, err = api.PostMessage(
-			channelID,
-			slack.MsgOptionText(text, false),
-			slack.MsgOptionResponseURL(
-				hopsMsg.Data["response_url"].(string),
-				slack.ResponseTypeEphemeral,
-			),
-		)
-
-		if err != nil {
-			return err
-		}
-
-		return nil
+	if errors.Is(matchError, markdown.ErrCommandNotFound) {
+		sendErrorResponse(api, fmt.Sprintf("Sorry, `%s` didn't match any commands", mapreader.Str(hopsMsg.Data, "text")), responseURL)
+		return err
+	} else if matchError != nil {
+		sendErrorResponse(api, fmt.Sprintf("An error occurred - this could be due to a misconfiguration\n`%s`", matchError.Error()), responseURL)
+		return err
+	} else if flow == nil {
+		return sendErrorResponse(api, "Command conditions not met - _Perhaps the command is restricted to specific channels or users?_", responseURL)
 	}
 
 	// If we get here then we've got an actual command to present. Yay.
 	blocks, err := CommandToSlackBlocks(flow.Command)
 	if err != nil {
-		// TODO: Do something with this error
-		fmt.Println("Got an error creating the command form blocks:", err.Error())
-		return nil
+		sendErrorResponse(api, "command failed", responseURL)
+		return fmt.Errorf("unable to render command as modal: %w", err)
 	}
 
 	privateMeta, err := json.Marshal(CommandPrivateMeta{
 		CommandAction: flow.ActionName(),
-		ChannelID:     channelID,
+		ChannelID:     mapreader.Str(hopsMsg.Data, "channel_id"),
 	})
 
 	if err != nil {
-		// TODO: Do something with this error
-		fmt.Println("unable to marshal private metadata")
-		return nil
+		sendErrorResponse(api, "command failed", responseURL)
+		return fmt.Errorf("unable to marshal private metadata: %w", err)
 	}
 
 	_, err = api.OpenView(
@@ -114,10 +97,8 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 		},
 	)
 	if err != nil {
-		// TODO: Do something with this error
-		// response_metadata.messages contains the actual error descriptions
-		fmt.Println("Got an error opening view:", err.Error())
-		return nil
+		sendErrorResponse(api, "command failed - unable to open form", responseURL)
+		return fmt.Errorf("unable to open slack view: %w", err)
 	}
 
 	return nil
@@ -320,4 +301,17 @@ func parseViewInputValue(paramState map[string]any) (any, error) {
 	default:
 		return nil, fmt.Errorf("unsupported input type '%s'", inputType)
 	}
+}
+
+func sendErrorResponse(api *slack.Client, msg string, responseURL string) error {
+	_, _, err := api.PostMessage(
+		"",
+		slack.MsgOptionText(msg, false),
+		slack.MsgOptionResponseURL(
+			responseURL,
+			slack.ResponseTypeEphemeral,
+		),
+	)
+
+	return err
 }
