@@ -2,6 +2,7 @@ package nats
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ var (
 	NotifyStreamSubjects  = []string{fmt.Sprintf("%s.>", ChannelNotify)}
 	RequestStreamSubjects = []string{fmt.Sprintf("%s.>", ChannelRequest)}
 	WorkStreamSubjects    = []string{fmt.Sprintf("%s.>", ChannelWork)}
+	nonAlphaNumRegex      = regexp.MustCompile(`[^a-zA-Z0-9\-_]+`)
 )
 
 type (
@@ -288,6 +290,13 @@ func RequestSubject(sequenceId string, messageId string, appName string, handler
 	}
 
 	return strings.Join(tokens, ".")
+}
+
+// SanitiseToken is a helper function to ensure source event tokens are suitable
+// for consumption by hops/inclusion in hops subjects
+func SanitiseToken(token string) string {
+	token = nonAlphaNumRegex.ReplaceAllLiteralString(token, "")
+	return strings.ToLower(token)
 }
 
 func SequenceHopsKeyTokens(sequenceId string) []string {
