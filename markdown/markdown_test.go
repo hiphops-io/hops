@@ -76,13 +76,13 @@ title: A page
 		},
 	}
 
-	md := NewMarkdownHTML()
+	md := NewMarkdown()
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var b bytes.Buffer
 
-			_, err := md.Convert(tc.markdown, &b)
+			_, err := md.HTML(tc.markdown, &b)
 			require.NoError(t, err, "Markdown should convert without error")
 
 			// Compare as strings to make failure output more readable

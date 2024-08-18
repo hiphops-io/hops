@@ -35,7 +35,7 @@ func NewStaticBuilder() (*StaticBuilder, error) {
 	}
 
 	s := &StaticBuilder{
-		md:           NewMarkdownHTML(),
+		md:           NewMarkdown(),
 		pageTemplate: pageTemplate,
 	}
 
@@ -96,7 +96,7 @@ func (s *StaticBuilder) BuildMarkdown(source, build string) error {
 	}
 
 	var mdOutput bytes.Buffer
-	pCtx, err := s.md.Convert(content, &mdOutput)
+	pCtx, err := s.md.HTML(content, &mdOutput)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/yuin/goldmark/ast"
 	"github.com/zclconf/go-cty/cty/gocty"
 	"go.abhg.dev/goldmark/frontmatter"
 	"golang.org/x/text/cases"
@@ -27,12 +27,13 @@ type (
 		On       string  `yaml:"on" validate:"required_without_all=Command Schedule"`
 		Schedule string  `yaml:"schedule" validate:"required_without_all=On Command,omitempty,standard_cron"`
 		Worker   string  `yaml:"worker"`
-		// Calculated fields
+		// Computed fields
 		ID           string
 		dirName      string
 		fileName     string
 		ifExpression hcl.Expression
-		markdown     ast.Node
+		markdown     []byte
+		md           *Markdown
 		path         string
 	}
 
@@ -70,7 +71,7 @@ func NewFlowReader(basePath string) *FlowReader {
 	return &FlowReader{
 		basePath: basePath,
 		index:    NewFlowIndex(),
-		md:       NewMarkdownHTML(),
+		md:       NewMarkdown(),
 	}
 }
 
@@ -140,12 +141,23 @@ func (fr *FlowReader) ReadAll() error {
 }
 
 func (fr *FlowReader) ReadFlow(path string) (*Flow, error) {
-	ast, pCtx, err := fr.md.ParseFile(path)
+	content, pCtx, err := fr.md.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load flow: %w", err)
 	}
 
-	f := &Flow{path: path}
+	flowDirName := filepath.Base(filepath.Dir(path))
+	fileName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+
+	f := &Flow{
+		ID:       fmt.Sprintf("%s.%s", flowDirName, fileName),
+		path:     path,
+		markdown: content,
+		md:       fr.md,
+		dirName:  flowDirName,
+		fileName: fileName,
+	}
+
 	fm := frontmatter.Get(pCtx)
 	if fm == nil {
 		return nil, fmt.Errorf("flow does not contain any fields")
@@ -154,14 +166,6 @@ func (fr *FlowReader) ReadFlow(path string) (*Flow, error) {
 	if err := fm.Decode(f); err != nil {
 		return nil, fmt.Errorf("unable to decode flow: %w", err)
 	}
-
-	flowDirName := filepath.Base(filepath.Dir(path))
-	fileName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-
-	f.dirName = flowDirName
-	f.fileName = fileName
-	f.markdown = ast
-	f.ID = fmt.Sprintf("%s.%s", flowDirName, fileName)
 
 	if f.Worker == "" {
 		f.Worker = f.ID
@@ -266,6 +270,15 @@ func (f *Flow) IfValue(evalCtx *hcl.EvalContext) (bool, error) {
 	}
 
 	return matches, nil
+}
+
+func (f *Flow) Markdown() (string, error) {
+	var b bytes.Buffer
+	if _, err := f.md.Markdown(f.markdown, &b); err != nil {
+		return "", err
+	}
+
+	return b.String(), nil
 }
 
 func (pi *ParamItem) DisplayName() string {

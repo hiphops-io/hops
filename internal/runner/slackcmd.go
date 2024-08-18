@@ -6,11 +6,13 @@ import (
 	"strconv"
 	"time"
 
+	mdconv "github.com/eritikass/githubmarkdownconvertergo"
 	"github.com/goccy/go-json"
-	"github.com/hiphops-io/hops/markdown"
-	"github.com/hiphops-io/hops/nats"
 	"github.com/manterfield/go-mapreader"
 	"github.com/slack-go/slack"
+
+	"github.com/hiphops-io/hops/markdown"
+	"github.com/hiphops-io/hops/nats"
 )
 
 type (
@@ -54,11 +56,13 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 	}
 
 	if errors.Is(matchError, markdown.ErrCommandNotFound) {
-		sendErrorResponse(api, fmt.Sprintf("Sorry, `%s` didn't match any commands", mapreader.Str(hopsMsg.Data, "text")), responseURL)
-		return err
+		return sendErrorResponse(api, fmt.Sprintf("Sorry, `%s` didn't match any commands", mapreader.Str(hopsMsg.Data, "text")), responseURL)
+		// TODO: Log this
+		// return err
 	} else if matchError != nil {
-		sendErrorResponse(api, fmt.Sprintf("An error occurred - this could be due to a misconfiguration\n`%s`", matchError.Error()), responseURL)
-		return err
+		return sendErrorResponse(api, fmt.Sprintf("An error occurred - this could be due to a misconfiguration\n`%s`", matchError.Error()), responseURL)
+		// TODO: Log this
+		// return err
 	} else if flow == nil {
 		return sendErrorResponse(api, "Command conditions not met - _Perhaps the command is restricted to specific channels or users?_", responseURL)
 	}
@@ -66,8 +70,9 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 	// If we get here then we've got an actual command to present. Yay.
 	blocks, err := CommandToSlackBlocks(flow.Command)
 	if err != nil {
-		sendErrorResponse(api, "command failed", responseURL)
-		return fmt.Errorf("unable to render command as modal: %w", err)
+		return sendErrorResponse(api, "command failed", responseURL)
+		// TODO: Log this
+		// return fmt.Errorf("unable to render command as modal: %w", err)
 	}
 
 	privateMeta, err := json.Marshal(CommandPrivateMeta{
@@ -76,19 +81,29 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 	})
 
 	if err != nil {
-		sendErrorResponse(api, "command failed", responseURL)
-		return fmt.Errorf("unable to marshal private metadata: %w", err)
+		return sendErrorResponse(api, "command failed", responseURL)
+		// TODO: Log this
+		// return fmt.Errorf("unable to marshal private metadata: %w", err)
 	}
 
-	_, err = api.OpenView(
+	headerBlock, err := FlowHeaderBlock(flow)
+	if err != nil {
+		return sendErrorResponse(api, "command failed", responseURL)
+		// TODO: Log this error
+	}
+
+	blocks = append(
+		[]slack.Block{headerBlock},
+		blocks...,
+	)
+
+	r, err := api.OpenView(
 		hopsMsg.Data["trigger_id"].(string),
 		slack.ModalViewRequest{
 			Type:  slack.VTModal,
 			Title: slack.NewTextBlockObject("plain_text", flow.DisplayName(), false, false),
 			Blocks: slack.Blocks{
 				BlockSet: blocks,
-				// slack.NewTextBlockObject() // We want the rendered slack markdown here
-				// Maybe with the option to hide it?
 			},
 			PrivateMetadata: string(privateMeta),
 			CallbackID:      "command",
@@ -97,8 +112,11 @@ func SlackCommandRequest(flow *markdown.Flow, hopsMsg *nats.HopsMsg, matchError 
 		},
 	)
 	if err != nil {
-		sendErrorResponse(api, "command failed - unable to open form", responseURL)
-		return fmt.Errorf("unable to open slack view: %w", err)
+		fmt.Println("Got error opening form:", err.Error())
+		fmt.Printf("%v\n", r)
+		return sendErrorResponse(api, "command failed - unable to open form", responseURL)
+		// TODO: Log this
+		// return fmt.Errorf("unable to open slack view: %w", err)
 	}
 
 	return nil
@@ -140,6 +158,16 @@ func CommandToSlackBlocks(command markdown.Command) ([]slack.Block, error) {
 	}
 
 	return blocks, nil
+}
+
+func FlowHeaderBlock(flow *markdown.Flow) (slack.Block, error) {
+	md, err := flow.Markdown()
+	if err != nil {
+		return nil, err
+	}
+
+	slackMD := mdconv.Slack(md, mdconv.SlackConvertOptions{Headlines: true})
+	return slack.NewSectionBlock(slack.NewTextBlockObject("mrkdwn", slackMD, false, false), nil, nil), nil
 }
 
 func ParamBlockLabel(name string) *slack.TextBlockObject {
