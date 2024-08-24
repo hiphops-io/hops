@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   hops:
-    image: hiphops/hiphops:alpha-2408-simple-jackal
+    image: hiphops/hiphops:alpha-2408-glorious-weevil
     platform: "linux/arm64"
     ports:
       - 4222:4222
@@ -21,7 +21,7 @@ services:
         target: /hiphops/
 
   runtime:
-    image: hiphops/runtime-deno:alpha-2408-lonely-kouprey
+    image: hiphops/runtime-deno:alpha-2408-coordinated-salamander
     depends_on:
       hops:
         condition: service_healthy
